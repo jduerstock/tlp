@@ -3532,36 +3532,16 @@ LB87F:  brk                                     ; B87F 00                       
         brk                                     ; B88C 00                       .
         brk                                     ; B88D 00                       .
         brk                                     ; B88E 00                       .
+
+LB88F:
 	.byte	"K:",$9B			; B88F
-        .byte   $52                             ; B892 52                       R
-        .byte   $3A                             ; B893 3A                       :
-        .byte   $9B                             ; B894 9B                       .
+	.byte	"R:",$9B			; B892
         .byte   $54                             ; B895 54                       T
         .byte   $3A                             ; B896 3A                       :
         .byte   $9B                             ; B897 9B                       .
-        bvc     LB8D4                           ; B898 50 3A                    P:
-        .byte   $9B                             ; B89A 9B                       .
+	.byte	"P:",$9B			; B898
 	.byte	"RORRE NOITACINUMMOCIRATA 4891 THGIRYPOC"
-        eor     $4E                             ; B8C2 45 4E                    EN
-        .byte   $4F                             ; B8C4 4F                       O
-        pha                                     ; B8C5 48                       H
-        bvc     LB8E8                           ; B8C6 50 20                    P 
-        .byte   $47                             ; B8C8 47                       G
-        lsr     $4E49                           ; B8C9 4E 49 4E                 NIN
-        .byte   $52                             ; B8CC 52                       R
-        eor     ($45,x)                         ; B8CD 41 45                    AE
-        jmp     L4520                           ; B8CF 4C 20 45                 L E
-
-; ----------------------------------------------------------------------------
-        pha                                     ; B8D2 48                       H
-        .byte   $54                             ; B8D3 54                       T
-LB8D4:  jsr     L544F                           ; B8D4 20 4F 54                  OT
-        jsr     L4D45                           ; B8D7 20 45 4D                  EM
-        .byte   $4F                             ; B8DA 4F                       O
-        .byte   $43                             ; B8DB 43                       C
-        jmp     L5745                           ; B8DC 4C 45 57                 LEW
-
-; ----------------------------------------------------------------------------
+	.byte	"ENOHP GNINRAEL EHT OT EMOCLEW"
         and     ($4E,x)                         ; B8DF 21 4E                    !N
         .byte   $52                             ; B8E1 52                       R
         eor     $54,x                           ; B8E2 55 54                    UT
@@ -3675,8 +3655,7 @@ LB974:  brk                                     ; B974 00                       
 LB975:  brk                                     ; B975 00                       .
         jsr     L0403                           ; B976 20 03 04                  ..
         brk                                     ; B979 00                       .
-        .byte   $8F                             ; B97A 8F                       .
-        clv                                     ; B97B B8                       .
+	.addr	LB88F
         brk                                     ; B97C 00                       .
         brk                                     ; B97D 00                       .
         jsr     L0407                           ; B97E 20 07 04                  ..
@@ -5051,19 +5030,19 @@ LBFC2:  lda     #$FF                            ; BFC2 A9 FF                    
         sta     $133A                           ; BFD2 8D 3A 13                 .:.
         jsr     LB420                           ; BFD5 20 20 B4                   .
 LBFD8:  jsr     LB4F7                           ; BFD8 20 F7 B4                  ..
-        bcs     LBFF7                           ; BFDB B0 1A                    ..
+        bcs	:+
         lda     #$00                            ; BFDD A9 00                    ..
         sta     $133A                           ; BFDF 8D 3A 13                 .:.
         tax                                     ; BFE2 AA                       .
         jsr     LBF86                           ; BFE3 20 86 BF                  ..
-        bne     LBFF7                           ; BFE6 D0 0F                    ..
+        bne	:+
         lda     #'T'
         sta     $031A,x                         ; BFEA 9D 1A 03                 ...
         lda     #<t_handler
         sta     $031B,x                         ; BFEF 9D 1B 03                 ...
         lda     #>t_handler
         sta     $031C,x                         ; BFF4 9D 1C 03                 ...
-LBFF7:  rts                                     ; BFF7 60                       `
+:	rts
 
 ; ----------------------------------------------------------------------------
         brk                                     ; BFF8 00                       .
