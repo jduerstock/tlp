@@ -6,6 +6,12 @@
 
         .setcpu "6502"
 
+.macro  RString       Arg
+	.repeat .strlen(Arg), I
+		.byte .strat(Arg, .strlen(Arg)-1-I)
+	.endrep
+.endmacro
+
 	.segment "SEG1"
 
 ; ----------------------------------------------------------------------------
@@ -3540,42 +3546,11 @@ LB88F:
         .byte   $3A                             ; B896 3A                       :
         .byte   $9B                             ; B897 9B                       .
 	.byte	"P:",$9B			; B898
-	.byte	"RORRE NOITACINUMMOCIRATA 4891 THGIRYPOC"
-	.byte	"ENOHP GNINRAEL EHT OT EMOCLEW"
-        and     ($4E,x)                         ; B8DF 21 4E                    !N
-        .byte   $52                             ; B8E1 52                       R
-        eor     $54,x                           ; B8E2 55 54                    UT
-        eor     $52                             ; B8E4 45 52                    ER
-        .byte   $20                             ; B8E6 20                        
-        .byte   $53                             ; B8E7 53                       S
-LB8E8:  .byte   $53                             ; B8E8 53                       S
-        eor     $52                             ; B8E9 45 52                    ER
-        bvc     LB90D                           ; B8EB 50 20                    P 
-        bit     L6E65                           ; B8ED 2C 65 6E                 ,en
-        .byte   $6F                             ; B8F0 6F                       o
-        .byte   $74                             ; B8F1 74                       t
-        jsr     L6368                           ; B8F2 20 68 63                  hc
-        .byte   $74                             ; B8F5 74                       t
-        adc     #$70                            ; B8F6 69 70                    ip
-        jsr     L6768                           ; B8F8 20 68 67                  hg
-        adc     #$68                            ; B8FB 69 68                    ih
-        jsr     L2061                           ; B8FD 20 61 20                  a 
-        .byte   $73                             ; B900 73                       s
-        adc     ($68,x)                         ; B901 61 68                    ah
-        jsr     L6E65                           ; B903 20 65 6E                  en
-        .byte   $6F                             ; B906 6F                       o
-        pla                                     ; B907 68                       h
-        bvs     LB92A                           ; B908 70 20                    p 
-        adc     $68                             ; B90A 65 68                    eh
-        .byte   $74                             ; B90C 74                       t
-LB90D:  jsr     L6572                           ; B90D 20 72 65                  re
-        .byte   $74                             ; B910 74                       t
-        ror     $41                             ; B911 66 41                    fA
-        .byte   $64                             ; B913 64                       d
-        adc     $61,x                           ; B914 75 61                    ua
-        .byte   $62                             ; B916 62                       b
-        jsr     L3020                           ; B917 20 20 30                   0
-        bmi     LB94F                           ; B91A 30 33                    03
+	RString	"COMMUNICATION ERROR"
+	RString	"COPYRIGHT 1984 ATARI"
+	RString "WELCOME TO THE LEARNING PHONE"
+	RString "After the phone has a high pitch tone, PRESS RETURN!"
+	.byte	"duab  003"
         .byte   $64                             ; B91C 64                       d
         adc     $61,x                           ; B91D 75 61                    ua
         .byte   $62                             ; B91F 62                       b
