@@ -2935,7 +2935,8 @@ LB415:  lda     $133C                           ; B415 AD 3C 13                 
         jmp     LB3B5                           ; B41D 4C B5 B3                 L..
 
 ; ----------------------------------------------------------------------------
-LB420:  ldx     #$00                            ; B420 A2 00                    ..
+sub_b420:
+	ldx     #$00                            ; B420 A2 00                    ..
 LB422:  lda     $CB                             ; B422 A5 CB                    ..
         bne     LB422                           ; B424 D0 FC                    ..
         jsr     LB53A                           ; B426 20 3A B5                  :.
@@ -3141,7 +3142,7 @@ sub_b581:
         bne     LB597                           ; B593 D0 02                    ..
 LB595:  lda     #$5A                            ; B595 A9 5A                    .Z
 LB597:  sta     $1347                           ; B597 8D 47 13                 .G.
-        jsr     LB420                           ; B59A 20 20 B4                   .
+        jsr     sub_b420
         jsr     LB4F7                           ; B59D 20 F7 B4                  ..
         lda     #$00                            ; B5A0 A9 00                    ..
         sta     $133A                           ; B5A2 8D 3A 13                 .:.
@@ -4959,7 +4960,7 @@ sub_BF93:
         pha                                     ; BFA0 48                       H
         lda     #$00                            ; BFA1 A9 00                    ..
 LBFA3:  sta     $CB                             ; BFA3 85 CB                    ..
-        jsr     LB420                           ; BFA5 20 20 B4                   .
+        jsr     sub_b420
         pla                                     ; BFA8 68                       h
         sta     $CB                             ; BFA9 85 CB                    ..
         lda     #$51                            ; BFAB A9 51                    .Q
@@ -4981,7 +4982,7 @@ LBFC2:  lda     #$FF                            ; BFC2 A9 FF                    
         jsr     LB422                           ; BFCD 20 22 B4                  ".
         lda     #$51                            ; BFD0 A9 51                    .Q
         sta     $133A                           ; BFD2 8D 3A 13                 .:.
-        jsr     LB420                           ; BFD5 20 20 B4                   .
+        jsr     sub_b420
 LBFD8:  jsr     LB4F7                           ; BFD8 20 F7 B4                  ..
         bcs	:+
         lda     #$00                            ; BFDD A9 00                    ..
