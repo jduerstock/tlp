@@ -28,6 +28,7 @@ L0403           := $0403
 L0407           := $0407
 L0810           := $0810
 L1010           := $1010
+byte_133a	:= $133A
 L134D           := $134D
 L2000           := $2000
 L2010           := $2010
@@ -70,7 +71,7 @@ L9050           := $9050
 LC020           := $C020
 LC040           := $C040
 LE010           := $E010
-LE456           := $E456
+CIOV		:= $E456
 LE459           := $E459
 LE45C           := $E45C
 LE462           := $E462
@@ -2668,13 +2669,13 @@ LB206:  pha
         lda     LB96E+7,y
         sta     $0349,x
         pla
-        jmp     LE456
+        jmp     CIOV
 
 ; ----------------------------------------------------------------------------
 LB238:  ldx     #$10                            ; B238 A2 10                    ..
 LB23A:  lda     #$0C                            ; B23A A9 0C                    ..
         sta     $0342,x                         ; B23C 9D 42 03                 .B.
-        jmp     LE456                           ; B23F 4C 56 E4                 LV.
+        jmp     CIOV
 
 ; ----------------------------------------------------------------------------
 LB242:  pha                                     ; B242 48                       H
@@ -2767,7 +2768,7 @@ LB2DC:  ldy     #$09                            ; B2DC A0 09                    
         sty     $0374                           ; B2E3 8C 74 03                 .t.
         ldy     $FB                             ; B2E6 A4 FB                    ..
         sty     $0375                           ; B2E8 8C 75 03                 .u.
-        jsr     LE456                           ; B2EB 20 56 E4                  V.
+        jsr     CIOV
         lda     #$40                            ; B2EE A9 40                    .@
         clc                                     ; B2F0 18                       .
         adc     $FA                             ; B2F1 65 FA                    e.
@@ -2973,7 +2974,7 @@ LB447:  lda     $CB                             ; B447 A5 CB                    
         sta     $CB                             ; B453 85 CB                    ..
         lda     #$3D                            ; B455 A9 3D                    .=
         sta     $D303                           ; B457 8D 03 D3                 ...
-        lda     $133A                           ; B45A AD 3A 13                 .:.
+        lda     byte_133a
         and     #$10                            ; B45D 29 10                    ).
         beq     LB464                           ; B45F F0 03                    ..
         sec                                     ; B461 38                       8
@@ -2987,9 +2988,9 @@ LB464:  ldx     $1344                           ; B464 AE 44 13                 
 LB46B:  lda     #$3D                            ; B46B A9 3D                    .=
         sta     $D303                           ; B46D 8D 03 D3                 ...
         clc                                     ; B470 18                       .
-LB471:  lda     $133A                           ; B471 AD 3A 13                 .:.
+LB471:  lda     byte_133a
         and     #$EF                            ; B474 29 EF                    ).
-        sta     $133A                           ; B476 8D 3A 13                 .:.
+        sta     byte_133a
         rts                                     ; B479 60                       `
 
 ; ----------------------------------------------------------------------------
@@ -3132,7 +3133,7 @@ sub_b561:
         tsx                                     ; B561 BA                       .
         stx     $1344                           ; B562 8E 44 13                 .D.
         lda     $2A                             ; B565 A5 2A                    .*
-        sta     $133A                           ; B567 8D 3A 13                 .:.
+        sta     byte_133a
         lda     #$00                            ; B56A A9 00                    ..
         sta     $07                             ; B56C 85 07                    ..
         jsr     sub_b47d
@@ -3148,7 +3149,7 @@ sub_b561:
 sub_b581:
         tsx                                     ; B581 BA                       .
         stx     $1344                           ; B582 8E 44 13                 .D.
-        lda     $133A                           ; B585 AD 3A 13                 .:.
+        lda     byte_133a
         beq     LB5A5                           ; B588 F0 1B                    ..
         jsr     LB53A                           ; B58A 20 3A B5                  :.
         lda     $B2                             ; B58D A5 B2                    ..
@@ -3160,7 +3161,7 @@ LB597:  sta     $1347                           ; B597 8D 47 13                 
         jsr     sub_b420
         jsr     LB4F7                           ; B59D 20 F7 B4                  ..
         lda     #$00                            ; B5A0 A9 00                    ..
-        sta     $133A                           ; B5A2 8D 3A 13                 .:.
+        sta     byte_133a
 LB5A5:  ldy     #$01                            ; B5A5 A0 01                    ..
         rts                                     ; B5A7 60                       `
 
@@ -3299,7 +3300,7 @@ LB6A5:  lda     $1340                           ; B6A5 AD 40 13                 
 
 ; ----------------------------------------------------------------------------
         lda     #$8D                            ; B6B8 A9 8D                    ..
-        sta     $133A                           ; B6BA 8D 3A 13                 .:.
+        sta     byte_133a
         ldy     #$00                            ; B6BD A0 00                    ..
         sty     $1342                           ; B6BF 8C 42 13                 .B.
         sty     $133D                           ; B6C2 8C 3D 13                 .=.
@@ -3320,7 +3321,7 @@ LB6D0:  lda     $1330,y                         ; B6D0 B9 30 13                 
         sty     $1346                           ; B6DA 8C 46 13                 .F.
         iny                                     ; B6DD C8                       .
         sty     $030A                           ; B6DE 8C 0A 03                 ...
-        sty     $133A                           ; B6E1 8C 3A 13                 .:.
+        sty     byte_133a
         lda     #$57                            ; B6E4 A9 57                    .W
         jmp     LB802                           ; B6E6 4C 02 B8                 L..
 
@@ -3371,7 +3372,7 @@ LB724:  lda     #$00                            ; B724 A9 00                    
         sta     $0304                           ; B739 8D 04 03                 ...
         lda     #$13                            ; B73C A9 13                    ..
         sta     $0305                           ; B73E 8D 05 03                 ...
-        lda     $133A                           ; B741 AD 3A 13                 .:.
+        lda     byte_133a
         sta     $030A                           ; B744 8D 0A 03                 ...
         lda     #$09                            ; B747 A9 09                    ..
         sta     $0308                           ; B749 8D 08 03                 ...
@@ -3408,7 +3409,7 @@ LB76F:  lda     $0209,x                         ; B76F BD 09 02                 
         stx     $1346                           ; B78B 8E 46 13                 .F.
         cli                                     ; B78E 58                       X
         ldy     #$01                            ; B78F A0 01                    ..
-        lda     $133A                           ; B791 AD 3A 13                 .:.
+        lda     byte_133a
         sta     $2A                             ; B794 85 2A                    .*
         cpy     #$00                            ; B796 C0 00                    ..
         rts                                     ; B798 60                       `
@@ -3416,7 +3417,7 @@ LB76F:  lda     $0209,x                         ; B76F BD 09 02                 
 ; ----------------------------------------------------------------------------
 sub_b799:
 	lda     #$00                            ; B799 A9 00                    ..
-        sta     $133A                           ; B79B 8D 3A 13                 .:.
+        sta     byte_133a
         sta     $0309                           ; B79E 8D 09 03                 ...
         tax                                     ; B7A1 AA                       .
         jsr     sub_bf86
@@ -3659,7 +3660,7 @@ LB9AE:  brk                                     ; B9AE 00                       
         .byte   $44                             ; B9B0 44                       D
         .byte   $84                             ; B9B1 84                       .
 LB9B2:  .byte   $0C                             ; B9B2 0C                       .
-        ora     LBEBC                           ; B9B3 0D BC BE                 ...
+	.byte	$0D,$BC,$BE
 LB9B6:  php                                     ; B9B6 08                       .
         bpl     LB9C9                           ; B9B7 10 10                    ..
         jsr     L4020                           ; B9B9 20 20 40                   @
@@ -4778,9 +4779,7 @@ LBEB7:  bvs     LBED9                           ; BEB7 70 20                    
         brk                                     ; BEB9 00                       .
         brk                                     ; BEBA 00                       .
         brk                                     ; BEBB 00                       .
-LBEBC:  rti                                     ; BEBC 40                       @
-
-; ----------------------------------------------------------------------------
+	.byte	$40
         beq     LBEFF                           ; BEBD F0 40                    .@
         brk                                     ; BEBF 00                       .
         brk                                     ; BEC0 00                       .
@@ -4954,7 +4953,7 @@ sub_BF93:
 	jsr	sub_b47d
 	lda	#$51
 	sta	$1347
-	sta	$133A
+	sta	byte_133a
 	lda	$CB
         pha                                     ; BFA0 48                       H
         lda     #$00                            ; BFA1 A9 00                    ..
@@ -4963,7 +4962,7 @@ LBFA3:  sta     $CB                             ; BFA3 85 CB                    
         pla                                     ; BFA8 68                       h
         sta     $CB                             ; BFA9 85 CB                    ..
         lda     #$51                            ; BFAB A9 51                    .Q
-        sta     $133A                           ; BFAD 8D 3A 13                 .:.
+        sta     byte_133a
         lda     $08                             ; BFB0 A5 08                    ..
         beq     LBFC2                           ; BFB2 F0 0E                    ..
         ldx     $B2                             ; BFB4 A6 B2                    ..
@@ -4974,18 +4973,18 @@ LBFBA:  sec                                     ; BFBA 38                       
 LBFBD:  ldx     #$02                            ; BFBD A2 02                    ..
         jsr     LB43F                           ; BFBF 20 3F B4                  ?.
 LBFC2:  lda     #$FF                            ; BFC2 A9 FF                    ..
-        sta     $133A                           ; BFC4 8D 3A 13                 .:.
+        sta     byte_133a
         lda     #$00                            ; BFC7 A9 00                    ..
         sta     $CB                             ; BFC9 85 CB                    ..
         ldx     #$02                            ; BFCB A2 02                    ..
         jsr     LB422                           ; BFCD 20 22 B4                  ".
         lda     #$51                            ; BFD0 A9 51                    .Q
-        sta     $133A                           ; BFD2 8D 3A 13                 .:.
+        sta     byte_133a
         jsr     sub_b420
 LBFD8:  jsr     LB4F7                           ; BFD8 20 F7 B4                  ..
         bcs	:+
         lda     #$00                            ; BFDD A9 00                    ..
-        sta     $133A                           ; BFDF 8D 3A 13                 .:.
+        sta     byte_133a
         tax                                     ; BFE2 AA                       .
         jsr     sub_bf86
         bne	:+
@@ -4998,8 +4997,7 @@ LBFD8:  jsr     LB4F7                           ; BFD8 20 F7 B4                 
 :	rts
 
 ; ----------------------------------------------------------------------------
-        brk                                     ; BFF8 00                       .
-        brk                                     ; BFF9 00                       .
+	.byte	$00,$00
 
 	.addr	sub_a000
         .byte   $00,$04
