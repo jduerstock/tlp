@@ -4942,14 +4942,14 @@ LBF81:  jsr     L2020                           ; BF81 20 20 20
 LBF85:  .byte   $20                             ; BF85 20                        
 
 sub_bf86:
-	cmp     $031A,x                         ; BF86 DD 1A 03                 ...
+	cmp     $031A,x
 	beq	:+
-        inx                                     ; BF8B E8                       .
-        inx                                     ; BF8C E8                       .
-        inx                                     ; BF8D E8                       .
-	cpx     #$20                            ; BF8E E0 20                    . 
+        inx
+        inx
+        inx
+	cpx     #$20
         bcc     sub_bf86
-:	rts                                     ; BF92 60                       `
+:	rts
 
 ; ----------------------------------------------------------------------------
 
