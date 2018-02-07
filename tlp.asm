@@ -3563,6 +3563,8 @@ LB88F:
 
 LB892:
 	.byte	"R:",$9B			; B892
+
+LB895:
 	.byte	"T:",$9B			; B895
 	.byte	"P:",$9B			; B898
 
@@ -3633,12 +3635,10 @@ LB96E:  .byte   $10,$03,$0D,$00
 	.byte	$00,$00
 	.byte	$00,$00
 
-        .byte   $10                             ; B996 10                       .
-LB997:  .byte   $03                             ; B997 03                       .
-        ora     $9500                           ; B998 0D 00 95                 ...
-        clv                                     ; B99B B8                       .
-        brk                                     ; B99C 00                       .
-        brk                                     ; B99D 00                       .
+	.byte	$10,$03,$0D,$00
+	.addr	LB895
+	.byte	$00,$00
+
         bmi     LB9A3                           ; B99E 30 03                    0.
         php                                     ; B9A0 08                       .
         brk                                     ; B9A1 00                       .
