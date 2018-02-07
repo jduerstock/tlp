@@ -176,7 +176,7 @@ LA0A3:  ldy     #$00                            ; A0A3 A0 00                    
 ; ----------------------------------------------------------------------------
 LA0B6:  dey                                     ; A0B6 88                       .
         beq     LA0BC                           ; A0B7 F0 03                    ..
-        jsr     LA7FE                           ; A0B9 20 FE A7                  ..
+        jsr     sub_a7fe
 LA0BC:  lda     LBAE2,y                         ; A0BC B9 E2 BA                 ...
         pha                                     ; A0BF 48                       H
         lda     LBAE7,y                         ; A0C0 B9 E7 BA                 ...
@@ -1068,7 +1068,7 @@ LA6EC:  clc                                     ; A6EC 18                       
         rts                                     ; A6F5 60                       `
 
 ; ----------------------------------------------------------------------------
-        jsr     LA7FE                           ; A6F6 20 FE A7                  ..
+        jsr     sub_a7fe
         ldx     $D8                             ; A6F9 A6 D8                    ..
         ldy     #$0F                            ; A6FB A0 0F                    ..
 LA6FD:  lsr     $DC                             ; A6FD 46 DC                    F.
@@ -1205,16 +1205,18 @@ LA7E8:  clc                                     ; A7E8 18                       
 :	jmp     LA673                           ; A7F3 4C 73 A6                 Ls.
 
 ; ----------------------------------------------------------------------------
-LA7F6:  ldx     $B6                             ; A7F6 A6 B6                    ..
+sub_a7f6:
+	ldx     $B6                             ; A7F6 A6 B6                    ..
         lda     $3E2E,x                         ; A7F8 BD 2E 3E                 ..>
         inc     $B6                             ; A7FB E6 B6                    ..
         rts                                     ; A7FD 60                       `
 
 ; ----------------------------------------------------------------------------
-LA7FE:  jsr     LA7F6                           ; A7FE 20 F6 A7                  ..
+sub_a7fe:
+	jsr     sub_a7f6
         and     #$3F                            ; A801 29 3F                    )?
         sta     $DB                             ; A803 85 DB                    ..
-        jsr     LA7F6                           ; A805 20 F6 A7                  ..
+        jsr     sub_a7f6
         and     #$3F                            ; A808 29 3F                    )?
         sta     $DC                             ; A80A 85 DC                    ..
         lda     #$00                            ; A80C A9 00                    ..
@@ -1224,7 +1226,7 @@ LA7FE:  jsr     LA7F6                           ; A7FE 20 F6 A7                 
         ror     a                               ; A813 6A                       j
         ora     $DB                             ; A814 05 DB                    ..
         sta     $DB                             ; A816 85 DB                    ..
-        jsr     LA7F6                           ; A818 20 F6 A7                  ..
+        jsr     sub_a7f6
         asl     a                               ; A81B 0A                       .
         asl     a                               ; A81C 0A                       .
         asl     a                               ; A81D 0A                       .
@@ -1322,7 +1324,7 @@ sub_a89f:
         jmp     LA3B2                           ; A8B0 4C B2 A3                 L..
 
 ; ----------------------------------------------------------------------------
-LA8B3:  jsr     LA7F6                           ; A8B3 20 F6 A7                  ..
+LA8B3:  jsr     sub_a7f6
         cmp     #$40                            ; A8B6 C9 40                    .@
         bcs     LA901                           ; A8B8 B0 47                    .G
         jsr     LA8DC                           ; A8BA 20 DC A8                  ..
@@ -1360,7 +1362,7 @@ LA8EE:  and     #$1F                            ; A8EE 29 1F                    
         and     #$E0                            ; A8F4 29 E0                    ).
         ora     $DB                             ; A8F6 05 DB                    ..
         sta     $BD                             ; A8F8 85 BD                    ..
-        jsr     LA7F6                           ; A8FA 20 F6 A7                  ..
+        jsr     sub_a7f6
         cmp     #$40                            ; A8FD C9 40                    .@
         bcc     LA8CB                           ; A8FF 90 CA                    ..
 LA901:  cmp     #$60                            ; A901 C9 60                    .`
@@ -3566,6 +3568,8 @@ LB892:
 
 LB895:
 	.byte	"T:",$9B			; B895
+
+LB898:
 	.byte	"P:",$9B			; B898
 
 LB89B:
@@ -3639,15 +3643,10 @@ LB96E:  .byte   $10,$03,$0D,$00
 	.addr	LB895
 	.byte	$00,$00
 
-        bmi     LB9A3                           ; B99E 30 03                    0.
-        php                                     ; B9A0 08                       .
-        brk                                     ; B9A1 00                       .
-        tya                                     ; B9A2 98                       .
-LB9A3:  clv                                     ; B9A3 B8                       .
-        rti                                     ; B9A4 40                       @
+	.byte	$30,$03,$08,$00
+	.addr	LB898
+	.byte	$40,$00
 
-; ----------------------------------------------------------------------------
-        brk                                     ; B9A5 00                       .
 LB9A6:  asl     $09                             ; B9A6 06 09                    ..
         brk                                     ; B9A8 00                       .
         tsx                                     ; B9A9 BA                       .
