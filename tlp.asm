@@ -15,7 +15,6 @@
 	.segment "SEG1"
 
 ; ----------------------------------------------------------------------------
-L0000           := $0000
 L0010           := $0010
 L0020           := $0020
 L0070           := $0070
@@ -500,8 +499,8 @@ LA2DC:  lda     LBA67,x                         ; A2DC BD 67 BA                 
         lda     L0010                           ; A314 A5 10                    ..
         and     #$7F                            ; A316 29 7F                    ).
         jsr     LB549                           ; A318 20 49 B5                  I.
-        ldy     #$13                            ; A31B A0 13                    ..
-        ldx     #$B0                            ; A31D A2 B0                    ..
+        ldy     #<sub_b013
+        ldx     #>sub_b013
         lda     #$07                            ; A31F A9 07                    ..
         jmp     LE45C                           ; A321 4C 5C E4                 L\.
 
@@ -2368,6 +2367,8 @@ LB010:  sta     ($E3),y                         ; B010 91 E3                    
         rts                                     ; B012 60                       `
 
 ; ----------------------------------------------------------------------------
+
+sub_b013:
         sec                                     ; B013 38                       8
         lda     $C1                             ; B014 A5 C1                    ..
         sbc     #$02                            ; B016 E9 02                    ..
@@ -3532,7 +3533,7 @@ LB87F:  brk                                     ; B87F 00                       
         brk                                     ; B882 00                       .
         brk                                     ; B883 00                       .
         ora     ($01,x)                         ; B884 01 01                    ..
-        ora     (L0000,x)                       ; B886 01 00                    ..
+	.byte	$01,$00
         .byte   $FF                             ; B888 FF                       .
         .byte   $FF                             ; B889 FF                       .
         .byte   $FF                             ; B88A FF                       .
@@ -3621,12 +3622,12 @@ LB96E:  .byte   $10,$03,$0D,$00
         brk                                     ; B984 00                       .
         brk                                     ; B985 00                       .
         bpl     LB993                           ; B986 10 0B                    ..
-        ora     a:L0000                         ; B988 0D 00 00                 ...
+	.byte	$0D,$00,$00
         brk                                     ; B98B 00                       .
         brk                                     ; B98C 00                       .
         brk                                     ; B98D 00                       .
         bpl     LB997                           ; B98E 10 07                    ..
-        ora     a:L0000                         ; B990 0D 00 00                 ...
+	.byte	$0D,$00,$00
 LB993:  brk                                     ; B993 00                       .
         brk                                     ; B994 00                       .
         brk                                     ; B995 00                       .
@@ -3903,9 +3904,7 @@ LBAE7:  .byte   $B2                             ; BAE7 B2                       
         .byte   $7C                             ; BB02 7C                       |
         brk                                     ; BB03 00                       .
         .byte   $32                             ; BB04 32                       2
-        jmp     L0000                           ; BB05 4C 00 00                 L..
-
-; ----------------------------------------------------------------------------
+	.byte	$4C,$00,$00
         brk                                     ; BB08 00                       .
         brk                                     ; BB09 00                       .
         brk                                     ; BB0A 00                       .
@@ -3935,7 +3934,7 @@ LBB24:  brk                                     ; BB24 00                       
         brk                                     ; BB2B 00                       .
         brk                                     ; BB2C 00                       .
         bpl     LBB3F                           ; BB2D 10 10                    ..
-        bpl     LBB41                           ; BB2F 10 10                    ..
+	.byte	$10,$10
         .byte   $7C                             ; BB31 7C                       |
 LBB32:  sec                                     ; BB32 38                       8
         .byte   $10                             ; BB33 10                       .
@@ -3943,14 +3942,12 @@ LBB34:  brk                                     ; BB34 00                       
         brk                                     ; BB35 00                       .
         jsr     LFE60                           ; BB36 20 60 FE                  `.
         rts                                     ; BB39 60                       `
-
-; ----------------------------------------------------------------------------
-        jsr     L0000                           ; BB3A 20 00 00                  ..
+	.byte	$20,$00,$00
         brk                                     ; BB3D 00                       .
         .byte   $24                             ; BB3E 24                       $
 LBB3F:  clc                                     ; BB3F 18                       .
         clc                                     ; BB40 18                       .
-LBB41:  bit     L0000                           ; BB41 24 00                    $.
+	.byte	$24,$00
         brk                                     ; BB43 00                       .
         inc     L2040,x                         ; BB44 FE 40 20                 .@ 
         bpl     LBB59                           ; BB47 10 10                    ..
@@ -3961,7 +3958,7 @@ LBB41:  bit     L0000                           ; BB41 24 00                    
         .byte   $44                             ; BB50 44                       D
         .byte   $44                             ; BB51 44                       D
         .byte   $82                             ; BB52 82                       .
-        inc     a:L0000,x                       ; BB53 FE 00 00                 ...
+	.byte	$FE,$00,$00
         .byte   $44                             ; BB56 44                       D
 LBB57:  .byte   $44                             ; BB57 44                       D
         .byte   $44                             ; BB58 44                       D
