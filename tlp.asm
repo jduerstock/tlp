@@ -15,7 +15,7 @@
 	.segment "SEG1"
 
 ; ----------------------------------------------------------------------------
-L0010           := $0010
+POKMSK		:= $0010
 L0020           := $0020
 L0070           := $0070
 L0080           := $0080
@@ -496,7 +496,7 @@ LA2DC:  lda     LBA67,x                         ; A2DC BD 67 BA                 
         sta     $E9                             ; A30E 85 E9                    ..
         lda     #$44                            ; A310 A9 44                    .D
         sta     $E8                             ; A312 85 E8                    ..
-        lda     L0010                           ; A314 A5 10                    ..
+        lda     POKMSK
         and     #$7F                            ; A316 29 7F                    ).
         jsr     LB549                           ; A318 20 49 B5                  I.
         ldy     #<sub_b013
@@ -2892,7 +2892,7 @@ LB3C6:  cld                                     ; B3C6 D8                       
         lda     $1340                           ; B3C9 AD 40 13                 .@.
         bne     LB3D8                           ; B3CC D0 0A                    ..
         lda     #$E7                            ; B3CE A9 E7                    ..
-        and     L0010                           ; B3D0 25 10                    %.
+        and     POKMSK
         jsr     LB549                           ; B3D2 20 49 B5                  I.
         jmp     LB3B5                           ; B3D5 4C B5 B3                 L..
 
@@ -2996,7 +2996,7 @@ LB485:  sta     $133C,y                         ; B485 99 3C 13                 
         sta     $07                             ; B48B 85 07                    ..
         sta     $1346                           ; B48D 8D 46 13                 .F.
         lda     #$C7                            ; B490 A9 C7                    ..
-        and     L0010                           ; B492 25 10                    %.
+        and     POKMSK
         ora     #$20                            ; B494 09 20                    . 
         jsr     LB549                           ; B496 20 49 B5                  I.
         cli                                     ; B499 58                       X
@@ -3060,7 +3060,7 @@ LB505:  lda     $1336,y                         ; B505 B9 36 13                 
         and     #$FE                            ; B511 29 FE                    ).
         sta     $D302                           ; B513 8D 02 D3                 ...
         lda     #$C7                            ; B516 A9 C7                    ..
-        and     L0010                           ; B518 25 10                    %.
+        and     POKMSK
         jsr     LB549                           ; B51A 20 49 B5                  I.
         cli                                     ; B51D 58                       X
         rts                                     ; B51E 60                       `
@@ -3091,9 +3091,9 @@ LB53F:  lda     $1340                           ; B53F AD 40 13                 
         rts                                     ; B544 60                       `
 
 ; ----------------------------------------------------------------------------
-LB545:  lda     L0010                           ; B545 A5 10                    ..
+LB545:  lda     POKMSK
         ora     #$18                            ; B547 09 18                    ..
-LB549:  sta     L0010                           ; B549 85 10                    ..
+LB549:  sta     POKMSK
         sta     $D20E                           ; B54B 8D 0E D2                 ...
         rts                                     ; B54E 60                       `
 
@@ -3263,7 +3263,7 @@ LB655:  lda     $1340                           ; B655 AD 40 13                 
         sta     $0210                           ; B690 8D 10 02                 ...
         lda     #$B5                            ; B693 A9 B5                    ..
         sta     $0211                           ; B695 8D 11 02                 ...
-        lda     L0010                           ; B698 A5 10                    ..
+        lda     POKMSK
         ora     #$01                            ; B69A 09 01                    ..
         jsr     LB549                           ; B69C 20 49 B5                  I.
         sta     $D209                           ; B69F 8D 09 D2                 ...
@@ -3276,7 +3276,7 @@ LB6A5:  lda     $1340                           ; B6A5 AD 40 13                 
         lda     $FE                             ; B6AA A5 FE                    ..
         bne     LB6A5                           ; B6AC D0 F7                    ..
         lda     #$FE                            ; B6AE A9 FE                    ..
-        and     L0010                           ; B6B0 25 10                    %.
+        and     POKMSK
         jsr     LB549                           ; B6B2 20 49 B5                  I.
         ldy     #$01                            ; B6B5 A0 01                    ..
         rts                                     ; B6B7 60                       `
@@ -3317,7 +3317,7 @@ LB6F0:  lda     $1340                           ; B6F0 AD 40 13                 
         bcs     LB6F0                           ; B6F5 B0 F9                    ..
         sei                                     ; B6F7 78                       x
         jsr     LB369                           ; B6F8 20 69 B3                  i.
-        lda     L0010                           ; B6FB A5 10                    ..
+        lda     POKMSK
         ora     #$18                            ; B6FD 09 18                    ..
         jsr     LB549                           ; B6FF 20 49 B5                  I.
         ldy     #$00                            ; B702 A0 00                    ..
@@ -3385,7 +3385,7 @@ LB76F:  lda     $0209,x                         ; B76F BD 09 02                 
         bne     LB76F                           ; B77C D0 F1                    ..
         stx     $CC                             ; B77E 86 CC                    ..
         stx     $CD                             ; B780 86 CD                    ..
-        lda     L0010                           ; B782 A5 10                    ..
+        lda     POKMSK
         ora     #$20                            ; B784 09 20                    . 
         jsr     LB549                           ; B786 20 49 B5                  I.
         ldx     #$01                            ; B789 A2 01                    ..
@@ -4504,7 +4504,7 @@ LBDAD:  .byte   $80                             ; BDAD 80                       
         rti                                     ; BDAE 40                       @
 
 ; ----------------------------------------------------------------------------
-        jsr     L0010                           ; BDAF 20 10 00                  ..
+	.byte	$20,$10,$00
 LBDB2:  bvs     LBDC4                           ; BDB2 70 10                    p.
         .byte   $10                             ; BDB4 10                       .
 LBDB5:  .byte	$10,$70
