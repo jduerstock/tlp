@@ -4934,7 +4934,7 @@ LBF65:  bvc     LBEEF                           ; BF65 50 88                    
         brk                                     ; BF78 00                       .
         brk                                     ; BF79 00                       .
         jsr     L2070                           ; BF7A 20 70 20                  p 
-        bvs     LBF9F                           ; BF7D 70 20                    p 
+	.byte	$70,$20
         brk                                     ; BF7F 00                       .
         .byte   $20                             ; BF80 20                        
 LBF81:  jsr     L2020                           ; BF81 20 20 20                    
@@ -4958,8 +4958,7 @@ sub_BF93:
 	lda	#$51
 	sta	$1347
 	sta	$133A
-        .byte   $A5                             ; BF9E A5                       .
-LBF9F:  .byte   $CB                             ; BF9F CB                       .
+	lda	$CB
         pha                                     ; BFA0 48                       H
         lda     #$00                            ; BFA1 A9 00                    ..
 LBFA3:  sta     $CB                             ; BFA3 85 CB                    ..
