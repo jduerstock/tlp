@@ -3616,22 +3616,19 @@ LB966:  brk                                     ; B966 00                       
 LB96E:  .byte   $10,$03,$0D,$00
 	.addr	LB892
 	.byte	$00,$00
-        jsr     L0403                           ; B976 20 03 04                  ..
-        brk                                     ; B979 00                       .
+
+	.byte	$20,$03,$04,$00
 	.addr	LB88F
-        brk                                     ; B97C 00                       .
-        brk                                     ; B97D 00                       .
-        jsr     L0407                           ; B97E 20 07 04                  ..
-        brk                                     ; B981 00                       .
-        brk                                     ; B982 00                       .
-        brk                                     ; B983 00                       .
-        brk                                     ; B984 00                       .
-        brk                                     ; B985 00                       .
-        bpl     LB993                           ; B986 10 0B                    ..
-	.byte	$0D,$00,$00
-        brk                                     ; B98B 00                       .
-        brk                                     ; B98C 00                       .
-        brk                                     ; B98D 00                       .
+	.byte	$00,$00
+
+	.byte	$20,$07,$04,$00
+	.byte	$00,$00
+	.byte	$00,$00
+
+	.byte	$10,$0B,$0D,$00
+	.byte	$00,$00
+	.byte	$00,$00
+
         bpl     LB997                           ; B98E 10 07                    ..
 	.byte	$0D,$00,$00
 LB993:  brk                                     ; B993 00                       .
