@@ -23,6 +23,7 @@ off_E3		:= $00E3
 off_E5		:= $00E5
 off_EC		:= $00EC
 off_F4		:= $00F4
+HATABS		:= $031A
 L0403           := $0403
 L0407           := $0407
 L0810           := $0810
@@ -4943,7 +4944,7 @@ LBF81:  jsr     L2020                           ; BF81 20 20 20
 LBF85:  .byte   $20                             ; BF85 20                        
 
 sub_bf86:
-	cmp     $031A,x
+	cmp     HATABS,x
 	beq	:+
         inx
         inx
@@ -4994,17 +4995,17 @@ LBFD8:  jsr     LB4F7                           ; BFD8 20 F7 B4                 
         jsr     sub_bf86
         bne	:+
         lda     #'T'
-        sta     $031A,x                         ; BFEA 9D 1A 03                 ...
+        sta     HATABS,x
         lda     #<t_handler
-        sta     $031B,x                         ; BFEF 9D 1B 03                 ...
+        sta     HATABS+1,x
         lda     #>t_handler
-        sta     $031C,x                         ; BFF4 9D 1C 03                 ...
+        sta     HATABS+2,x
 :	rts
 
 ; ----------------------------------------------------------------------------
         brk                                     ; BFF8 00                       .
         brk                                     ; BFF9 00                       .
-        brk                                     ; BFFA 00                       .
-        ldy     #$00                            ; BFFB A0 00                    ..
-        .byte   $04                             ; BFFD 04                       .
+
+	.addr	sub_a000
+        .byte   $00,$04
 	.addr	sub_BF93
