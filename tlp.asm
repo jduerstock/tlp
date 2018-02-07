@@ -4879,7 +4879,7 @@ LBF08:  brk                                     ; BF08 00                       
 	.byte	$50,$70
         bvc     LBF4B                           ; BF29 50 20                    P 
         brk                                     ; BF2B 00                       .
-        bmi     LBF8E                           ; BF2C 30 60                    0`
+	.byte	$30,$60
         ldy     #$60                            ; BF2E A0 60                    .`
         bmi     LBF32                           ; BF30 30 00                    0.
 LBF32:  jsr     L2050                           ; BF32 20 50 20                  P 
@@ -4890,7 +4890,7 @@ LBF32:  jsr     L2050                           ; BF32 20 50 20                 
 	.byte	$50,$60
         cpy     #$00                            ; BF3C C0 00                    ..
         cpy     #$A0                            ; BF3E C0 A0                    ..
-        bvc     LBF92                           ; BF40 50 50                    PP
+	.byte	$50,$50
         ldy     #$C0                            ; BF42 A0 C0                    ..
         sed                                     ; BF44 F8                       .
         jsr     L4040                           ; BF45 20 40 40                  @@
@@ -4943,13 +4943,13 @@ LBF85:  .byte   $20                             ; BF85 20
 
 sub_bf86:
 	cmp     $031A,x                         ; BF86 DD 1A 03                 ...
-	beq	LBF92
+	beq	:+
         inx                                     ; BF8B E8                       .
         inx                                     ; BF8C E8                       .
         inx                                     ; BF8D E8                       .
-LBF8E:  cpx     #$20                            ; BF8E E0 20                    . 
+	cpx     #$20                            ; BF8E E0 20                    . 
         bcc     sub_bf86
-LBF92:  rts                                     ; BF92 60                       `
+:	rts                                     ; BF92 60                       `
 
 ; ----------------------------------------------------------------------------
 
