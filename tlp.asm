@@ -2637,30 +2637,30 @@ LB1F1:  jsr     LB206                           ; B1F1 20 06 B2                 
 LB1F6:  ldy     #$18                            ; B1F6 A0 18                    ..
         sty     $9C                             ; B1F8 84 9C                    ..
         ldy     #$12                            ; B1FA A0 12                    ..
-        lda     #$9B                            ; B1FC A9 9B                    ..
-        ldx     #$B8                            ; B1FE A2 B8                    ..
+        lda     #<LB89B
+        ldx     #>LB89B
         jsr     LA89F                           ; B200 20 9F A8                  ..
 LB203:  jmp     LB203                           ; B203 4C 03 B2                 L..
 
 ; ----------------------------------------------------------------------------
-LB206:  pha                                     ; B206 48                       H
-        ldx     LB96E,y                         ; B207 BE 6E B9                 .n.
-        lda     LB96F,y                         ; B20A B9 6F B9                 .o.
-        sta     $0342,x                         ; B20D 9D 42 03                 .B.
-        lda     LB970,y                         ; B210 B9 70 B9                 .p.
-        sta     $034A,x                         ; B213 9D 4A 03                 .J.
-        lda     LB971,y                         ; B216 B9 71 B9                 .q.
-        sta     $034B,x                         ; B219 9D 4B 03                 .K.
-        lda     LB972,y                         ; B21C B9 72 B9                 .r.
-        sta     $0344,x                         ; B21F 9D 44 03                 .D.
-        lda     LB973,y                         ; B222 B9 73 B9                 .s.
-        sta     $0345,x                         ; B225 9D 45 03                 .E.
-        lda     LB974,y                         ; B228 B9 74 B9                 .t.
-        sta     $0348,x                         ; B22B 9D 48 03                 .H.
-        lda     LB975,y                         ; B22E B9 75 B9                 .u.
-        sta     $0349,x                         ; B231 9D 49 03                 .I.
-        pla                                     ; B234 68                       h
-        jmp     LE456                           ; B235 4C 56 E4                 LV.
+LB206:  pha
+        ldx     LB96E,y
+        lda     LB96E+1,y
+        sta     $0342,x
+        lda     LB96E+2,y
+        sta     $034A,x
+        lda     LB96E+3,y
+        sta     $034B,x
+        lda     LB96E+4,y
+        sta     $0344,x
+        lda     LB96E+5,y
+        sta     $0345,x
+        lda     LB96E+6,y
+        sta     $0348,x
+        lda     LB96E+7,y
+        sta     $0349,x
+        pla
+        jmp     LE456
 
 ; ----------------------------------------------------------------------------
 LB238:  ldx     #$10                            ; B238 A2 10                    ..
@@ -3541,9 +3541,13 @@ LB87F:  brk                                     ; B87F 00                       
 
 LB88F:
 	.byte	"K:",$9B			; B88F
+
+LB892:
 	.byte	"R:",$9B			; B892
-	.byte	"T:",$9B			; B892
+	.byte	"T:",$9B			; B895
 	.byte	"P:",$9B			; B898
+
+LB89B:
 	RString	"COMMUNICATION ERROR"
 	RString	"COPYRIGHT 1984 ATARI"
 	RString "WELCOME TO THE LEARNING PHONE"
@@ -3599,14 +3603,10 @@ LB966:  brk                                     ; B966 00                       
         .byte   $3F                             ; B96B 3F                       ?
         .byte   $1F                             ; B96C 1F                       .
         .byte   $0F                             ; B96D 0F                       .
-LB96E:  .byte   $10                             ; B96E 10                       .
-LB96F:  .byte   $03                             ; B96F 03                       .
-LB970:  .byte   $0D                             ; B970 0D                       .
-LB971:  brk                                     ; B971 00                       .
-LB972:  .byte   $92                             ; B972 92                       .
-LB973:  clv                                     ; B973 B8                       .
-LB974:  brk                                     ; B974 00                       .
-LB975:  brk                                     ; B975 00                       .
+
+LB96E:  .byte   $10,$03,$0D,$00
+	.addr	LB892
+	.byte	$00,$00
         jsr     L0403                           ; B976 20 03 04                  ..
         brk                                     ; B979 00                       .
 	.addr	LB88F
