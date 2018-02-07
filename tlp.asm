@@ -19,6 +19,7 @@ POKMSK		:= $0010
 L0020           := $0020
 L0070           := $0070
 L0080           := $0080
+off_E3		:= $00E3
 off_E5		:= $00E5
 off_EC		:= $00EC
 off_F4		:= $00F4
@@ -1020,7 +1021,7 @@ LA695:  jsr     LAD8E                           ; A695 20 8E AD                 
 LA69A:  and     #$07                            ; A69A 29 07                    ).
         tax                                     ; A69C AA                       .
         ldy     #$00                            ; A69D A0 00                    ..
-        jmp     LB004                           ; A69F 4C 04 B0                 L..
+        jmp     sub_b004
 
 ; ----------------------------------------------------------------------------
 LA6A2:  ldy     #$00                            ; A6A2 A0 00                    ..
@@ -2251,7 +2252,7 @@ LAF36:  sty     $E3                             ; AF36 84 E3                    
         lsr     a                               ; AF45 4A                       J
         lsr     a                               ; AF46 4A                       J
         tay                                     ; AF47 A8                       .
-LAF48:  jsr     LB004                           ; AF48 20 04 B0                  ..
+LAF48:  jsr     sub_b004
         inc     $F6                             ; AF4B E6 F6                    ..
         bne     LAF53                           ; AF4D D0 04                    ..
         inc     $F7                             ; AF4F E6 F7                    ..
@@ -2305,18 +2306,18 @@ LAF94:  ldx     $C9                             ; AF94 A6 C9                    
 LAF9D:  lda     off_F4
         adc     $D4                             ; AF9F 65 D4                    e.
         sta     off_F4
-        lda     $F5                             ; AFA3 A5 F5                    ..
+        lda     off_F4+1
         adc     $D5                             ; AFA5 65 D5                    e.
-        sta     $F5                             ; AFA7 85 F5                    ..
+        sta     off_F4+1
         cmp     $D7                             ; AFA9 C5 D7                    ..
         bcc     LAFD7                           ; AFAB 90 2A                    .*
         bne     LAFB5                           ; AFAD D0 06                    ..
-        lda     $F4                             ; AFAF A5 F4                    ..
+        lda     off_F4                             ; AFAF A5 F4                    ..
         cmp     $D6                             ; AFB1 C5 D6                    ..
         bcc     LAFD7                           ; AFB3 90 22                    ."
-LAFB5:  lda     $F4                             ; AFB5 A5 F4                    ..
+LAFB5:  lda     off_F4                             ; AFB5 A5 F4                    ..
         sbc     $D6                             ; AFB7 E5 D6                    ..
-        sta     $F4                             ; AFB9 85 F4                    ..
+        sta     off_F4                             ; AFB9 85 F4                    ..
         lda     $F5                             ; AFBB A5 F5                    ..
         sbc     $D7                             ; AFBD E5 D7                    ..
         sta     $F5                             ; AFBF 85 F5                    ..
@@ -2360,12 +2361,13 @@ LAFEE:  ldy     $EC,x                           ; AFEE B4 EC                    
         rts                                     ; B003 60                       `
 
 ; ----------------------------------------------------------------------------
-LB004:  lda     LB93A,x                         ; B004 BD 3A B9                 .:.
+sub_b004:  
+	lda     LB93A,x                         ; B004 BD 3A B9                 .:.
         and     ($E3),y                         ; B007 31 E3                    1.
         bit     $B0                             ; B009 24 B0                    $.
-        bvs     LB010                           ; B00B 70 03                    p.
+        bvs	:+
         ora     LB942,x                         ; B00D 1D 42 B9                 .B.
-LB010:  sta     ($E3),y                         ; B010 91 E3                    ..
+:	sta     (off_E3),y
         rts                                     ; B012 60                       `
 
 ; ----------------------------------------------------------------------------
@@ -3578,19 +3580,9 @@ LB936:
 	.byte	$00,$40,$80,$C0
 
 LB93A:
-	.byte   $7F,$BF,$DF,$EF
-        .byte   $F7                             ; B93E F7                       .
-        .byte   $FB                             ; B93F FB                       .
-        .byte   $FD                             ; B940 FD                       .
-        .byte   $FE                             ; B941 FE                       .
-LB942:  .byte   $80                             ; B942 80                       .
-        rti                                     ; B943 40                       @
-
-; ----------------------------------------------------------------------------
-        jsr     L0810                           ; B944 20 10 08                  ..
-        .byte   $04                             ; B947 04                       .
-        .byte   $02                             ; B948 02                       .
-        ora     ($E3,x)                         ; B949 01 E3                    ..
+	.byte   $7F,$BF,$DF,$EF,$F7,$FB,$FD,$FE
+LB942:  .byte   $80,$40,$20,$10,$08,$04,$02,$01
+	.byte	$E3
         sbc     ($E0,x)                         ; B94B E1 E0                    ..
         .byte   $E2                             ; B94D E2                       .
 LB94E:  brk                                     ; B94E 00                       .
