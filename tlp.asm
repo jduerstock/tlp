@@ -3542,9 +3542,7 @@ LB87F:  brk                                     ; B87F 00                       
 LB88F:
 	.byte	"K:",$9B			; B88F
 	.byte	"R:",$9B			; B892
-        .byte   $54                             ; B895 54                       T
-        .byte   $3A                             ; B896 3A                       :
-        .byte   $9B                             ; B897 9B                       .
+	.byte	"T:",$9B			; B892
 	.byte	"P:",$9B			; B898
 	RString	"COMMUNICATION ERROR"
 	RString	"COPYRIGHT 1984 ATARI"
