@@ -3162,7 +3162,7 @@ LB5B0:  lda     #$00                            ; B5B0 A9 00                    
         sta     $D302                           ; B5BF 8D 02 D3                 ...
         ldx     #$00                            ; B5C2 A2 00                    ..
         lda     #$52                            ; B5C4 A9 52                    .R
-        jsr     LBF86                           ; B5C6 20 86 BF                  ..
+        jsr     sub_bf86
         bne     LB5D5                           ; B5C9 D0 0A                    ..
         lda     #$D6                            ; B5CB A9 D6                    ..
         sta     $031B,x                         ; B5CD 9D 1B 03                 ...
@@ -3398,7 +3398,7 @@ LB799:  lda     #$00                            ; B799 A9 00                    
         sta     $133A                           ; B79B 8D 3A 13                 .:.
         sta     $0309                           ; B79E 8D 09 03                 ...
         tax                                     ; B7A1 AA                       .
-        jsr     LBF86                           ; B7A2 20 86 BF                  ..
+        jsr     sub_bf86
         beq     LB7A8                           ; B7A5 F0 01                    ..
         rts                                     ; B7A7 60                       `
 
@@ -3550,34 +3550,15 @@ LB88F:
 	RString	"COPYRIGHT 1984 ATARI"
 	RString "WELCOME TO THE LEARNING PHONE"
 	RString "After the phone has a high pitch tone, PRESS RETURN!"
-	.byte	"duab  003"
-        .byte   $64                             ; B91C 64                       d
-        adc     $61,x                           ; B91D 75 61                    ua
-        .byte   $62                             ; B91F 62                       b
-        jsr     L3030                           ; B920 20 30 30                  00
-        .byte   $32                             ; B923 32                       2
-        and     ($64),y                         ; B924 31 64                    1d
-        adc     $61,x                           ; B926 75 61                    ua
-        .byte   $62                             ; B928 62                       b
-        .byte   $20                             ; B929 20                        
-LB92A:  bmi     LB95C                           ; B92A 30 30                    00
-        .byte   $33                             ; B92C 33                       3
-        jsr     L6974                           ; B92D 20 74 69                  ti
-        .byte   $62                             ; B930 62                       b
-        .byte   $6F                             ; B931 6F                       o
-        .byte   $72                             ; B932 72                       r
-        .byte   $63                             ; B933 63                       c
-        adc     #$4D                            ; B934 69 4D                    iM
-LB936:  brk                                     ; B936 00                       .
-        rti                                     ; B937 40                       @
+	RString "300  baud"
+	RString "1200 baud"
+	RString "Microbit 300 baud"
 
-; ----------------------------------------------------------------------------
-        .byte   $80                             ; B938 80                       .
-        .byte   $C0                             ; B939 C0                       .
-LB93A:  .byte   $7F                             ; B93A 7F                       .
-        .byte   $BF                             ; B93B BF                       .
-        .byte   $DF                             ; B93C DF                       .
-        .byte   $EF                             ; B93D EF                       .
+LB936:
+	.byte	$00,$40,$80,$C0
+
+LB93A:
+	.byte   $7F,$BF,$DF,$EF
         .byte   $F7                             ; B93E F7                       .
         .byte   $FB                             ; B93F FB                       .
         .byte   $FD                             ; B940 FD                       .
@@ -4937,7 +4918,7 @@ LBF61:  brk                                     ; BF61 00                       
         bvc     LBF85                           ; BF63 50 20                    P 
 LBF65:  bvc     LBEEF                           ; BF65 50 88                    P.
         brk                                     ; BF67 00                       .
-        bpl     LBF8A                           ; BF68 10 20                    . 
+	.byte	$10,$20
         brk                                     ; BF6A 00                       .
         brk                                     ; BF6B 00                       .
         brk                                     ; BF6C 00                       .
@@ -4959,14 +4940,15 @@ LBF65:  bvc     LBEEF                           ; BF65 50 88                    
 LBF81:  jsr     L2020                           ; BF81 20 20 20                    
         .byte   $20                             ; BF84 20                        
 LBF85:  .byte   $20                             ; BF85 20                        
-LBF86:  cmp     $031A,x                         ; BF86 DD 1A 03                 ...
-        .byte   $F0                             ; BF89 F0                       .
-LBF8A:  .byte   $07                             ; BF8A 07                       .
+
+sub_bf86:
+	cmp     $031A,x                         ; BF86 DD 1A 03                 ...
+	beq	LBF92
         inx                                     ; BF8B E8                       .
         inx                                     ; BF8C E8                       .
         inx                                     ; BF8D E8                       .
 LBF8E:  cpx     #$20                            ; BF8E E0 20                    . 
-        bcc     LBF86                           ; BF90 90 F4                    ..
+        bcc     sub_bf86
 LBF92:  rts                                     ; BF92 60                       `
 
 ; ----------------------------------------------------------------------------
@@ -5009,7 +4991,7 @@ LBFD8:  jsr     LB4F7                           ; BFD8 20 F7 B4                 
         lda     #$00                            ; BFDD A9 00                    ..
         sta     $133A                           ; BFDF 8D 3A 13                 .:.
         tax                                     ; BFE2 AA                       .
-        jsr     LBF86                           ; BFE3 20 86 BF                  ..
+        jsr     sub_bf86
         bne	:+
         lda     #'T'
         sta     $031A,x                         ; BFEA 9D 1A 03                 ...
