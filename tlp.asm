@@ -19,6 +19,7 @@ POKMSK		:= $0010
 L0020           := $0020
 L0070           := $0070
 L0080           := $0080
+off_E5		:= $00E5
 off_EC		:= $00EC
 L0403           := $0403
 L0407           := $0407
@@ -1794,12 +1795,12 @@ LABFF:  ldx     $B7                             ; ABFF A6 B7                    
         sta     $EB                             ; AC0E 85 EB                    ..
         txa                                     ; AC10 8A                       .
 LAC11:  asl     a                               ; AC11 0A                       .
-        rol     $E6                             ; AC12 26 E6                    &.
+        rol     off_E5+1
         asl     a                               ; AC14 0A                       .
-        rol     $E6                             ; AC15 26 E6                    &.
+        rol     off_E5+1
         asl     a                               ; AC17 0A                       .
-        rol     $E6                             ; AC18 26 E6                    &.
-        sta     $E5                             ; AC1A 85 E5                    ..
+        rol     off_E5+1
+        sta     off_E5
         ldx     $B7                             ; AC1C A6 B7                    ..
         cpx     #$03                            ; AC1E E0 03                    ..
         bcs     LAC37                           ; AC20 B0 15                    ..
@@ -1817,7 +1818,7 @@ LAC24:  asl     a                               ; AC24 0A                       
         inc     $E6                             ; AC35 E6 E6                    ..
 LAC37:  clc                                     ; AC37 18                       .
         adc     $EA                             ; AC38 65 EA                    e.
-        sta     $E5                             ; AC3A 85 E5                    ..
+        sta     off_E5
 LAC3C:  lda     $D8                             ; AC3C A5 D8                    ..
         adc     $E6                             ; AC3E 65 E6                    e.
         adc     $EB                             ; AC40 65 EB                    e.
@@ -1852,7 +1853,7 @@ LAC73:  lda     #$00                            ; AC73 A9 00                    
         beq     LAC7C                           ; AC76 F0 04                    ..
 LAC78:  txa                                     ; AC78 8A                       .
 LAC79:  tay                                     ; AC79 A8                       .
-        lda     ($E5),y                         ; AC7A B1 E5                    ..
+        lda     (off_E5),y
 LAC7C:  ldy     $CA                             ; AC7C A4 CA                    ..
         bpl     LACB3                           ; AC7E 10 33                    .3
         sta     $E7                             ; AC80 85 E7                    ..
@@ -1940,27 +1941,27 @@ LAD05:  asl     a                               ; AD05 0A                       
         inc     $E6                             ; AD10 E6 E6                    ..
         clc                                     ; AD12 18                       .
 LAD13:  adc     $E8                             ; AD13 65 E8                    e.
-        sta     $E5                             ; AD15 85 E5                    ..
-        lda     $E6                             ; AD17 A5 E6                    ..
+        sta     off_E5
+        lda     off_E5+1
         adc     $E9                             ; AD19 65 E9                    e.
-        sta     $E6                             ; AD1B 85 E6                    ..
+        sta     off_E5+1
         jsr     LAD8E                           ; AD1D 20 8E AD                  ..
         lda     $A4                             ; AD20 A5 A4                    ..
         jsr     LADCB                           ; AD22 20 CB AD                  ..
         ldx     #$05                            ; AD25 A2 05                    ..
 LAD27:  jsr     LAD34                           ; AD27 20 34 AD                  4.
         dex                                     ; AD2A CA                       .
-        bmi     LAD33                           ; AD2B 30 06                    0.
+        bmi	:+
         jsr     LACE3                           ; AD2D 20 E3 AC                  ..
         jmp     LAD27                           ; AD30 4C 27 AD                 L'.
 
 ; ----------------------------------------------------------------------------
-LAD33:  rts                                     ; AD33 60                       `
+:	rts
 
 ; ----------------------------------------------------------------------------
 LAD34:  txa                                     ; AD34 8A                       .
         tay                                     ; AD35 A8                       .
-        lda     ($E5),y                         ; AD36 B1 E5                    ..
+        lda     (off_E5),y
         ldy     #$00                            ; AD38 A0 00                    ..
 LAD3A:  bit     $B0                             ; AD3A 24 B0                    $.
         bvc     LAD46                           ; AD3C 50 08                    P.
@@ -3018,6 +3019,7 @@ LB49B:
 LB4A1:
 	.addr	sub_b3f9
 	.addr	sub_b406
+
 LB4A5:  lda     #$07                            ; B4A5 A9 07                    ..
         and     $0232                           ; B4A7 2D 32 02                 -2.
         ora     #$70                            ; B4AA 09 70                    .p
@@ -3184,12 +3186,13 @@ LB5B0:  lda     #$00                            ; B5B0 A9 00                    
 LB5D5:  rts                                     ; B5D5 60                       `
 
 ; ----------------------------------------------------------------------------
-        .byte   $67                             ; B5D6 67                       g
-        ldx     $A4,y                           ; B5D7 B6 A4                    ..
-        ldx     $08,y                           ; B5D9 B6 08                    ..
-        .byte   $B7                             ; B5DB B7                       .
-        inx                                     ; B5DC E8                       .
-        ldx     $D8,y                           ; B5DD B6 D8                    ..
+	.addr	$B667
+	.addr	$B6A4
+	.addr	$B708
+	.addr	$B6E8
+
+sub_b5de:
+	cld
         tya                                     ; B5DF 98                       .
         pha                                     ; B5E0 48                       H
         lda     $FD                             ; B5E1 A5 FD                    ..
