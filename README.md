@@ -9,5 +9,3 @@ best on the PLATO service available on http://cyber1.org/ and because of the
 success of using this client, we probably should keep an official disassembly
 that is sufficiently commented so that it can be modified easily.
 
--TSCHAK909 (aka -Thom, aka Thomas Cherryhomes)
-thom.cherryhomes at gmail dot com
