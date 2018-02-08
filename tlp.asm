@@ -31,8 +31,6 @@ byte_133a	:= $133A
 byte_1340	:= $1340
 L134D           := $134D
 L2000           := $2000
-L2010           := $2010
-L2020           := $2020
 L2040           := $2040
 L2050           := $2050
 L2060           := $2060
@@ -4017,29 +4015,35 @@ byte_BAEC:
 
 	.byte	%00010000
 	.byte	%00010000
-	plp                                     ; BB4E 28                       (
-	plp                                     ; BB4F 28                       (
-	.byte   $44                             ; BB50 44                       D
-	.byte   $44                             ; BB51 44                       D
-	.byte   $82                             ; BB52 82                       .
-	.byte	$FE,$00,$00
-	.byte   $44                             ; BB56 44                       D
-LBB57:  .byte   $44                             ; BB57 44                       D
-	.byte   $44                             ; BB58 44                       D
-LBB59:  sec                                     ; BB59 38                       8
-	brk                                     ; BB5A 00                       .
-	brk                                     ; BB5B 00                       .
-	brk                                     ; BB5C 00                       .
-	brk                                     ; BB5D 00                       .
-LBB5E:  sec                                     ; BB5E 38                       8
-	.byte   $44                             ; BB5F 44                       D
-	.byte   $44                             ; BB60 44                       D
-	.byte   $44                             ; BB61 44                       D
-	brk                                     ; BB62 00                       .
-	brk                                     ; BB63 00                       .
-	brk                                     ; BB64 00                       .
-	brk                                     ; BB65 00                       .
-	bpl     LBB68                           ; BB66 10 00                    ..
+	.byte   %00101000
+	.byte   %00101000
+	.byte   %01000100
+	.byte   %01000100
+	.byte   %10000010
+	.byte   %11111110
+
+	.byte	%00000000
+	.byte	%00000000
+	.byte   %01000100
+	.byte   %01000100
+	.byte   %01000100
+	.byte	%00111000
+	.byte	%00000000
+	.byte	%00000000
+
+	.byte	%00000000
+	.byte	%00000000
+	.byte	%00111000
+	.byte   %01000100
+	.byte   %01000100
+	.byte   %01000100
+	.byte	%00000000
+	.byte	%00000000
+
+	.byte	%00000000
+	.byte	%00000000
+	.byte	%00010000
+	.byte	%00000000
 LBB68:  .byte   $7C                             ; BB68 7C                       |
 	brk                                     ; BB69 00                       .
 	bpl     LBB6C                           ; BB6A 10 00                    ..
@@ -4398,7 +4402,7 @@ LBCF7:  brk                                     ; BCF7 00                       
 LBCF8:  rti                                     ; BCF8 40                       @
 
 ; ----------------------------------------------------------------------------
-	jsr     L2010                           ; BCF9 20 10 20                  . 
+	.byte	$20,$10,$20
 LBCFC:  rti                                     ; BCFC 40                       @
 
 ; ----------------------------------------------------------------------------
@@ -4507,7 +4511,7 @@ LBD77:  .byte   $80                             ; BD77 80                       
 	cpx     #$10                            ; BD78 E0 10                    ..
 	cpx     #$00                            ; BD7A E0 00                    ..
 	sed                                     ; BD7C F8                       .
-	jsr     L2020                           ; BD7D 20 20 20                    
+	.byte	$20,$20,$20
 	jsr     L9000                           ; BD80 20 00 90                  ..
 	bcc     LBD15                           ; BD83 90 90                    ..
 	bcc     LBD77                           ; BD85 90 F0                    ..
@@ -4961,7 +4965,7 @@ LBF56:  brk                                     ; BF56 00                       
 	brk                                     ; BF5A 00                       .
 	brk                                     ; BF5B 00                       .
 	.byte	$20,$70,$F8
-	bvs     LBF81                           ; BF5F 70 20                    p 
+	.byte	$70,$20
 LBF61:  brk                                     ; BF61 00                       .
 	dey                                     ; BF62 88                       .
 	bvc     LBF85                           ; BF63 50 20                    P 
@@ -4986,7 +4990,7 @@ LBF65:  bvc     LBEEF                           ; BF65 50 88                    
 	.byte	$70,$20
 	brk                                     ; BF7F 00                       .
 	.byte   $20                             ; BF80 20                        
-LBF81:  jsr     L2020                           ; BF81 20 20 20                    
+	.byte	$20,$20,$20
 	.byte   $20                             ; BF84 20                        
 LBF85:  .byte   $20                             ; BF85 20                        
 
