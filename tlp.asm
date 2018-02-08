@@ -3972,31 +3972,51 @@ byte_BAEC:
 
 	.byte	%00000000
 	.byte	%00000000
-	php                                     ; BB26 08                       .
-	.byte   $0C                             ; BB27 0C                       .
-	inc     $080C,x                         ; BB28 FE 0C 08                 ...
-	brk                                     ; BB2B 00                       .
-	brk                                     ; BB2C 00                       .
-	bpl     LBB3F                           ; BB2D 10 10                    ..
-	.byte	$10,$10
-	.byte   $7C                             ; BB31 7C                       |
-LBB32:  sec                                     ; BB32 38                       8
-	.byte   $10                             ; BB33 10                       .
-LBB34:  brk                                     ; BB34 00                       .
-	brk                                     ; BB35 00                       .
-	.byte	$20,$60,$FE
-	rts                                     ; BB39 60                       `
-	.byte	$20,$00,$00
-	brk                                     ; BB3D 00                       .
-	.byte   $24                             ; BB3E 24                       $
-LBB3F:  clc                                     ; BB3F 18                       .
-	clc                                     ; BB40 18                       .
-	.byte	$24,$00
-	brk                                     ; BB43 00                       .
-	inc     L2040,x                         ; BB44 FE 40 20                 .@ 
-	bpl     LBB59                           ; BB47 10 10                    ..
-	.byte	$20,$40,$FE
-	bpl     LBB5E                           ; BB4C 10 10                    ..
+	.byte	%00001000
+	.byte	%00001100
+	.byte	%11111110
+	.byte	%00001100
+	.byte	%00001000
+	.byte	%00000000
+
+	.byte	%00000000
+	.byte	%00010000
+	.byte	%00010000
+	.byte	%00010000
+	.byte	%00010000
+	.byte   %01111100
+	.byte   %00111000
+	.byte	%00010000
+
+	.byte	%00000000
+	.byte	%00000000
+	.byte   %00100000
+	.byte   %01100000
+	.byte   %11111110
+	.byte   %01100000
+	.byte   %00100000
+	.byte	%00000000
+
+	.byte	%00000000
+	.byte	%00000000
+	.byte   %00100100
+	.byte   %00011000
+	.byte   %00011000
+	.byte   %00100100
+	.byte	%00000000
+	.byte	%00000000
+
+	.byte   %11111110
+	.byte	%01000000
+	.byte	%00100000
+	.byte	%00010000
+	.byte	%00010000
+	.byte	%00100000
+	.byte	%01000000
+	.byte   %11111110
+
+	.byte	%00010000
+	.byte	%00010000
 	plp                                     ; BB4E 28                       (
 	plp                                     ; BB4F 28                       (
 	.byte   $44                             ; BB50 44                       D
