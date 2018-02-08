@@ -19,6 +19,7 @@ POKMSK		:= $0010
 L0020           := $0020
 L0070           := $0070
 L0080           := $0080
+byte_CC		:= $00CC
 off_E3		:= $00E3
 off_E5		:= $00E5
 off_EC		:= $00EC
@@ -76,7 +77,7 @@ XITVBV		:= $E462
 
 sub_a000:
         jsr     sub_b799
-        jsr     LA214                           ; A003 20 14 A2                  ..
+        jsr     sub_a214
         jsr     LA33D                           ; A006 20 3D A3                  =.
         ldy     #$08                            ; A009 A0 08                    ..
         jsr     LB1F1                           ; A00B 20 F1 B1                  ..
@@ -123,7 +124,7 @@ LA054:  lda     #$46                            ; A054 A9 46                    
 LA05E:  jsr     LA963                           ; A05E 20 63 A9                  c.
         jsr     LAB35                           ; A061 20 35 AB                  5.
         jsr     LA12C                           ; A064 20 2C A1                  ,.
-        lda     $CC                             ; A067 A5 CC                    ..
+        lda     byte_CC
         beq     LA05E                           ; A069 F0 F3                    ..
         jsr     LA079                           ; A06B 20 79 A0                  y.
         bcc     LA05E                           ; A06E 90 EE                    ..
@@ -381,7 +382,8 @@ LA1FE:  jsr     LA120                           ; A1FE 20 20 A1                 
         jmp     LAB54                           ; A211 4C 54 AB                 LT.
 
 ; ----------------------------------------------------------------------------
-LA214:  lda     #$00                            ; A214 A9 00                    ..
+sub_a214:
+	lda     #$00                            ; A214 A9 00                    ..
         sta     $D400                           ; A216 8D 00 D4                 ...
         sta     $D01D                           ; A219 8D 1D D0                 ...
         sta     $02BE                           ; A21C 8D BE 02                 ...
@@ -440,20 +442,20 @@ LA24F:  sta     $1006,x                         ; A24F 9D 06 10                 
         lda     #$10                            ; A295 A9 10                    ..
         sta     $130F                           ; A297 8D 0F 13                 ...
         ldx     #$00                            ; A29A A2 00                    ..
-LA29C:  lda     off_F4+1
+:	lda     off_F4+1
         sta     $04C0,x                         ; A29E 9D C0 04                 ...
         lda     off_F4
         sta     $0400,x                         ; A2A3 9D 00 04                 ...
         inx                                     ; A2A6 E8                       .
         cpx     #$C0                            ; A2A7 E0 C0                    ..
-        beq     LA2B7                           ; A2A9 F0 0C                    ..
+        beq	:+
         lda     off_F4
         adc     #$28                            ; A2AD 69 28                    i(
         sta     off_F4
-        bcc     LA29C                           ; A2B1 90 E9                    ..
+        bcc	:-
         inc     off_F4+1
-        bne     LA29C                           ; A2B5 D0 E5                    ..
-LA2B7:  lda     #$03                            ; A2B7 A9 03                    ..
+        bne	:-
+:	lda     #$03                            ; A2B7 A9 03                    ..
         sta     $D01D                           ; A2B9 8D 1D D0                 ...
         lda     #$04                            ; A2BC A9 04                    ..
         sta     $D407                           ; A2BE 8D 07 D4                 ...
@@ -2857,7 +2859,7 @@ LB38A:  lda     $0F00,y                         ; B38A B9 00 0F                 
         sta     $1347                           ; B38F 8D 47 13                 .G.
         iny                                     ; B392 C8                       .
         sty     $133F                           ; B393 8C 3F 13                 .?.
-        dec     $CC                             ; B396 C6 CC                    ..
+        dec     byte_CC
         cli                                     ; B398 58                       X
         ldy     #$01                            ; B399 A0 01                    ..
         rts                                     ; B39B 60                       `
@@ -2886,7 +2888,7 @@ LB3B9:  ldy     $133E                           ; B3B9 AC 3E 13                 
         sta     $0F00,y                         ; B3BC 99 00 0F                 ...
         iny                                     ; B3BF C8                       .
         sty     $133E                           ; B3C0 8C 3E 13                 .>.
-        inc     $CC                             ; B3C3 E6 CC                    ..
+        inc     byte_CC
         rts                                     ; B3C5 60                       `
 
 ; ----------------------------------------------------------------------------
@@ -3398,7 +3400,7 @@ LB76F:  lda     $0209,x                         ; B76F BD 09 02                 
         sta     $0209,x                         ; B778 9D 09 02                 ...
         dex                                     ; B77B CA                       .
         bne     LB76F                           ; B77C D0 F1                    ..
-        stx     $CC                             ; B77E 86 CC                    ..
+        stx     byte_CC
         stx     $CD                             ; B780 86 CD                    ..
         lda     POKMSK
         ora     #$20                            ; B784 09 20                    . 
@@ -4142,8 +4144,7 @@ LBC20:  brk                                     ; BC20 00                       
         brk                                     ; BC26 00                       .
         brk                                     ; BC27 00                       .
         brk                                     ; BC28 00                       .
-        .byte   $04                             ; BC29 04                       .
-        php                                     ; BC2A 08                       .
+        .byte   $04,$08
 	.byte	$10,$44
         plp                                     ; BC2D 28                       (
         bpl     LBC30                           ; BC2E 10 00                    ..
