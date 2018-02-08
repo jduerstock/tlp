@@ -23,7 +23,9 @@ off_E3		:= $00E3
 off_E5		:= $00E5
 off_EC		:= $00EC
 off_F4		:= $00F4
+DLIST		:= $0230
 HATABS		:= $031A
+ICCOM		:= $0342
 byte_133a	:= $133A
 byte_1340	:= $1340
 L134D           := $134D
@@ -425,10 +427,10 @@ LA24F:  sta     $1006,x                         ; A24F 9D 06 10                 
         sta     $130D                           ; A26E 8D 0D 13                 ...
         lda     #$00                            ; A271 A9 00                    ..
         sta     $1007,x                         ; A273 9D 07 10                 ...
-        sta     $0230                           ; A276 8D 30 02                 .0.
+        sta     DLIST
         lda     #$10                            ; A279 A9 10                    ..
         sta     $1008,x                         ; A27B 9D 08 10                 ...
-        sta     $0231                           ; A27E 8D 31 02                 .1.
+        sta     DLIST+1
         lda     #$00                            ; A281 A9 00                    ..
         sta     $DF                             ; A283 85 DF                    ..
         sta     $E1                             ; A285 85 E1                    ..
@@ -484,7 +486,7 @@ LA2DC:  lda     LBA67,x                         ; A2DC BD 67 BA                 
         sta     $02C8                           ; A2F2 8D C8 02                 ...
         sta     $02C6                           ; A2F5 8D C6 02                 ...
         sta     $D3                             ; A2F8 85 D3                    ..
-        jsr     LA324                           ; A2FA 20 24 A3                  $.
+        jsr     sub_a324
         lda     #$94                            ; A2FD A9 94                    ..
         sta     $D1                             ; A2FF 85 D1                    ..
         lda     #$E1                            ; A301 A9 E1                    ..
@@ -505,7 +507,8 @@ LA2DC:  lda     LBA67,x                         ; A2DC BD 67 BA                 
         jmp     SETVBV
 
 ; ----------------------------------------------------------------------------
-LA324:  tay                                     ; A324 A8                       .
+sub_a324:
+	tay                                     ; A324 A8                       .
         clc                                     ; A325 18                       .
         adc     #$04                            ; A326 69 04                    i.
         and     #$0F                            ; A328 29 0F                    ).
@@ -1629,10 +1632,10 @@ LAADB:  ldx     #$00                            ; AADB A2 00                    
         lda     $D0                             ; AAE5 A5 D0                    ..
         sta     $02C5                           ; AAE7 8D C5 02                 ...
         ldy     $D1                             ; AAEA A4 D1                    ..
-        lda     #$CA                            ; AAEC A9 CA                    ..
-        ldx     #$10                            ; AAEE A2 10                    ..
-LAAF0:  sta     $0230                           ; AAF0 8D 30 02                 .0.
-        stx     $0231                           ; AAF3 8E 31 02                 .1.
+        lda     #<$10CA
+        ldx     #>$10CA
+LAAF0:  sta	DLIST
+        stx	DLIST+1
         sty     $02C6                           ; AAF6 8C C6 02                 ...
         sty     $02C8                           ; AAF9 8C C8 02                 ...
         rts                                     ; AAFC 60                       `
@@ -2425,7 +2428,7 @@ LB076:  sta     $02C6                           ; B076 8D C6 02                 
         sta     $02C8                           ; B079 8D C8 02                 ...
         bcc     LB085                           ; B07C 90 07                    ..
         sta     $D3                             ; B07E 85 D3                    ..
-        jsr     LA324                           ; B080 20 24 A3                  $.
+        jsr     sub_a324
         bmi     LB087                           ; B083 30 02                    0.
 LB085:  sta     $D1                             ; B085 85 D1                    ..
 LB087:  jmp     XITVBV
@@ -2433,10 +2436,10 @@ LB087:  jmp     XITVBV
 ; ----------------------------------------------------------------------------
 LB08A:  inc     $02C5                           ; B08A EE C5 02                 ...
         lda     $02C5                           ; B08D AD C5 02                 ...
-        bcc     LB096                           ; B090 90 04                    ..
+        bcc	:+
         sta     $D2                             ; B092 85 D2                    ..
         bcs     LB087                           ; B094 B0 F1                    ..
-LB096:  sta     $D0                             ; B096 85 D0                    ..
+:	sta     $D0                             ; B096 85 D0                    ..
         bcc     LB087                           ; B098 90 ED                    ..
 LB09A:  tya                                     ; B09A 98                       .
         and     #$F0                            ; B09B 29 F0                    ).
@@ -2450,11 +2453,11 @@ LB09A:  tya                                     ; B09A 98                       
 ; ----------------------------------------------------------------------------
 LB0A8:  ldy     $C1                             ; B0A8 A4 C1                    ..
         beq     LB103                           ; B0AA F0 57                    .W
-        bpl     LB0B1                           ; B0AC 10 03                    ..
+        bpl	:+
         jmp     LB17D                           ; B0AE 4C 7D B1                 L}.
 
 ; ----------------------------------------------------------------------------
-LB0B1:  cpx     $C2                             ; B0B1 E4 C2                    ..
+:	cpx     $C2                             ; B0B1 E4 C2                    ..
         bne     LB104                           ; B0B3 D0 4F                    .O
         ldx     $C5                             ; B0B5 A6 C5                    ..
         cpx     #$7F                            ; B0B7 E0 7F                    ..
@@ -2652,7 +2655,7 @@ LB203:  jmp     LB203                           ; B203 4C 03 B2                 
 LB206:  pha
         ldx     LB96E,y
         lda     LB96E+1,y
-        sta     $0342,x
+        sta     ICCOM,x
         lda     LB96E+2,y
         sta     $034A,x
         lda     LB96E+3,y
@@ -4580,8 +4583,7 @@ LBDF9:  brk                                     ; BDF9 00                       
         rti                                     ; BDFE 40                       @
 
 ; ----------------------------------------------------------------------------
-        brk                                     ; BDFF 00                       .
-        jsr     L2000                           ; BE00 20 00 20                  . 
+	.byte	$00,$20,$00,$20
         .byte   $20                             ; BE03 20                        
         .byte   $20                             ; BE04 20                        
 LBE05:  cpy     #$80                            ; BE05 C0 80                    ..
