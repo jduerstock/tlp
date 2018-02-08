@@ -7,22 +7,22 @@
         .setcpu "6502"
 
 .macro  RString       Arg
-	.repeat .strlen(Arg), I
-		.byte .strat(Arg, .strlen(Arg)-1-I)
-	.endrep
+    .repeat .strlen(Arg), I
+        .byte .strat(Arg, .strlen(Arg)-1-I)
+    .endrep
 .endmacro
 
-	.segment "SEG1"
+    .segment "SEG1"
 
 ; ----------------------------------------------------------------------------
-POKMSK		:= $0010
+POKMSK      := $0010
 L0020           := $0020
 L0070           := $0070
 L0080           := $0080
-off_E3		:= $00E3
-off_E5		:= $00E5
-off_EC		:= $00EC
-off_F4		:= $00F4
+off_E3      := $00E3
+off_E5      := $00E5
+off_EC      := $00EC
+off_F4      := $00F4
 L0403           := $0403
 L0407           := $0407
 L0810           := $0810
@@ -1121,9 +1121,9 @@ LA74E:  lda     LB9F4,y                         ; A74E B9 F4 B9                 
         tax                                     ; A754 AA                       .
         lda     LB9D6,x                         ; A755 BD D6 B9                 ...
         cmp     $3E10,x                         ; A758 DD 10 3E                 ..>
-        bcc	:+
+        bcc :+
         bne     LA768                           ; A75D D0 09                    ..
-:	lda     (off_F4),y
+:   lda     (off_F4),y
         ldx     $AB                             ; A761 A6 AB                    ..
         ora     LB942,x                         ; A763 1D 42 B9                 .B.
         sta     (off_F4),y
@@ -1199,9 +1199,9 @@ LA7E8:  clc                                     ; A7E8 18                       
         lda     off_F4
         adc     #$06                            ; A7EB 69 06                    i.
         sta     off_F4
-        bcc	:+
+        bcc :+
         inc     off_F4+1
-:	jmp     LA673                           ; A7F3 4C 73 A6                 Ls.
+:   jmp     LA673                           ; A7F3 4C 73 A6                 Ls.
 
 ; ----------------------------------------------------------------------------
 LA7F6:  ldx     $B6                             ; A7F6 A6 B6                    ..
@@ -1310,10 +1310,10 @@ LA89E:  rts                                     ; A89E 60                       
 
 ; ----------------------------------------------------------------------------
 sub_a89f:
-	sty     $EE                             ; A89F 84 EE                    ..
+    sty     $EE                             ; A89F 84 EE                    ..
         sta     off_EC
         stx     off_EC+1
-:	ldy     $EE                             ; A8A5 A4 EE                    ..
+:   ldy     $EE                             ; A8A5 A4 EE                    ..
         lda     (off_EC),y
         jsr     LAB5D                           ; A8A9 20 5D AB                  ].
         dec     $EE                             ; A8AC C6 EE                    ..
@@ -1951,12 +1951,12 @@ LAD13:  adc     $E8                             ; AD13 65 E8                    
         ldx     #$05                            ; AD25 A2 05                    ..
 LAD27:  jsr     LAD34                           ; AD27 20 34 AD                  4.
         dex                                     ; AD2A CA                       .
-        bmi	:+
+        bmi :+
         jsr     LACE3                           ; AD2D 20 E3 AC                  ..
         jmp     LAD27                           ; AD30 4C 27 AD                 L'.
 
 ; ----------------------------------------------------------------------------
-:	rts
+:   rts
 
 ; ----------------------------------------------------------------------------
 LAD34:  txa                                     ; AD34 8A                       .
@@ -2292,11 +2292,11 @@ LAF91:  jmp     LAF48                           ; AF91 4C 48 AF                 
 
 ; ----------------------------------------------------------------------------
 LAF94:  ldx     $C9                             ; AF94 A6 C9                    ..
-        bne	:+
+        bne :+
         rts                                     ; AF98 60                       `
 
 ; ----------------------------------------------------------------------------
-:	dex                                     ; AF99 CA                       .
+:   dex                                     ; AF99 CA                       .
         stx     $DA                             ; AF9A 86 DA                    ..
         rts                                     ; AF9C 60                       `
 
@@ -2360,12 +2360,12 @@ LAFEE:  ldy     $EC,x                           ; AFEE B4 EC                    
 
 ; ----------------------------------------------------------------------------
 sub_b004:  
-	lda     LB93A,x                         ; B004 BD 3A B9                 .:.
+    lda     LB93A,x                         ; B004 BD 3A B9                 .:.
         and     ($E3),y                         ; B007 31 E3                    1.
         bit     $B0                             ; B009 24 B0                    $.
-        bvs	:+
+        bvs :+
         ora     LB942,x                         ; B00D 1D 42 B9                 .B.
-:	sta     (off_E3),y
+:   sta     (off_E3),y
         rts                                     ; B012 60                       `
 
 ; ----------------------------------------------------------------------------
@@ -2891,7 +2891,7 @@ LB3B9:  ldy     $133E                           ; B3B9 AC 3E 13                 
 
 ; ----------------------------------------------------------------------------
 sub_b3c6:
-	cld                                     ; B3C6 D8                       .
+    cld                                     ; B3C6 D8                       .
         tya                                     ; B3C7 98                       .
         pha                                     ; B3C8 48                       H
         lda     $1340                           ; B3C9 AD 40 13                 .@.
@@ -2945,7 +2945,7 @@ LB415:  lda     $133C                           ; B415 AD 3C 13                 
 
 ; ----------------------------------------------------------------------------
 sub_b420:
-	ldx     #$00                            ; B420 A2 00                    ..
+    ldx     #$00                            ; B420 A2 00                    ..
 LB422:  lda     $CB                             ; B422 A5 CB                    ..
         bne     LB422                           ; B424 D0 FC                    ..
         jsr     LB53A                           ; B426 20 3A B5                  :.
@@ -2995,7 +2995,7 @@ LB47A:  php                                     ; B47A 08                       
         .byte   $B4                             ; B47C B4                       .
 
 sub_b47d:
-	sei                                     ; B47D 78                       x
+    sei                                     ; B47D 78                       x
         jsr     LB4A5                           ; B47E 20 A5 B4                  ..
         ldy     #$07                            ; B481 A0 07                    ..
         lda     #$00                            ; B483 A9 00                    ..
@@ -3013,13 +3013,13 @@ LB485:  sta     $133C,y                         ; B485 99 3C 13                 
 
 ; ----------------------------------------------------------------------------
 LB49B:
-	.addr	sub_b39c
-	.addr	sub_b3c6
-	.addr	sub_b3c6
+    .addr   sub_b39c
+    .addr   sub_b3c6
+    .addr   sub_b3c6
 
 LB4A1:
-	.addr	sub_b3f9
-	.addr	sub_b406
+    .addr   sub_b3f9
+    .addr   sub_b406
 
 LB4A5:  lda     #$07                            ; B4A5 A9 07                    ..
         and     $0232                           ; B4A7 2D 32 02                 -2.
@@ -3164,10 +3164,10 @@ LB5A5:  ldy     #$01                            ; B5A5 A0 01                    
 ; ----------------------------------------------------------------------------
 
 t_handler:
-	.addr	sub_b561-1
-	.addr	sub_b581-1
-	.addr	sub_b37c-1
-	.addr	sub_b2fa-1
+    .addr   sub_b561-1
+    .addr   sub_b581-1
+    .addr   sub_b37c-1
+    .addr   sub_b2fa-1
 
 LB5B0:  lda     #$00                            ; B5B0 A9 00                    ..
         sta     $D302                           ; B5B2 8D 02 D3                 ...
@@ -3187,13 +3187,13 @@ LB5B0:  lda     #$00                            ; B5B0 A9 00                    
 LB5D5:  rts                                     ; B5D5 60                       `
 
 ; ----------------------------------------------------------------------------
-	.addr	$B667
-	.addr	$B6A4
-	.addr	$B708
-	.addr	$B6E8
+    .addr   $B667
+    .addr   $B6A4
+    .addr   $B708
+    .addr   $B6E8
 
 sub_b5de:
-	cld
+    cld
         tya                                     ; B5DF 98                       .
         pha                                     ; B5E0 48                       H
         lda     $FD                             ; B5E1 A5 FD                    ..
@@ -3412,7 +3412,7 @@ LB76F:  lda     $0209,x                         ; B76F BD 09 02                 
 
 ; ----------------------------------------------------------------------------
 sub_b799:
-	lda     #$00                            ; B799 A9 00                    ..
+    lda     #$00                            ; B799 A9 00                    ..
         sta     $133A                           ; B79B 8D 3A 13                 .:.
         sta     $0309                           ; B79E 8D 09 03                 ...
         tax                                     ; B7A1 AA                       .
@@ -3447,7 +3447,7 @@ LB7A8:  lda     #$52                            ; B7A8 A9 52                    
         bne     :+
         lda     $1346                           ; B7DF AD 46 13                 .F.
         sta     $CB                             ; B7E2 85 CB                    ..
-:	jmp	sub_b3c6
+:   jmp sub_b3c6
 
 ; ----------------------------------------------------------------------------
 LB7E7:  lda     #$42                            ; B7E7 A9 42                    .B
@@ -3455,7 +3455,7 @@ LB7E7:  lda     #$42                            ; B7E7 A9 42                    
         bmi     :+
         ldx     #$0A                            ; B7ED A2 0A                    ..
         bne     LB7F3                           ; B7EF D0 02                    ..
-:	ldx	#$00                            ; B7F1 A2 00                    ..
+:   ldx #$00                            ; B7F1 A2 00                    ..
 LB7F3:  jsr     LB7FA                           ; B7F3 20 FA B7                  ..
         lda     #$41                            ; B7F6 A9 41                    .A
         ldx     #$F3                            ; B7F8 A2 F3                    ..
@@ -3548,7 +3548,7 @@ LB87F:  brk                                     ; B87F 00                       
         brk                                     ; B882 00                       .
         brk                                     ; B883 00                       .
         ora     ($01,x)                         ; B884 01 01                    ..
-	.byte	$01,$00
+    .byte   $01,$00
         .byte   $FF                             ; B888 FF                       .
         .byte   $FF                             ; B889 FF                       .
         .byte   $FF                             ; B88A FF                       .
@@ -3558,29 +3558,29 @@ LB87F:  brk                                     ; B87F 00                       
         brk                                     ; B88E 00                       .
 
 LB88F:
-	.byte	"K:",$9B			; B88F
+    .byte   "K:",$9B            ; B88F
 
 LB892:
-	.byte	"R:",$9B			; B892
-	.byte	"T:",$9B			; B895
-	.byte	"P:",$9B			; B898
+    .byte   "R:",$9B            ; B892
+    .byte   "T:",$9B            ; B895
+    .byte   "P:",$9B            ; B898
 
 LB89B:
-	RString	"COMMUNICATION ERROR"
-	RString	"COPYRIGHT 1984 ATARI"
-	RString "WELCOME TO THE LEARNING PHONE"
-	RString "After the phone has a high pitch tone, PRESS RETURN!"
-	RString "300  baud"
-	RString "1200 baud"
-	RString "Microbit 300 baud"
+    RString "COMMUNICATION ERROR"
+    RString "COPYRIGHT 1984 ATARI"
+    RString "WELCOME TO THE LEARNING PHONE"
+    RString "After the phone has a high pitch tone, PRESS RETURN!"
+    RString "300  baud"
+    RString "1200 baud"
+    RString "Microbit 300 baud"
 
 LB936:
-	.byte	$00,$40,$80,$C0
+    .byte   $00,$40,$80,$C0
 
 LB93A:
-	.byte   $7F,$BF,$DF,$EF,$F7,$FB,$FD,$FE
+    .byte   $7F,$BF,$DF,$EF,$F7,$FB,$FD,$FE
 LB942:  .byte   $80,$40,$20,$10,$08,$04,$02,$01
-	.byte	$E3
+    .byte   $E3
         sbc     ($E0,x)                         ; B94B E1 E0                    ..
         .byte   $E2                             ; B94D E2                       .
 LB94E:  brk                                     ; B94E 00                       .
@@ -3613,11 +3613,11 @@ LB966:  brk                                     ; B966 00                       
         .byte   $0F                             ; B96D 0F                       .
 
 LB96E:  .byte   $10,$03,$0D,$00
-	.addr	LB892
-	.byte	$00,$00
+    .addr   LB892
+    .byte   $00,$00
         jsr     L0403                           ; B976 20 03 04                  ..
         brk                                     ; B979 00                       .
-	.addr	LB88F
+    .addr   LB88F
         brk                                     ; B97C 00                       .
         brk                                     ; B97D 00                       .
         jsr     L0407                           ; B97E 20 07 04                  ..
@@ -3627,12 +3627,12 @@ LB96E:  .byte   $10,$03,$0D,$00
         brk                                     ; B984 00                       .
         brk                                     ; B985 00                       .
         bpl     LB993                           ; B986 10 0B                    ..
-	.byte	$0D,$00,$00
+    .byte   $0D,$00,$00
         brk                                     ; B98B 00                       .
         brk                                     ; B98C 00                       .
         brk                                     ; B98D 00                       .
         bpl     LB997                           ; B98E 10 07                    ..
-	.byte	$0D,$00,$00
+    .byte   $0D,$00,$00
 LB993:  brk                                     ; B993 00                       .
         brk                                     ; B994 00                       .
         brk                                     ; B995 00                       .
@@ -3883,315 +3883,425 @@ LBAE7:  .byte   $B2                             ; BAE7 B2                       
         ldy     $FE,x                           ; BAE8 B4 FE                    ..
         .byte   $3F                             ; BAEA 3F                       ?
         .byte   $32                             ; BAEB 32                       2
-        brk                                     ; BAEC 00                       .
-        brk                                     ; BAED 00                       .
-        brk                                     ; BAEE 00                       .
-        brk                                     ; BAEF 00                       .
-        brk                                     ; BAF0 00                       .
-        brk                                     ; BAF1 00                       .
-        brk                                     ; BAF2 00                       .
-        brk                                     ; BAF3 00                       .
-        brk                                     ; BAF4 00                       .
-        .byte   $02                             ; BAF5 02                       .
-        .byte   $04                             ; BAF6 04                       .
-        php                                     ; BAF7 08                       .
-        bpl     LBB1A                           ; BAF8 10 20                    . 
-        rti                                     ; BAFA 40                       @
+; ----------------------------------------------------------------------------
+; 8x8 Character sets
+; ----------------------------------------------------------------------------
+; space
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+
+
+        .byte   %00000000 ; 00
+        .byte   %00000010 ; 02
+        .byte   %00000100 ; 04
+        .byte   %00001000 ; 08
+        .byte   %00010000 ; 10
+        .byte   %00100000 ; 20
+        .byte   %01000000 ; 40
+        .byte   %10000000 ; 80
+
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %01111100 ; 7C
+        .byte   %00000000 ; 00
+        .byte   %01111100 ; 7C
+        .byte   %00000000 ; 00
+        .byte   %01111100 ; 7C
+        .byte   %00000000 ; 00
+
+        .byte   %00110010 ; 32
+        .byte   %01001100 ; 4C
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+
+        .byte   %00000000 ; 00
+        .byte   %00010000 ; 10
+        .byte   %00110000 ; 30
+        .byte   %01011110 ; 5E
+        .byte   %10000000 ; 80
+        .byte   %01011110 ; 5E
+        .byte   %00110000 ; 30
+        .byte   %00010000 ; 10
+
+        .byte   %00000000 ; 00
+        .byte   %00000010 ; 02
+        .byte   %00000100 ; 04
+        .byte   %11111110 ; FE
+        .byte   %00010000 ; 10
+        .byte   %11111110 ; FE
+LBB1A:  .byte   %01000000 ; 40
+        .byte   %10000000 ; 80
+
+        .byte   %00000000 ; 00
+        .byte   %00010000 ; 10
+        .byte   %00111000 ; 38
+        .byte   %01111100 ; 7C
+        .byte   %00010000 ; 10
+        .byte   %00010000 ; 10
+        .byte   %00010000 ; 10
+        .byte   %00010000 ; 10
+
+LBB24:  .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00001000 ; 08
+        .byte   %00001100 ; 0C
+        .byte   %11111110 ; FE
+        .byte   %00001100 ; 0C
+        .byte   %00001000 ; 08
+        .byte   %00000000 ; 00
+
+        .byte   %00000000 ; 00
+        .byte   %00010000 ; 10
+        .byte   %00010000 ; 10
+        .byte   %00010000 ; 10
+        .byte   %00010000 ; 10
+        .byte   %01111100 ; 7C
+LBB32:  .byte   %00111000 ; 38
+        .byte   %00010000 ; 10
+
+LBB34:  .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00100000 ; 20
+        .byte   %01100000 ; 60
+        .byte   %11111110 ; FE
+        .byte   %01100000 ; 60
+        .byte   %00100000 ; 20
+        .byte   %00000000 ; 00
+
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00100100 ; 24
+LBB3F:  .byte   %00011000 ; 18
+        .byte   %00011000 ; 18
+        .byte   %00100100 ; 24
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+
+        .byte   %11111110 ; FE
+        .byte   %01000000 ; 40
+        .byte   %00100000 ; 20
+        .byte   %00010000 ; 10
+        .byte   %00010000 ; 10
+        .byte   %00100000 ; 20
+        .byte   %01000000 ; 40
+        .byte   %11111110 ; FE
+
+        .byte   %00010000 ; 10
+        .byte   %00010000 ; 10
+        .byte   %00101000 ; 28
+        .byte   %00101000 ; 28
+        .byte   %01000100 ; 44
+        .byte   %01000100 ; 44
+        .byte   %10000010 ; 82
+        .byte   %11111110 ; FE
+
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %01000100 ; 44
+LBB57:  .byte   %01000100 ; 44
+        .byte   %01000100 ; 44
+LBB59:  .byte   %00111000 ; 38
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+LBB5E:  .byte   %00111000 ; 38
+        .byte   %01000100 ; 44
+        .byte   %01000100 ; 44
+        .byte   %01000100 ; 44
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00010000 ; 10
+        .byte   %00000000 ; 00
+LBB68:  .byte   %01111100 ; 7C
+        .byte   %00000000 ; 00
+        .byte   %00010000 ; 10
+        .byte   %00000000 ; 00
+
+
+LBB6C:  .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %01100010 ; 62
+        .byte   %10010010 ; 92
+        .byte   %10010100 ; 94
+        .byte   %10001000 ; 88
+        .byte   %10011000 ; 98
+        .byte   %01100110 ; 66
+
+        .byte   %00011000 ; 18
+        .byte   %00100100 ; 24
+        .byte   %01000100 ; 44
+        .byte   %01111000 ; 78
+        .byte   %01000100 ; 44
+        .byte   %01000010 ; 42
+        .byte   %01111100 ; 7C
+        .byte   %01000000 ; 40
+
+        .byte   %00110000 ; 30
+        .byte   %01001000 ; 48
+        .byte   %00100000 ; 20
+        .byte   %00110000 ; 30
+        .byte   %01001000 ; 48
+        .byte   %01000100 ; 44
+        .byte   %01000100 ; 44
+        .byte   %00111000 ; 38
+
+        .byte   %01000000 ; 40
+        .byte   %00100000 ; 20
+        .byte   %00010000 ; 10
+        .byte   %00010000 ; 10
+        .byte   %00101000 ; 28
+        .byte   %00101000 ; 28
+        .byte   %01000100 ; 44
+        .byte   %01000100 ; 44
+
+        .byte   %00000000 ; 00
+        .byte   %00100100 ; 24
+        .byte   %00100100 ; 24
+        .byte   %00100100 ; 24
+        .byte   %00111010 ; 3A
+        .byte   %00100000 ; 20
+        .byte   %00100000 ; 20
+        .byte   %11000000 ; C0
+
+        .byte   %00000000 ; 00
+        .byte   %00100000 ; 20
+        .byte   %01111100 ; 7C
+        .byte   %10101000 ; A8
+        .byte   %00101000 ; 28
+        .byte   %00101000 ; 28
+        .byte   %00101000 ; 28
+        .byte   %00101000 ; 28
+
+        .byte   %00000000 ; 00
+        .byte   %00001100 ; 0C
+        .byte   %00010010 ; 12
+        .byte   %00100010 ; 22
+        .byte   %01100100 ; 64
+        .byte   %01011000 ; 58
+        .byte   %01000000 ; 40
+        .byte   %10000000 ; 80
+
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00111110 ; 3E
+        .byte   %01010000 ; 50
+        .byte   %10001000 ; 88
+        .byte   %10001000 ; 88
+        .byte   %10001000 ; 88
+        .byte   %01110000 ; 70
+
+        .byte   %00000000 ; 00
+LBBAD:  .byte   %00000000 ; 00
+        .byte   %01000100 ; 44
+        .byte   %10000010 ; 82
+        .byte   %10010010 ; 92
+        .byte   %10010010 ; 92
+        .byte   %10010010 ; 92
+        .byte   %01101100 ; 6C
+
+        .byte   %00001100 ; 0C
+        .byte   %00110000 ; 30
+        .byte   %11000000 ; C0
+        .byte   %00110000 ; 30
+        .byte   %00001100 ; 0C
+        .byte   %00000000 ; 00
+        .byte   %11111100 ; FC
+        .byte   %00000000 ; 00
+
+        .byte   %01100000 ; 60
+        .byte   %00011000 ; 18
+        .byte   %01100000 ; 60
+        .byte   %00011000 ; 18
+        .byte   %01100000 ; 60
+        .byte   %00000000 ; 00
+        .byte   %01111110 ; 7E
+        .byte   %00000000 ; 00
+
+        .byte   %00111000 ; 38
+        .byte   %01000100 ; 44
+LBBC6:  .byte   %10000010 ; 82
+        .byte   %11111110 ; FE
+        .byte   %10000010 ; 82
+        .byte   %10000010 ; 82
+        .byte   %01000100 ; 44
+        .byte   %00111000 ; 38
+
+ LBBCC: .byte   %01000000 ; 40
+        .byte   %10000000 ; 80
+        .byte   %00011000 ; 18
+        .byte   %00101000 ; 28
+        .byte   %01001000 ; 48
+        .byte   %00101000 ; 28
+        .byte   %00011000 ; 18
+        .byte   %00001100 ; 0C
+
+        .byte   %00110000 ; 30
+        .byte   %01001000 ; 48
+        .byte   %01001000 ; 48
+        .byte   %00110000 ; 30
+        .byte   %00000000 ; 00
+LBBD9:  .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+
+        .byte   %01000000 ; 40
+        .byte   %00100000 ; 20
+        .byte   %00110000 ; 30
+        .byte   %00101000 ; 28
+        .byte   %00100100 ; 24
+        .byte   %00101000 ; 28
+        .byte   %00110000 ; 30
+        .byte   %01100000 ; 60
+
+        .byte   %11100000 ; E0
+        .byte   %10010000 ; 90
+        .byte   %01001000 ; 48
+        .byte   %00100100 ; 24
+        .byte   %00100100 ; 24
+        .byte   %01001000 ; 48
+        .byte   %10010000 ; 90
+        .byte   %11100000 ; E0
+
+        .byte   %11111110 ; FE
+        .byte   %00000000 ; 00
+        .byte   %00111100 ; 3C
+        .byte   %01000010 ; 42
+        .byte   %10000000 ; 80
+        .byte   %00111100 ; 3C
+        .byte   %00000000 ; 00
+        .byte   %11111110 ; FE
+
+        .byte   %00101000 ; 28
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %01111100 ; 7C
+        .byte   %01000100 ; 44
+        .byte   %01000100 ; 44
+        .byte   %01111100 ; 7C
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00110000 ; 30
+        .byte   %01001000 ; 48
+        .byte   %01001000 ; 48
+        .byte   %00110000 ; 30
+        .byte   %00000000 ; 00
+LBC0B:  .byte   %00000000 ; 00
+
+        .byte   %00000000 ; 00
+        .byte   %00010000 ; 10
+        .byte   %00111000 ; 38
+        .byte   %01111100 ; 7C
+        .byte   %11111110 ; FE
+        .byte   %01111100 ; 7C
+        .byte   %00111000 ; 38
+        .byte   %00010000 ; 10
+
+        .byte   %00000000 ; 00
+LBC15:  .byte   %10000010 ; 82
+        .byte   %01000100 ; 44
+        .byte   %00101000 ; 28
+        .byte   %00010000 ; 10
+        .byte   %00101000 ; 28
+        .byte   %01000100 ; 44
+        .byte   %10000010 ; 82
+
+        .byte   %00000100 ; 04
+        .byte   %00001000 ; 08
+LBC1E:  .byte   %00010000 ; 10
+LBC1F:  .byte   %00000000 ; 00
+LBC20:  .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00000100 ; 04
+        .byte   %00001000 ; 08
+        .byte   %00010000 ; 10
+
+        .byte   %01000100 ; 44
+        .byte   %00101000 ; 28
+        .byte   %00010000 ; 10
+        .byte   %00000000 ; 00
+LBC30:  .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+
+        .byte   %00000000 ; 00
+        .byte   %00010000 ; 10
+        .byte   %00111000 ; 38
+LBC37:  .byte   %01111100 ; 7C
+        .byte   %00010000 ; 10
+        .byte   %01111100 ; 7C
+        .byte   %00111000 ; 38
+        .byte   %00010000 ; 10
+
+        .byte   %00010000 ; 10
+        .byte   %00010000 ; 10
+        .byte   %00010000 ; 10
+        .byte   %00010000 ; 10
+        .byte   %00010000 ; 10
+        .byte   %00010000 ; 10
+LBC42:  .byte   %00010000 ; 10
+        .byte   %00010000 ; 10
 
 ; ----------------------------------------------------------------------------
-        .byte   $80                             ; BAFB 80                       .
-        brk                                     ; BAFC 00                       .
-        brk                                     ; BAFD 00                       .
-        .byte   $7C                             ; BAFE 7C                       |
-        brk                                     ; BAFF 00                       .
-        .byte   $7C                             ; BB00 7C                       |
-        brk                                     ; BB01 00                       .
-        .byte   $7C                             ; BB02 7C                       |
-        brk                                     ; BB03 00                       .
-        .byte   $32                             ; BB04 32                       2
-	.byte	$4C,$00,$00
-        brk                                     ; BB08 00                       .
-        brk                                     ; BB09 00                       .
-        brk                                     ; BB0A 00                       .
-        brk                                     ; BB0B 00                       .
-        brk                                     ; BB0C 00                       .
-        bpl     LBB3F                           ; BB0D 10 30                    .0
-        lsr     $5E80,x                         ; BB0F 5E 80 5E                 ^.^
-        bmi     LBB24                           ; BB12 30 10                    0.
-        brk                                     ; BB14 00                       .
-        .byte   $02                             ; BB15 02                       .
-        .byte   $04                             ; BB16 04                       .
-        inc     $FE10,x                         ; BB17 FE 10 FE                 ...
-LBB1A:  rti                                     ; BB1A 40                       @
-
+; 8x6 chars
 ; ----------------------------------------------------------------------------
-        .byte   $80                             ; BB1B 80                       .
-        brk                                     ; BB1C 00                       .
-        bpl     LBB57                           ; BB1D 10 38                    .8
-        .byte   $7C                             ; BB1F 7C                       |
-        bpl     LBB32                           ; BB20 10 10                    ..
-        bpl     LBB34                           ; BB22 10 10                    ..
-LBB24:  brk                                     ; BB24 00                       .
-        brk                                     ; BB25 00                       .
-        php                                     ; BB26 08                       .
-        .byte   $0C                             ; BB27 0C                       .
-        inc     $080C,x                         ; BB28 FE 0C 08                 ...
-        brk                                     ; BB2B 00                       .
-        brk                                     ; BB2C 00                       .
-        bpl     LBB3F                           ; BB2D 10 10                    ..
-	.byte	$10,$10
-        .byte   $7C                             ; BB31 7C                       |
-LBB32:  sec                                     ; BB32 38                       8
-        .byte   $10                             ; BB33 10                       .
-LBB34:  brk                                     ; BB34 00                       .
-        brk                                     ; BB35 00                       .
-	.byte	$20,$60,$FE
-        rts                                     ; BB39 60                       `
-	.byte	$20,$00,$00
-        brk                                     ; BB3D 00                       .
-        .byte   $24                             ; BB3E 24                       $
-LBB3F:  clc                                     ; BB3F 18                       .
-        clc                                     ; BB40 18                       .
-	.byte	$24,$00
-        brk                                     ; BB43 00                       .
-        inc     L2040,x                         ; BB44 FE 40 20                 .@ 
-        bpl     LBB59                           ; BB47 10 10                    ..
-	.byte	$20,$40,$FE
-        bpl     LBB5E                           ; BB4C 10 10                    ..
-        plp                                     ; BB4E 28                       (
-        plp                                     ; BB4F 28                       (
-        .byte   $44                             ; BB50 44                       D
-        .byte   $44                             ; BB51 44                       D
-        .byte   $82                             ; BB52 82                       .
-	.byte	$FE,$00,$00
-        .byte   $44                             ; BB56 44                       D
-LBB57:  .byte   $44                             ; BB57 44                       D
-        .byte   $44                             ; BB58 44                       D
-LBB59:  sec                                     ; BB59 38                       8
-        brk                                     ; BB5A 00                       .
-        brk                                     ; BB5B 00                       .
-        brk                                     ; BB5C 00                       .
-        brk                                     ; BB5D 00                       .
-LBB5E:  sec                                     ; BB5E 38                       8
-        .byte   $44                             ; BB5F 44                       D
-        .byte   $44                             ; BB60 44                       D
-        .byte   $44                             ; BB61 44                       D
-        brk                                     ; BB62 00                       .
-        brk                                     ; BB63 00                       .
-        brk                                     ; BB64 00                       .
-        brk                                     ; BB65 00                       .
-        bpl     LBB68                           ; BB66 10 00                    ..
-LBB68:  .byte   $7C                             ; BB68 7C                       |
-        brk                                     ; BB69 00                       .
-        bpl     LBB6C                           ; BB6A 10 00                    ..
-LBB6C:  brk                                     ; BB6C 00                       .
-        brk                                     ; BB6D 00                       .
-        .byte   $62                             ; BB6E 62                       b
-        .byte   $92                             ; BB6F 92                       .
-        sty     $88,x                           ; BB70 94 88                    ..
-        tya                                     ; BB72 98                       .
-        ror     $18                             ; BB73 66 18                    f.
-        bit     $44                             ; BB75 24 44                    $D
-        sei                                     ; BB77 78                       x
-        .byte   $44                             ; BB78 44                       D
-        .byte   $42                             ; BB79 42                       B
-        .byte   $7C                             ; BB7A 7C                       |
-        rti                                     ; BB7B 40                       @
+; space
+LBC44:  .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+LBC47:  .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
+; !
+        .byte   %01000000 ; 40
+        .byte   %01000000 ; 40
+        .byte   %01000000 ; 40
+LBC4D:  .byte   %00000000 ; 00
+        .byte   %01000000 ; 40
+        .byte   %00000000 ; 00
 
-; ----------------------------------------------------------------------------
-        bmi     LBBC6                           ; BB7C 30 48                    0H
-        jsr     L4830                           ; BB7E 20 30 48                  0H
-        .byte   $44                             ; BB81 44                       D
-        .byte   $44                             ; BB82 44                       D
-        sec                                     ; BB83 38                       8
-        rti                                     ; BB84 40                       @
+; "
+LBC50:  .byte   %01010000 ; 50
+LBC51:  .byte   %01010000 ; 50
+LBC52:  .byte   %00000000 ; 00
+LBC53:  .byte   %00000000 ; 00
+LBC54:  .byte   %00000000 ; 00
+        .byte   %00000000 ; 00
 
-; ----------------------------------------------------------------------------
-        jsr     L1010                           ; BB85 20 10 10                  ..
-        plp                                     ; BB88 28                       (
-        plp                                     ; BB89 28                       (
-        .byte   $44                             ; BB8A 44                       D
-        .byte   $44                             ; BB8B 44                       D
-        brk                                     ; BB8C 00                       .
-        bit     $24                             ; BB8D 24 24                    $$
-        bit     $3A                             ; BB8F 24 3A                    $:
-        jsr     LC020                           ; BB91 20 20 C0                   .
-        brk                                     ; BB94 00                       .
-        jsr     LA87C                           ; BB95 20 7C A8                  |.
-        plp                                     ; BB98 28                       (
-        plp                                     ; BB99 28                       (
-        plp                                     ; BB9A 28                       (
-        plp                                     ; BB9B 28                       (
-        brk                                     ; BB9C 00                       .
-        .byte   $0C                             ; BB9D 0C                       .
-        .byte   $12                             ; BB9E 12                       .
-        .byte   $22                             ; BB9F 22                       "
-        .byte   $64                             ; BBA0 64                       d
-        cli                                     ; BBA1 58                       X
-        rti                                     ; BBA2 40                       @
-
-; ----------------------------------------------------------------------------
-        .byte   $80                             ; BBA3 80                       .
-        brk                                     ; BBA4 00                       .
-        brk                                     ; BBA5 00                       .
-        rol     L8850,x                         ; BBA6 3E 50 88                 >P.
-        dey                                     ; BBA9 88                       .
-        dey                                     ; BBAA 88                       .
-        bvs     LBBAD                           ; BBAB 70 00                    p.
-LBBAD:  brk                                     ; BBAD 00                       .
-        .byte   $44                             ; BBAE 44                       D
-        .byte   $82                             ; BBAF 82                       .
-        .byte   $92                             ; BBB0 92                       .
-        .byte   $92                             ; BBB1 92                       .
-        .byte   $92                             ; BBB2 92                       .
-        jmp     (L300C)                         ; BBB3 6C 0C 30                 l.0
-
-; ----------------------------------------------------------------------------
-        cpy     #$30                            ; BBB6 C0 30                    .0
-        .byte   $0C                             ; BBB8 0C                       .
-        brk                                     ; BBB9 00                       .
-        .byte   $FC                             ; BBBA FC                       .
-        brk                                     ; BBBB 00                       .
-        rts                                     ; BBBC 60                       `
-
-; ----------------------------------------------------------------------------
-        clc                                     ; BBBD 18                       .
-        rts                                     ; BBBE 60                       `
-
-; ----------------------------------------------------------------------------
-        clc                                     ; BBBF 18                       .
-        rts                                     ; BBC0 60                       `
-
-; ----------------------------------------------------------------------------
-        brk                                     ; BBC1 00                       .
-        ror     $3800,x                         ; BBC2 7E 00 38                 ~.8
-        .byte   $44                             ; BBC5 44                       D
-LBBC6:  .byte   $82                             ; BBC6 82                       .
-        inc     $8282,x                         ; BBC7 FE 82 82                 ...
-        .byte   $44                             ; BBCA 44                       D
-        sec                                     ; BBCB 38                       8
-LBBCC:  rti                                     ; BBCC 40                       @
-
-; ----------------------------------------------------------------------------
-        .byte   $80                             ; BBCD 80                       .
-        clc                                     ; BBCE 18                       .
-        plp                                     ; BBCF 28                       (
-        pha                                     ; BBD0 48                       H
-        plp                                     ; BBD1 28                       (
-        clc                                     ; BBD2 18                       .
-        .byte   $0C                             ; BBD3 0C                       .
-        bmi     LBC1E                           ; BBD4 30 48                    0H
-        pha                                     ; BBD6 48                       H
-        bmi     LBBD9                           ; BBD7 30 00                    0.
-LBBD9:  brk                                     ; BBD9 00                       .
-        brk                                     ; BBDA 00                       .
-        brk                                     ; BBDB 00                       .
-        rti                                     ; BBDC 40                       @
-
-; ----------------------------------------------------------------------------
-        jsr     L2830                           ; BBDD 20 30 28                  0(
-        bit     $28                             ; BBE0 24 28                    $(
-        bmi     LBC44                           ; BBE2 30 60                    0`
-        cpx     #$90                            ; BBE4 E0 90                    ..
-        pha                                     ; BBE6 48                       H
-        bit     $24                             ; BBE7 24 24                    $$
-        pha                                     ; BBE9 48                       H
-        bcc     LBBCC                           ; BBEA 90 E0                    ..
-        inc     $3C00,x                         ; BBEC FE 00 3C                 ..<
-        .byte   $42                             ; BBEF 42                       B
-        .byte   $80                             ; BBF0 80                       .
-        .byte   $3C                             ; BBF1 3C                       <
-        brk                                     ; BBF2 00                       .
-        inc     a:$28,x                         ; BBF3 FE 28 00                 .(.
-        brk                                     ; BBF6 00                       .
-        brk                                     ; BBF7 00                       .
-        brk                                     ; BBF8 00                       .
-        brk                                     ; BBF9 00                       .
-        brk                                     ; BBFA 00                       .
-        brk                                     ; BBFB 00                       .
-        brk                                     ; BBFC 00                       .
-        brk                                     ; BBFD 00                       .
-        .byte   $7C                             ; BBFE 7C                       |
-        .byte   $44                             ; BBFF 44                       D
-        .byte   $44                             ; BC00 44                       D
-        .byte   $7C                             ; BC01 7C                       |
-        brk                                     ; BC02 00                       .
-        brk                                     ; BC03 00                       .
-        brk                                     ; BC04 00                       .
-        brk                                     ; BC05 00                       .
-        bmi     LBC50                           ; BC06 30 48                    0H
-        pha                                     ; BC08 48                       H
-        bmi     LBC0B                           ; BC09 30 00                    0.
-LBC0B:  brk                                     ; BC0B 00                       .
-        brk                                     ; BC0C 00                       .
-        bpl     LBC47                           ; BC0D 10 38                    .8
-        .byte   $7C                             ; BC0F 7C                       |
-        inc     $387C,x                         ; BC10 FE 7C 38                 .|8
-        bpl     LBC15                           ; BC13 10 00                    ..
-LBC15:  .byte   $82                             ; BC15 82                       .
-        .byte   $44                             ; BC16 44                       D
-        plp                                     ; BC17 28                       (
-        bpl     LBC42                           ; BC18 10 28                    .(
-        .byte   $44                             ; BC1A 44                       D
-        .byte   $82                             ; BC1B 82                       .
-        .byte   $04                             ; BC1C 04                       .
-        php                                     ; BC1D 08                       .
-LBC1E:  .byte   $10                             ; BC1E 10                       .
-LBC1F:  brk                                     ; BC1F 00                       .
-LBC20:  brk                                     ; BC20 00                       .
-        brk                                     ; BC21 00                       .
-        brk                                     ; BC22 00                       .
-        brk                                     ; BC23 00                       .
-        brk                                     ; BC24 00                       .
-        brk                                     ; BC25 00                       .
-        brk                                     ; BC26 00                       .
-        brk                                     ; BC27 00                       .
-        brk                                     ; BC28 00                       .
-        .byte   $04                             ; BC29 04                       .
-        php                                     ; BC2A 08                       .
-        bpl     LBC71                           ; BC2B 10 44                    .D
-        plp                                     ; BC2D 28                       (
-        bpl     LBC30                           ; BC2E 10 00                    ..
-LBC30:  brk                                     ; BC30 00                       .
-        brk                                     ; BC31 00                       .
-        brk                                     ; BC32 00                       .
-        brk                                     ; BC33 00                       .
-        brk                                     ; BC34 00                       .
-        bpl     LBC6F                           ; BC35 10 38                    .8
-LBC37:  .byte   $7C                             ; BC37 7C                       |
-        bpl     LBCB6                           ; BC38 10 7C                    .|
-        sec                                     ; BC3A 38                       8
-        bpl     LBC4D                           ; BC3B 10 10                    ..
-        bpl     LBC4F                           ; BC3D 10 10                    ..
-        bpl     LBC51                           ; BC3F 10 10                    ..
-        .byte   $10                             ; BC41 10                       .
-LBC42:  bpl     LBC54                           ; BC42 10 10                    ..
-LBC44:  brk                                     ; BC44 00                       .
-        brk                                     ; BC45 00                       .
-        brk                                     ; BC46 00                       .
-LBC47:  brk                                     ; BC47 00                       .
-        brk                                     ; BC48 00                       .
-        brk                                     ; BC49 00                       .
-        rti                                     ; BC4A 40                       @
-
-; ----------------------------------------------------------------------------
-        rti                                     ; BC4B 40                       @
-
-; ----------------------------------------------------------------------------
-        rti                                     ; BC4C 40                       @
-
-; ----------------------------------------------------------------------------
-LBC4D:  brk                                     ; BC4D 00                       .
-        rti                                     ; BC4E 40                       @
-
-; ----------------------------------------------------------------------------
-LBC4F:  brk                                     ; BC4F 00                       .
-LBC50:  .byte   $50                             ; BC50 50                       P
-LBC51:  .byte   $50                             ; BC51 50                       P
-LBC52:  brk                                     ; BC52 00                       .
-LBC53:  brk                                     ; BC53 00                       .
-LBC54:  brk                                     ; BC54 00                       .
-        brk                                     ; BC55 00                       .
         bvc     LBC50                           ; BC56 50 F8                    P.
         bvc     LBC52                           ; BC58 50 F8                    P.
         bvc     LBC5C                           ; BC5A 50 00                    P.
@@ -4229,7 +4339,7 @@ LBC71:  brk                                     ; BC71 00                       
         brk                                     ; BC7F 00                       .
         bcc     LBCE2                           ; BC80 90 60                    .`
         beq     LBCE4                           ; BC82 F0 60                    .`
-	.byte	$90,$00,$20,$20,$F8
+    .byte   $90,$00,$20,$20,$F8
         jsr     L0020                           ; BC89 20 20 00                   .
         brk                                     ; BC8C 00                       .
         brk                                     ; BC8D 00                       .
@@ -4280,15 +4390,15 @@ LBCB0:  rts                                     ; BCB0 60                       
 ; ----------------------------------------------------------------------------
         beq     LBCB6                           ; BCB4 F0 00                    ..
 LBCB6:  .byte   $F0                             ; BCB6 F0                       .
-LBCB7:  .byte	$10,$20
-        .byte	$10,$E0
+LBCB7:  .byte   $10,$20
+        .byte   $10,$E0
         brk                                     ; BCBB 00                       .
         .byte   $20                             ; BCBC 20                        
 LBCBD:  rts                                     ; BCBD 60                       `
 
 ; ----------------------------------------------------------------------------
         .byte   $A0                             ; BCBE A0                       .
-LBCBF:  .byte	$F0,$20
+LBCBF:  .byte   $F0,$20
 LBCC1:  brk                                     ; BCC1 00                       .
 LBCC2:  cpx     #$80                            ; BCC2 E0 80                    ..
         cpx     #$10                            ; BCC4 E0 10                    ..
@@ -4462,7 +4572,7 @@ LBD77:  .byte   $80                             ; BD77 80                       
         bcc     LBD77                           ; BD85 90 F0                    ..
         brk                                     ; BD87 00                       .
         .byte   $90                             ; BD88 90                       .
-LBD89:  .byte	$90,$90
+LBD89:  .byte   $90,$90
         rts                                     ; BD8B 60                       `
 
 ; ----------------------------------------------------------------------------
@@ -4507,10 +4617,10 @@ LBDAD:  .byte   $80                             ; BDAD 80                       
         rti                                     ; BDAE 40                       @
 
 ; ----------------------------------------------------------------------------
-	.byte	$20,$10,$00
+    .byte   $20,$10,$00
 LBDB2:  bvs     LBDC4                           ; BDB2 70 10                    p.
         .byte   $10                             ; BDB4 10                       .
-LBDB5:  .byte	$10,$70
+LBDB5:  .byte   $10,$70
         brk                                     ; BDB7 00                       .
 LBDB8:  brk                                     ; BDB8 00                       .
         jsr     L8850                           ; BDB9 20 50 88                  P.
@@ -4877,10 +4987,10 @@ LBF08:  brk                                     ; BF08 00                       
 ; ----------------------------------------------------------------------------
         jsr     L8040                           ; BF22 20 40 80                  @.
         cpx     #$20                            ; BF25 E0 20                    . 
-	.byte	$50,$70
+    .byte   $50,$70
         bvc     LBF4B                           ; BF29 50 20                    P 
         brk                                     ; BF2B 00                       .
-	.byte	$30,$60
+    .byte   $30,$60
         ldy     #$60                            ; BF2E A0 60                    .`
         bmi     LBF32                           ; BF30 30 00                    0.
 LBF32:  jsr     L2050                           ; BF32 20 50 20                  P 
@@ -4888,10 +4998,10 @@ LBF32:  jsr     L2050                           ; BF32 20 50 20                 
         brk                                     ; BF36 00                       .
         brk                                     ; BF37 00                       .
         cpy     #$60                            ; BF38 C0 60                    .`
-	.byte	$50,$60
+    .byte   $50,$60
         cpy     #$00                            ; BF3C C0 00                    ..
         cpy     #$A0                            ; BF3E C0 A0                    ..
-	.byte	$50,$50
+    .byte   $50,$50
         ldy     #$C0                            ; BF42 A0 C0                    ..
         sed                                     ; BF44 F8                       .
         jsr     L4040                           ; BF45 20 40 40                  @@
@@ -4912,14 +5022,14 @@ LBF56:  brk                                     ; BF56 00                       
         bcc     LBFBA                           ; BF58 90 60                    .`
         brk                                     ; BF5A 00                       .
         brk                                     ; BF5B 00                       .
-	.byte	$20,$70,$F8
+    .byte   $20,$70,$F8
         bvs     LBF81                           ; BF5F 70 20                    p 
 LBF61:  brk                                     ; BF61 00                       .
         dey                                     ; BF62 88                       .
         bvc     LBF85                           ; BF63 50 20                    P 
 LBF65:  bvc     LBEEF                           ; BF65 50 88                    P.
         brk                                     ; BF67 00                       .
-	.byte	$10,$20
+    .byte   $10,$20
         brk                                     ; BF6A 00                       .
         brk                                     ; BF6B 00                       .
         brk                                     ; BF6C 00                       .
@@ -4928,14 +5038,14 @@ LBF65:  bvc     LBEEF                           ; BF65 50 88                    
         brk                                     ; BF6F 00                       .
         brk                                     ; BF70 00                       .
         brk                                     ; BF71 00                       .
-	.byte	$10,$20
+    .byte   $10,$20
         ldy     #$20                            ; BF74 A0 20                    . 
         brk                                     ; BF76 00                       .
         brk                                     ; BF77 00                       .
         brk                                     ; BF78 00                       .
         brk                                     ; BF79 00                       .
         jsr     L2070                           ; BF7A 20 70 20                  p 
-	.byte	$70,$20
+    .byte   $70,$20
         brk                                     ; BF7F 00                       .
         .byte   $20                             ; BF80 20                        
 LBF81:  jsr     L2020                           ; BF81 20 20 20                    
@@ -4943,23 +5053,23 @@ LBF81:  jsr     L2020                           ; BF81 20 20 20
 LBF85:  .byte   $20                             ; BF85 20                        
 
 sub_bf86:
-	cmp     $031A,x
-	beq	:+
+    cmp     $031A,x
+    beq :+
         inx
         inx
         inx
-	cpx     #$20
+    cpx     #$20
         bcc     sub_bf86
-:	rts
+:   rts
 
 ; ----------------------------------------------------------------------------
 
 sub_BF93:
-	jsr	sub_b47d
-	lda	#$51
-	sta	$1347
-	sta	$133A
-	lda	$CB
+    jsr sub_b47d
+    lda #$51
+    sta $1347
+    sta $133A
+    lda $CB
         pha                                     ; BFA0 48                       H
         lda     #$00                            ; BFA1 A9 00                    ..
 LBFA3:  sta     $CB                             ; BFA3 85 CB                    ..
@@ -4987,19 +5097,19 @@ LBFC2:  lda     #$FF                            ; BFC2 A9 FF                    
         sta     $133A                           ; BFD2 8D 3A 13                 .:.
         jsr     sub_b420
 LBFD8:  jsr     LB4F7                           ; BFD8 20 F7 B4                  ..
-        bcs	:+
+        bcs :+
         lda     #$00                            ; BFDD A9 00                    ..
         sta     $133A                           ; BFDF 8D 3A 13                 .:.
         tax                                     ; BFE2 AA                       .
         jsr     sub_bf86
-        bne	:+
+        bne :+
         lda     #'T'
         sta     $031A,x                         ; BFEA 9D 1A 03                 ...
         lda     #<t_handler
         sta     $031B,x                         ; BFEF 9D 1B 03                 ...
         lda     #>t_handler
         sta     $031C,x                         ; BFF4 9D 1C 03                 ...
-:	rts
+:   rts
 
 ; ----------------------------------------------------------------------------
         brk                                     ; BFF8 00                       .
@@ -5007,4 +5117,5 @@ LBFD8:  jsr     LB4F7                           ; BFD8 20 F7 B4                 
         brk                                     ; BFFA 00                       .
         ldy     #$00                            ; BFFB A0 00                    ..
         .byte   $04                             ; BFFD 04                       .
-	.addr	sub_BF93
+    .addr   sub_BF93
+
