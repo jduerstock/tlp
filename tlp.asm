@@ -3953,20 +3953,25 @@ byte_BAEC:
 	.byte   %00010000 
 
 	.byte	%00000000
-	.byte   $02                             ; BB15 02                       .
-	.byte   $04                             ; BB16 04                       .
-	inc     $FE10,x                         ; BB17 FE 10 FE                 ...
-LBB1A:  rti                                     ; BB1A 40                       @
+	.byte	%00000010
+	.byte	%00000100
+	.byte	%11111110
+	.byte	%00010000
+	.byte	%11111110
+	.byte	%01000000
+	.byte	%10000000
 
-; ----------------------------------------------------------------------------
-	.byte   $80                             ; BB1B 80                       .
-	brk                                     ; BB1C 00                       .
-	bpl     LBB57                           ; BB1D 10 38                    .8
-	.byte   $7C                             ; BB1F 7C                       |
-	bpl     LBB32                           ; BB20 10 10                    ..
-	bpl     LBB34                           ; BB22 10 10                    ..
-LBB24:  brk                                     ; BB24 00                       .
-	brk                                     ; BB25 00                       .
+	.byte	%00000000
+	.byte   %00010000
+	.byte   %00111000
+	.byte   %01111100
+	.byte   %00010000
+	.byte   %00010000
+	.byte   %00010000
+	.byte   %00010000
+
+	.byte	%00000000
+	.byte	%00000000
 	php                                     ; BB26 08                       .
 	.byte   $0C                             ; BB27 0C                       .
 	inc     $080C,x                         ; BB28 FE 0C 08                 ...
