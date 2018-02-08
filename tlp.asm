@@ -4102,64 +4102,69 @@ byte_BAEC:
 	.byte	%00101000
 	.byte	%00101000
 
-	brk                                     ; BB9C 00                       .
-	.byte   $0C                             ; BB9D 0C                       .
-	.byte   $12                             ; BB9E 12                       .
-	.byte   $22                             ; BB9F 22                       "
-	.byte   $64                             ; BBA0 64                       d
-	cli                                     ; BBA1 58                       X
-	rti                                     ; BBA2 40                       @
+	.byte	%00000000
+	.byte	%00001100
+	.byte	%00010010
+	.byte	%00100010
+	.byte	%01100100
+	.byte	%01011000
+	.byte	%01000000
+	.byte	%10000000
 
-; ----------------------------------------------------------------------------
-	.byte   $80                             ; BBA3 80                       .
-	brk                                     ; BBA4 00                       .
-	brk                                     ; BBA5 00                       .
-	rol     L8850,x                         ; BBA6 3E 50 88                 >P.
-	dey                                     ; BBA9 88                       .
-	dey                                     ; BBAA 88                       .
-	bvs     LBBAD                           ; BBAB 70 00                    p.
-LBBAD:  brk                                     ; BBAD 00                       .
-	.byte   $44                             ; BBAE 44                       D
-	.byte   $82                             ; BBAF 82                       .
-	.byte   $92                             ; BBB0 92                       .
-	.byte   $92                             ; BBB1 92                       .
-	.byte   $92                             ; BBB2 92                       .
-	jmp     (L300C)                         ; BBB3 6C 0C 30                 l.0
+	.byte	%00000000
+	.byte	%00000000
+	.byte	%00111110
+	.byte	%01010000
+	.byte	%10001000
+	.byte	%10001000
+	.byte	%10001000
+	.byte	%01110000
 
-; ----------------------------------------------------------------------------
-	cpy     #$30                            ; BBB6 C0 30                    .0
-	.byte   $0C                             ; BBB8 0C                       .
-	brk                                     ; BBB9 00                       .
-	.byte   $FC                             ; BBBA FC                       .
-	brk                                     ; BBBB 00                       .
-	rts                                     ; BBBC 60                       `
+	.byte	%00000000
+	.byte	%00000000
+	.byte	%01000100
+	.byte	%10000010
+	.byte	%10010010
+	.byte	%10010010
+	.byte	%10010010
+	.byte	%01101100
 
-; ----------------------------------------------------------------------------
-	clc                                     ; BBBD 18                       .
-	rts                                     ; BBBE 60                       `
+	.byte	%00001100
+	.byte	%00110000
+	.byte	%11000000
+	.byte	%00110000
+	.byte	%00001100
+	.byte	%00000000
+	.byte	%11111100
+	.byte	%00000000
 
-; ----------------------------------------------------------------------------
-	clc                                     ; BBBF 18                       .
-	rts                                     ; BBC0 60                       `
+	.byte	%01100000
+	.byte	%00011000
+	.byte	%01100000
+	.byte	%00011000
+	.byte	%01100000
+	.byte	%00000000
+	.byte	%01111110
+	.byte	%00000000
 
-; ----------------------------------------------------------------------------
-	brk                                     ; BBC1 00                       .
-	ror     $3800,x                         ; BBC2 7E 00 38                 ~.8
-	.byte   $44                             ; BBC5 44                       D
-LBBC6:  .byte   $82                             ; BBC6 82                       .
-	inc     $8282,x                         ; BBC7 FE 82 82                 ...
-	.byte   $44                             ; BBCA 44                       D
-	sec                                     ; BBCB 38                       8
-LBBCC:  rti                                     ; BBCC 40                       @
+	.byte	%00111000
+	.byte	%01000100
+	.byte	%10000010
+	.byte	%11111110
+	.byte	%10000010
+	.byte	%10000010
+	.byte	%01000100
+	.byte	%00111000
 
-; ----------------------------------------------------------------------------
-	.byte   $80                             ; BBCD 80                       .
-	clc                                     ; BBCE 18                       .
-	plp                                     ; BBCF 28                       (
-	pha                                     ; BBD0 48                       H
-	plp                                     ; BBD1 28                       (
-	clc                                     ; BBD2 18                       .
-	.byte   $0C                             ; BBD3 0C                       .
+	.byte	%01000000
+	.byte	%10000000
+	.byte	%00011000
+	.byte	%00101000
+	.byte	%01001000
+	.byte	%00101000
+	.byte	%00011000
+	.byte	%00001100
+
 	bmi     LBC1E                           ; BBD4 30 48                    0H
 	pha                                     ; BBD6 48                       H
 	bmi     LBBD9                           ; BBD7 30 00                    0.
@@ -4176,7 +4181,7 @@ LBBD9:  brk                                     ; BBD9 00                       
 	pha                                     ; BBE6 48                       H
 	bit     $24                             ; BBE7 24 24                    $$
 	pha                                     ; BBE9 48                       H
-	bcc     LBBCC                           ; BBEA 90 E0                    ..
+	.byte	$90,$E0
 	inc     $3C00,x                         ; BBEC FE 00 3C                 ..<
 	.byte   $42                             ; BBEF 42                       B
 	.byte   $80                             ; BBF0 80                       .
