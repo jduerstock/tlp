@@ -28,6 +28,7 @@ DLIST		:= $0230
 HATABS		:= $031A
 ICCOM		:= $0342
 byte_133a	:= $133A
+byte_133e	:= $133E
 byte_1340	:= $1340
 L134D           := $134D
 L2000           := $2000
@@ -46,9 +47,6 @@ L3E33           := $3E33
 L4000           := $4000
 L4020           := $4020
 L4040           := $4040
-L4520           := $4520
-L4830           := $4830
-L4D45           := $4D45
 L5050           := $5050
 L50F8           := $50F8
 L544F           := $544F
@@ -2860,7 +2858,7 @@ sub_b37c:
 LB380:  cli                                     ; B380 58                       X
 	sei                                     ; B381 78                       x
 	ldy     $133F                           ; B382 AC 3F 13                 .?.
-	cpy     $133E                           ; B385 CC 3E 13                 .>.
+	cpy     byte_133e
 	beq     LB380                           ; B388 F0 F6                    ..
 LB38A:  lda     $0F00,y                         ; B38A B9 00 0F                 ...
 	and     #$7F                            ; B38D 29 7F                    ).
@@ -2892,10 +2890,10 @@ LB3B5:  pla                                     ; B3B5 68                       
 	rti                                     ; B3B8 40                       @
 
 ; ----------------------------------------------------------------------------
-LB3B9:  ldy     $133E                           ; B3B9 AC 3E 13                 .>.
+LB3B9:  ldy     byte_133e
 	sta     $0F00,y                         ; B3BC 99 00 0F                 ...
 	iny                                     ; B3BF C8                       .
-	sty     $133E                           ; B3C0 8C 3E 13                 .>.
+	sty     byte_133e
 	inc     byte_CC
 	rts                                     ; B3C5 60                       `
 
@@ -3345,9 +3343,9 @@ LB6D0:  lda     $1330,y                         ; B6D0 B9 30 13                 
 	sta     $1347                           ; B6E9 8D 47 13                 .G.
 	ldx     #$01                            ; B6EC A2 01                    ..
 	stx     $21                             ; B6EE 86 21                    .!
-LB6F0:  lda     byte_1340
+:	lda     byte_1340
 	cmp     #$1F                            ; B6F3 C9 1F                    ..
-	bcs     LB6F0                           ; B6F5 B0 F9                    ..
+	bcs     :-
 	sei                                     ; B6F7 78                       x
 	jsr     sub_b369
 	lda     POKMSK
@@ -3363,8 +3361,8 @@ LB6F0:  lda     byte_1340
 LB709:  cli                                     ; B709 58                       X
 	sei                                     ; B70A 78                       x
 	ldy     $133F                           ; B70B AC 3F 13                 .?.
-	cpy     $133E                           ; B70E CC 3E 13                 .>.
-	beq     LB709                           ; B711 F0 F6                    ..
+	cpy     byte_133e
+	beq     LB709
 	jsr     LB38A                           ; B713 20 8A B3                  ..
 	ldy     #$01                            ; B716 A0 01                    ..
 	rts                                     ; B718 60                       `
@@ -3379,7 +3377,7 @@ LB71C:  ldy     #$00                            ; B71C A0 00                    
 ; ----------------------------------------------------------------------------
 LB724:  lda     #$00                            ; B724 A9 00                    ..
 	sta     $B2                             ; B726 85 B2                    ..
-	sta     $133E                           ; B728 8D 3E 13                 .>.
+	sta     byte_133e
 	sta     $133F                           ; B72B 8D 3F 13                 .?.
 	sta     $1342                           ; B72E 8D 42 13                 .B.
 	sta     $1341                           ; B731 8D 41 13                 .A.
@@ -4955,11 +4953,13 @@ byte_BAEC:
 	.byte   %11000000                       ; ##......
 	.byte   %00000000                       ; ........
 
-	brk                                     ; BE78 00                       .
-	brk                                     ; BE79 00                       .
-	pla                                     ; BE7A 68                       h
-	bcs     LBE7D                           ; BE7B B0 00                    ..
-LBE7D:  brk                                     ; BE7D 00                       .
+	.byte   %00000000                       ; ........
+	.byte   %00000000                       ; ........
+	.byte	%01101000			; .##.#...
+	.byte	%10110000			; #.##....
+	.byte   %00000000                       ; ........
+	.byte   %00000000                       ; ........
+
 	brk                                     ; BE7E 00                       .
 	brk                                     ; BE7F 00                       .
 	brk                                     ; BE80 00                       .
