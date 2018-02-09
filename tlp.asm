@@ -33,7 +33,6 @@ byte_133e	:= $133E
 byte_1340	:= $1340
 L134D           := $134D
 L2000           := $2000
-L2040           := $2040
 L2050           := $2050
 L2060           := $2060
 L2061           := $2061
@@ -46,7 +45,6 @@ L3020           := $3020
 L3030           := $3030
 L3E33           := $3E33
 L4000           := $4000
-L4020           := $4020
 L4040           := $4040
 L5050           := $5050
 L50F8           := $50F8
@@ -864,7 +862,7 @@ LA582:  lda     $9F                             ; A582 A5 9F                    
 LA58C:  lda     #$62                            ; A58C A9 62                    .b
 	ldy     #$B8                            ; A58E A0 B8                    ..
 	ldx     #$0C                            ; A590 A2 0C                    ..
-	jsr     LB84B                           ; A592 20 4B B8                  K.
+	jsr     sub_b84b
 	rts                                     ; A595 60                       `
 
 ; ----------------------------------------------------------------------------
@@ -2056,19 +2054,19 @@ LADCA:  rts                                     ; ADCA 60                       
 LADCB:  and     #$07                            ; ADCB 29 07                    ).
 	sta     off_F4
 	bit     $C9                             ; ADCF 24 C9                    $.
-	bvs     LADDF                           ; ADD1 70 0C                    p.
+	bvs     :+
 	tax                                     ; ADD3 AA                       .
-	beq     LADEA                           ; ADD4 F0 14                    ..
+	beq     :++
 	lda     LB94E,x                         ; ADD6 BD 4E B9                 .N.
 	sta     $A7                             ; ADD9 85 A7                    ..
 	eor     #$FF                            ; ADDB 49 FF                    I.
 	bne     LADEE                           ; ADDD D0 0F                    ..
-LADDF:  tax                                     ; ADDF AA                       .
+:	tax                                     ; ADDF AA                       .
 	lda     LB966,x                         ; ADE0 BD 66 B9                 .f.
 	sta     $A7                             ; ADE3 85 A7                    ..
 	lda     LB95E,x                         ; ADE5 BD 5E B9                 .^.
 	bne     LADEE                           ; ADE8 D0 04                    ..
-LADEA:  lda     #$00                            ; ADEA A9 00                    ..
+:	lda     #$00                            ; ADEA A9 00                    ..
 	sta     $A7                             ; ADEC 85 A7                    ..
 LADEE:  sta     $AB                             ; ADEE 85 AB                    ..
 	rts                                     ; ADF0 60                       `
@@ -2363,7 +2361,7 @@ LAFEE:  ldy     $EC,x                           ; AFEE B4 EC                    
 ; ----------------------------------------------------------------------------
 sub_b004:  
 	lda     LB93A,x                         ; B004 BD 3A B9                 .:.
-	and     ($E3),y                         ; B007 31 E3                    1.
+	and     (off_E3),y
 	bit     $B0                             ; B009 24 B0                    $.
 	bvs	:+
 	ora     LB942,x                         ; B00D 1D 42 B9                 .B.
@@ -3514,31 +3512,33 @@ LB82C:  txa                                     ; B82C 8A                       
 	bne     LB82C                           ; B83C D0 EE                    ..
 	dey                                     ; B83E 88                       .
 	bne     LB82C                           ; B83F D0 EB                    ..
-	lda     #$62                            ; B841 A9 62                    .b
-	ldy     #$B8                            ; B843 A0 B8                    ..
+	lda     #<(LB863-1)
+	ldy     #>(LB863-1)
 	ldx     #$0C                            ; B845 A2 0C                    ..
-	jmp     LB84B                           ; B847 4C 4B B8                 LK.
+	jmp     sub_b84b
 
 ; ----------------------------------------------------------------------------
 	rts                                     ; B84A 60                       `
 
 ; ----------------------------------------------------------------------------
-LB84B:  sta     $EC                             ; B84B 85 EC                    ..
-	sty     $ED                             ; B84D 84 ED                    ..
+sub_b84b:
+	sta     off_EC
+	sty     off_EC+1
 	ldy     #$00                            ; B84F A0 00                    ..
 	lda     #$55                            ; B851 A9 55                    .U
 	sec                                     ; B853 38                       8
-LB854:  iny                                     ; B854 C8                       .
+:	iny                                     ; B854 C8                       .
 	rol     a                               ; B855 2A                       *
 	pha                                     ; B856 48                       H
-	eor     ($EC),y                         ; B857 51 EC                    Q.
-	sta     $3E32,y                         ; B859 99 32 3E                 .2>
+	eor     (off_EC),y
+	sta     L3E33-1,y
 	pla                                     ; B85C 68                       h
 	dex                                     ; B85D CA                       .
-	bne     LB854                           ; B85E D0 F4                    ..
+	bne     :-
 	jmp     L3E33                           ; B860 4C 33 3E                 L3>
 
 ; ----------------------------------------------------------------------------
+LB863:
 	adc     $AA                             ; B863 65 AA                    e.
 	.byte   $12                             ; B865 12                       .
 	.byte   $F7                             ; B866 F7                       .
@@ -3682,7 +3682,7 @@ LB9B2:  .byte   $0C                             ; B9B2 0C                       
 	.byte	$0D,$BC,$BE
 LB9B6:  php                                     ; B9B6 08                       .
 	bpl     LB9C9                           ; B9B7 10 10                    ..
-	jsr     L4020                           ; B9B9 20 20 40                   @
+	.byte	$20,$20,$40
 	.byte   $80                             ; B9BC 80                       .
 	.byte   $80                             ; B9BD 80                       .
 LB9BE:  brk                                     ; B9BE 00                       .
@@ -5068,7 +5068,7 @@ LBEE9:  brk                                     ; BEE9 00                       
 	jsr     LA050                           ; BEEA 20 50 A0                  P.
 	bcc     LBECF                           ; BEED 90 E0                    ..
 LBEEF:  .byte   $80                             ; BEEF 80                       .
-	jsr     L2040                           ; BEF0 20 40 20                  @ 
+	.byte	$20,$40,$20
 	bvc     LBF65                           ; BEF3 50 70                    Pp
 	brk                                     ; BEF5 00                       .
 	.byte   $80                             ; BEF6 80                       .
@@ -5129,7 +5129,7 @@ LBF32:  jsr     L2050                           ; BF32 20 50 20                 
 	.byte	$50,$50
 	ldy     #$C0                            ; BF42 A0 C0                    ..
 	sed                                     ; BF44 F8                       .
-	jsr     L4040                           ; BF45 20 40 40                  @@
+	.byte	$20,$40,$40
 	jsr     L50F8                           ; BF48 20 F8 50                  .P
 LBF4B:  brk                                     ; BF4B 00                       .
 	brk                                     ; BF4C 00                       .
