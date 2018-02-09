@@ -2633,16 +2633,18 @@ LB1DB:  dex                                     ; B1DB CA                       
 sub_b1df:  
 	tay                                     ; B1DF A8                       .
 	ldx     #$00                            ; B1E0 A2 00                    ..
-LB1E2:  lsr     a                               ; B1E2 4A                       J
-	bcc     LB1E6                           ; B1E3 90 01                    ..
+:	lsr     a                               ; B1E2 4A                       J
+	bcc     :+
 	inx                                     ; B1E5 E8                       .
-LB1E6:  bne     LB1E2                           ; B1E6 D0 FA                    ..
+:	bne     :--
 	txa                                     ; B1E8 8A                       .
 	lsr     a                               ; B1E9 4A                       J
 	tya                                     ; B1EA 98                       .
-	bcc     LB1EF                           ; B1EB 90 02                    ..
+	bcc     :+
 	ora     #$80                            ; B1ED 09 80                    ..
-LB1EF:  ldy     #$18                            ; B1EF A0 18                    ..
+
+sub_b1ef:
+:	ldy     #$18                            ; B1EF A0 18                    ..
 
 sub_b1f1:
 	jsr     sub_b206
@@ -2686,9 +2688,9 @@ LB23A:  lda     #$0C                            ; B23A A9 0C                    
 LB242:  pha                                     ; B242 48                       H
 	lda     #$1B                            ; B243 A9 1B                    ..
 	sta     $07                             ; B245 85 07                    ..
-	jsr     LB1EF                           ; B247 20 EF B1                  ..
+	jsr     sub_b1ef
 	pla                                     ; B24A 68                       h
-	jsr     LB1EF                           ; B24B 20 EF B1                  ..
+	jsr     sub_b1ef
 	lda     #$00                            ; B24E A9 00                    ..
 	sta     $07                             ; B250 85 07                    ..
 LB252:  rts                                     ; B252 60                       `
