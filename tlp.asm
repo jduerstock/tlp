@@ -23,6 +23,7 @@ off_E3		:= $00E3
 off_E5		:= $00E5
 off_EC		:= $00EC
 off_F4		:= $00F4
+off_FA		:= $00FA
 CDTMA1		:= $0226
 DLIST		:= $0230
 HATABS		:= $031A
@@ -31,7 +32,9 @@ ICBA		:= $0344
 byte_133a	:= $133A
 byte_133e	:= $133E
 byte_1340	:= $1340
+byte_1344	:= $1344
 byte_1346	:= $1346
+byte_1347	:= $1347
 L134D           := $134D
 L2000           := $2000
 L2050           := $2050
@@ -489,9 +492,9 @@ LA2DC:  lda     LBA67,x                         ; A2DC BD 67 BA                 
 	sta     $D2                             ; A306 85 D2                    ..
 	lda     #$CA                            ; A308 A9 CA                    ..
 	sta     $D0                             ; A30A 85 D0                    ..
-	lda     #$BC                            ; A30C A9 BC                    ..
+	lda     #>LBC44
 	sta     $E9                             ; A30E 85 E9                    ..
-	lda     #$44                            ; A310 A9 44                    .D
+	lda     #<LBC44
 	sta     $E8                             ; A312 85 E8                    ..
 	lda     POKMSK
 	and     #$7F                            ; A316 29 7F                    ).
@@ -2753,22 +2756,22 @@ LB2C0:  jsr     LB828                           ; B2C0 20 28 B8                 
 ; ----------------------------------------------------------------------------
 LB2C6:  ldy     #$3F                            ; B2C6 A0 3F                    .?
 	lda     #$20                            ; B2C8 A9 20                    . 
-LB2CA:  cmp     ($FA),y                         ; B2CA D1 FA                    ..
-	bne     LB2D1                           ; B2CC D0 03                    ..
+:	cmp     (off_FA),y
+	bne     :+
 	dey                                     ; B2CE 88                       .
-	bpl     LB2CA                           ; B2CF 10 F9                    ..
-LB2D1:  lda     #$9B                            ; B2D1 A9 9B                    ..
+	bpl     :-
+:	lda     #$9B                            ; B2D1 A9 9B                    ..
 	iny                                     ; B2D3 C8                       .
 	beq     LB2D7                           ; B2D4 F0 01                    ..
 	iny                                     ; B2D6 C8                       .
 LB2D7:  sty     $0378                           ; B2D7 8C 78 03                 .x.
 	ldx     #$30                            ; B2DA A2 30                    .0
 LB2DC:  ldy     #$09                            ; B2DC A0 09                    ..
-	sty     $0372                           ; B2DE 8C 72 03                 .r.
+	sty     ICCOM+$30
 	ldy     $FA                             ; B2E1 A4 FA                    ..
-	sty     $0374                           ; B2E3 8C 74 03                 .t.
+	sty     ICBA+$30
 	ldy     $FB                             ; B2E6 A4 FB                    ..
-	sty     $0375                           ; B2E8 8C 75 03                 .u.
+	sty     ICBA+1+$30
 	jsr     CIOV
 	lda     #$40                            ; B2EE A9 40                    .@
 	clc                                     ; B2F0 18                       .
@@ -2782,8 +2785,8 @@ LB2F9:  rts                                     ; B2F9 60                       
 
 sub_b2fa:
 	tsx                                     ; B2FA BA                       .
-	stx     $1344                           ; B2FB 8E 44 13                 .D.
-	sta     $1347                           ; B2FE 8D 47 13                 .G.
+	stx     byte_1344
+	sta     byte_1347
 	ldx     byte_1346
 	bne     LB312                           ; B304 D0 0C                    ..
 	ldx     $07                             ; B306 A6 07                    ..
@@ -2795,7 +2798,7 @@ sub_b2fa:
 
 ; ----------------------------------------------------------------------------
 LB312:  bpl     LB322                           ; B312 10 0E                    ..
-	lda     $1347                           ; B314 AD 47 13                 .G.
+	lda     byte_1347
 	sta     $1343                           ; B317 8D 43 13                 .C.
 	tax                                     ; B31A AA                       .
 	lda     #$00                            ; B31B A9 00                    ..
@@ -2841,7 +2844,7 @@ LB365:  cli                                     ; B365 58                       
 ; ----------------------------------------------------------------------------
 sub_b369:
 	ldy     $1342                           ; B369 AC 42 13                 .B.
-	lda     $1347                           ; B36C AD 47 13                 .G.
+	lda     byte_1347
 	sta     $1310,y                         ; B36F 99 10 13                 ...
 	jsr     sub_b55c
 	sta     $1342                           ; B375 8D 42 13                 .B.
@@ -2852,7 +2855,7 @@ sub_b369:
 
 sub_b37c:
 	tsx                                     ; B37C BA                       .
-	stx     $1344                           ; B37D 8E 44 13                 .D.
+	stx     byte_1344
 LB380:  cli                                     ; B380 58                       X
 	sei                                     ; B381 78                       x
 	ldy     $133F                           ; B382 AC 3F 13                 .?.
@@ -2860,7 +2863,7 @@ LB380:  cli                                     ; B380 58                       
 	beq     LB380                           ; B388 F0 F6                    ..
 LB38A:  lda     $0F00,y                         ; B38A B9 00 0F                 ...
 	and     #$7F                            ; B38D 29 7F                    ).
-	sta     $1347                           ; B38F 8D 47 13                 .G.
+	sta     byte_1347
 	iny                                     ; B392 C8                       .
 	sty     $133F                           ; B393 8C 3F 13                 .?.
 	dec     byte_CC
@@ -2985,7 +2988,7 @@ LB447:  lda     $CB                             ; B447 A5 CB                    
 	beq     LB464                           ; B45F F0 03                    ..
 	sec                                     ; B461 38                       8
 	bcs     LB471                           ; B462 B0 0D                    ..
-LB464:  ldx     $1344                           ; B464 AE 44 13                 .D.
+LB464:  ldx     byte_1344
 	txs                                     ; B467 9A                       .
 	ldy     #$8B                            ; B468 A0 8B                    ..
 	rts                                     ; B46A 60                       `
@@ -3145,7 +3148,7 @@ sub_b55c:
 
 sub_b561:
 	tsx                                     ; B561 BA                       .
-	stx     $1344                           ; B562 8E 44 13                 .D.
+	stx     byte_1344
 	lda     $2A                             ; B565 A5 2A                    .*
 	sta     byte_133a
 	lda     #$00                            ; B56A A9 00                    ..
@@ -3153,7 +3156,7 @@ sub_b561:
 	jsr     sub_b47d
 	jsr     LB54F                           ; B571 20 4F B5                  O.
 	lda     #$59                            ; B574 A9 59                    .Y
-	sta     $1347                           ; B576 8D 47 13                 .G.
+	sta     byte_1347
 	ldx     #$01                            ; B579 A2 01                    ..
 	jsr     sub_b422
 	jmp     LB5A5                           ; B57E 4C A5 B5                 L..
@@ -3162,7 +3165,7 @@ sub_b561:
 
 sub_b581:
 	tsx                                     ; B581 BA                       .
-	stx     $1344                           ; B582 8E 44 13                 .D.
+	stx     byte_1344
 	lda     byte_133a
 	beq     LB5A5                           ; B588 F0 1B                    ..
 	jsr     sub_b53a
@@ -3171,7 +3174,7 @@ sub_b581:
 	lda     #$51                            ; B591 A9 51                    .Q
 	bne     LB597                           ; B593 D0 02                    ..
 LB595:  lda     #$5A                            ; B595 A9 5A                    .Z
-LB597:  sta     $1347                           ; B597 8D 47 13                 .G.
+LB597:  sta     byte_1347
 	jsr     sub_b420
 	jsr     LB4F7                           ; B59D 20 F7 B4                  ..
 	lda     #$00                            ; B5A0 A9 00                    ..
@@ -3340,7 +3343,7 @@ LB6D0:  lda     $1330,y                         ; B6D0 B9 30 13                 
 	jmp     LB802                           ; B6E6 4C 02 B8                 L..
 
 ; ----------------------------------------------------------------------------
-	sta     $1347                           ; B6E9 8D 47 13                 .G.
+	sta     byte_1347
 	ldx     #$01                            ; B6EC A2 01                    ..
 	stx     $21                             ; B6EE 86 21                    .!
 :	lda     byte_1340
@@ -4291,6 +4294,7 @@ byte_BAEC:
 	.byte   %00010000                       ; ...#....
 	.byte   %00010000                       ; ...#....
 
+LBC44:
 	.byte   %00000000                       ; ........
 	.byte   %00000000                       ; ........
 	.byte   %00000000                       ; ........
