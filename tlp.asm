@@ -63,8 +63,7 @@ byte_B2		:= $00B2
 byte_B7		:= $00B7
 byte_B8		:= $00B8
 byte_CC		:= $00CC
-byte_DD		:= $00DD
-byte_DE		:= $00DE
+off_DD		:= $00DD
 byte_DF		:= $00DF
 byte_E0		:= $00E0
 byte_E1		:= $00E1
@@ -2501,14 +2500,14 @@ LB01E:  lda     $0284                           ; B01E AD 84 02                 
 LB02B:  sta     $C7                             ; B02B 85 C7                    ..
 LB02D:  ldx     $0278                           ; B02D AE 78 02                 .x.
 	lda     LB87F,x                         ; B030 BD 7F B8                 ...
-	sta     byte_DD                         ; B033 85 DD                    ..
+	sta     off_DD
 	lda     LB86F,x                         ; B035 BD 6F B8                 .o.
-	sta     byte_DE                         ; B038 85 DE                    ..
-	ora     byte_DD                         ; B03A 05 DD                    ..
-	bne     LB042                           ; B03C D0 04                    ..
+	sta     off_DD+1
+	ora     off_DD
+	bne     :+
 	sta     $C2                             ; B03E 85 C2                    ..
 	beq     LB045                           ; B040 F0 03                    ..
-LB042:  jsr     LB0A8                           ; B042 20 A8 B0                  ..
+:	jsr     LB0A8                           ; B042 20 A8 B0                  ..
 LB045:  ldx     $C6                             ; B045 A6 C6                    ..
 	beq     LB04B                           ; B047 F0 02                    ..
 	dec     $C6                             ; B049 C6 C6                    ..
@@ -2530,10 +2529,10 @@ LB04B:  lda     $14                             ; B04B A5 14                    
 	clc                                     ; B069 18                       .
 	adc     #$10                            ; B06A 69 10                    i.
 	and     #$F0                            ; B06C 29 F0                    ).
-	sta     byte_DD                         ; B06E 85 DD                    ..
+	sta     off_DD
 	tya                                     ; B070 98                       .
 	and     #$0F                            ; B071 29 0F                    ).
-	ora     byte_DD                         ; B073 05 DD                    ..
+	ora     off_DD
 	plp                                     ; B075 28                       (
 LB076:  sta     $02C6                           ; B076 8D C6 02                 ...
 	sta     $02C8                           ; B079 8D C8 02                 ...
@@ -2554,11 +2553,11 @@ LB08A:  inc     $02C5                           ; B08A EE C5 02                 
 	bcc     LB087                           ; B098 90 ED                    ..
 LB09A:  tya                                     ; B09A 98                       .
 	and     #$F0                            ; B09B 29 F0                    ).
-	sta     byte_DD                         ; B09D 85 DD                    ..
+	sta     off_DD
 	iny                                     ; B09F C8                       .
 	tya                                     ; B0A0 98                       .
 	and     #$0F                            ; B0A1 29 0F                    ).
-	ora     byte_DD                         ; B0A3 05 DD                    ..
+	ora     off_DD
 	jmp     LB076                           ; B0A5 4C 76 B0                 Lv.
 
 ; ----------------------------------------------------------------------------
@@ -2583,7 +2582,7 @@ LB0C5:  lda     $C1                             ; B0C5 A5 C1                    
 	lsr     a                               ; B0C7 4A                       J
 	ldx     $C7                             ; B0C8 A6 C7                    ..
 	inx                                     ; B0CA E8                       .
-	lda     byte_DE                         ; B0CB A5 DE                    ..
+	lda     off_DD+1
 	beq     LB0E8                           ; B0CD F0 19                    ..
 	bpl     LB0DE                           ; B0CF 10 0D                    ..
 	bcs     LB0D8                           ; B0D1 B0 05                    ..
@@ -2599,7 +2598,7 @@ LB0DE:  bcs     :+
 :  	jsr     sub_b137
 LB0E8:  lda     $C1                             ; B0E8 A5 C1                    ..
 	lsr     a                               ; B0EA 4A                       J
-	lda     byte_DD                         ; B0EB A5 DD                    ..
+	lda     off_DD
 	beq     LB136                           ; B0ED F0 47                    .G
 	bpl     LB0F8                           ; B0EF 10 07                    ..
 	bcs     LB157                           ; B0F1 B0 64                    .d
@@ -2686,25 +2685,25 @@ LB16E:  lda     $BF                             ; B16E A5 BF                    
 	clc                                     ; B178 18                       .
 	adc     #$0A                            ; B179 69 0A                    i.
 	bne     LB162                           ; B17B D0 E5                    ..
-LB17D:  lda     byte_DD                         ; B17D A5 DD                    ..
+LB17D:  lda     off_DD
 	beq     LB18E                           ; B17F F0 0D                    ..
 	clc                                     ; B181 18                       .
 	lda     byte_E1                         ; B182 A5 E1                    ..
-	adc     byte_DD                         ; B184 65 DD                    e.
+	adc     off_DD
 	cmp     #$19                            ; B186 C9 19                    ..
 	bcs     LB18E                           ; B188 B0 04                    ..
 	sta     byte_E1                         ; B18A 85 E1                    ..
 	sta     byte_DF                         ; B18C 85 DF                    ..
 LB18E:  lda     byte_E2                         ; B18E A5 E2                    ..
 	sta     byte_E0                         ; B190 85 E0                    ..
-	lda     byte_DE                         ; B192 A5 DE                    ..
+	lda     off_DD+1
 	beq     LB1AB                           ; B194 F0 15                    ..
 	clc                                     ; B196 18                       .
 	lda     byte_E2                         ; B197 A5 E2                    ..
-	adc     byte_DE                         ; B199 65 DE                    e.
+	adc     off_DD+1
 	cmp     #$40                            ; B19B C9 40                    .@
 	bcc     LB1AB                           ; B19D 90 0C                    ..
-	ldx     byte_DE                         ; B19F A6 DE                    ..
+	ldx     off_DD+1
 	bmi     LB1A3                           ; B1A1 30 00                    0.
 LB1A3:  cmp     #$71                            ; B1A3 C9 71                    .q
 	bcs     LB1AB                           ; B1A5 B0 04                    ..
@@ -2713,21 +2712,20 @@ LB1A3:  cmp     #$71                            ; B1A3 C9 71                    
 
 ; 
 LB1AB:  lda     #$CD                            ; B1AB A9 CD                    ..
-	sta     byte_DD                         ; B1AD 85 DD                    ..
-
+	sta     off_DD
 	lda     #$10                            ; B1AF A9 10                    ..
-	sta     byte_DE                         ; B1B1 85 DE                    ..
+	sta     off_DD+1
 
 	ldx     #$C0                            ; B1B3 A2 C0                    ..
 LB1B5:  ldy     #$00                            ; B1B5 A0 00                    ..
 	lda     #$4F                            ; B1B7 A9 4F                    .O
-	sta     (byte_DD),y                     ; B1B9 91 DD                    ..
+	sta     (off_DD),y
 	iny                                     ; B1BB C8                       .
 	lda     byte_DF                         ; B1BC A5 DF                    ..
-	sta     (byte_DD),y                     ; B1BE 91 DD                    ..
+	sta     (off_DD),y
 	iny                                     ; B1C0 C8                       .
 	lda     byte_E0                         ; B1C1 A5 E0                    ..
-	sta     (byte_DD),y                     ; B1C3 91 DD                    ..
+	sta     (off_DD),y
 	clc                                     ; B1C5 18                       .
 	lda     byte_DF                         ; B1C6 A5 DF                    ..
 	adc     #$40                            ; B1C8 69 40                    i@
@@ -2735,12 +2733,12 @@ LB1B5:  ldy     #$00                            ; B1B5 A0 00                    
 	bcc     LB1D0                           ; B1CC 90 02                    ..
 	inc     byte_E0                         ; B1CE E6 E0                    ..
 LB1D0:  clc                                     ; B1D0 18                       .
-	lda     byte_DD                         ; B1D1 A5 DD                    ..
+	lda     off_DD
 	adc     #$03                            ; B1D3 69 03                    i.
-	sta     byte_DD                         ; B1D5 85 DD                    ..
-	bcc     LB1DB                           ; B1D7 90 02                    ..
-	inc     byte_DE                         ; B1D9 E6 DE                    ..
-LB1DB:  dex                                     ; B1DB CA                       .
+	sta     off_DD
+	bcc     :+
+	inc     off_DD+1
+:	dex                                     ; B1DB CA                       .
 	bne     LB1B5                           ; B1DC D0 D7                    ..
 	rts                                     ; B1DE 60                       `
 
@@ -3671,33 +3669,16 @@ LB863:
 	and     $A9                             ; B869 25 A9                    %.
 	ora     LB2DC,y                         ; B86B 19 DC B2                 ...
 	.byte   $CD                             ; B86E CD                       .
-LB86F:  brk                                     ; B86F 00                       .
-	brk                                     ; B870 00                       .
-	brk                                     ; B871 00                       .
-	brk                                     ; B872 00                       .
-	brk                                     ; B873 00                       .
-	ora     ($FF,x)                         ; B874 01 FF                    ..
-	brk                                     ; B876 00                       .
-	brk                                     ; B877 00                       .
-	ora     ($FF,x)                         ; B878 01 FF                    ..
-	brk                                     ; B87A 00                       .
-	brk                                     ; B87B 00                       .
-	ora     ($FF,x)                         ; B87C 01 FF                    ..
-	brk                                     ; B87E 00                       .
-LB87F:  brk                                     ; B87F 00                       .
-	brk                                     ; B880 00                       .
-	brk                                     ; B881 00                       .
-	brk                                     ; B882 00                       .
-	brk                                     ; B883 00                       .
-	ora     ($01,x)                         ; B884 01 01                    ..
-	.byte	$01,$00
-	.byte   $FF                             ; B888 FF                       .
-	.byte   $FF                             ; B889 FF                       .
-	.byte   $FF                             ; B88A FF                       .
-	brk                                     ; B88B 00                       .
-	brk                                     ; B88C 00                       .
-	brk                                     ; B88D 00                       .
-	brk                                     ; B88E 00                       .
+
+LB86F:	.byte	$00,$00,$00,$00
+	.byte	$00,$01,$FF,$00
+	.byte	$00,$01,$FF,$00
+	.byte	$00,$01,$FF,$00
+
+LB87F:	.byte	$00,$00,$00,$00
+	.byte	$00,$01,$01,$01
+	.byte	$00,$FF,$FF,$FF
+	.byte	$00,$00,$00,$00
 
 LB88F:
 	.byte	"K:",$9B			; B88F
