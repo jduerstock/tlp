@@ -44,6 +44,7 @@ POKMSK		:= $0010			; POKEY Interrupts: used by IRQ service
 SHFLOK		:= $02BE			; Flag for shift and control keys
 CDTMA1		:= $0226			; System timer one jump address
 DLIST		:= $0230			; Starting address of the diplay list
+STICK0		:= $0278			; Joystick 0
 HATABS		:= $031A			; Handler Address Table
 ICCOM		:= $0342			 
 ICBA		:= $0344
@@ -56,7 +57,6 @@ DMACTL		:= $D400			; Direct Memory Access (DMA) control
 ;*                                                                             *
 ;*******************************************************************************
 
-L0070           := $0070
 L0080           := $0080
 
 byte_B2		:= $00B2
@@ -2498,7 +2498,7 @@ LB01E:  lda     $0284                           ; B01E AD 84 02                 
 	ldx     #$1E                            ; B027 A2 1E                    ..
 	stx     $C6                             ; B029 86 C6                    ..
 LB02B:  sta     $C7                             ; B02B 85 C7                    ..
-LB02D:  ldx     $0278                           ; B02D AE 78 02                 .x.
+LB02D:  ldx     STICK0				; read joystick 0
 	lda     LB87F,x                         ; B030 BD 7F B8                 ...
 	sta     off_DD
 	lda     LB86F,x                         ; B035 BD 6F B8                 .o.
