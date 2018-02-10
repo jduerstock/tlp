@@ -1,8 +1,27 @@
-; da65 V2.13.9 - (C) Copyright 2000-2009,  Ullrich von Bassewitz
-; Created:    2018-02-07 13:08:12
+;*******************************************************************************
+;*                                                                             *
+;*                    T H E   L E A R N I N G   P H O N E                      *
+;*                                                                             *
+;*                  for the Atari 8-bit Home Computer System                   *
+;*                                                                             *
+;*       Reverse engineered and documented assembly language source code       *
+;*                                                                             *
+;*                                     by                                      *
+;*                                                                             *
+;*                             [LIST GOES HERE]                                *
+;*                                                                             *
+;*                                                                             *
+;*                               First Release                                 *
+;*                                DD-MMM-YYYY                                  *
+;*                                                                             *
+;*                                Last Update                                  *
+;*                                DD-MMM-YYYY                                  *
+;*                                                                             *
+;*         THE LEARNING PHONE was created by Vicent Wu / Lane Winner           *
+;*              THE LEARNING PHONE was published by Atari Inc.                 *
+;*                                                                             *
+;*******************************************************************************
 ; Input file: tlp.bin
-; Page:       1
-
 
 	.setcpu "6502"
 
@@ -14,22 +33,49 @@
 
 	.segment "SEG1"
 
-; ----------------------------------------------------------------------------
+;*******************************************************************************
+;*                                                                             *
+;*                         S Y S T E M   S Y M B O L S                         *
+;*                                                                             *
+;*******************************************************************************
+
 TSTDAT		:= $0007
-POKMSK		:= $0010
+POKMSK		:= $0010			; POKEY Interrupts: used by IRQ service
+SHFLOK		:= $02BE			; Flag for shift and control keys
+CDTMA1		:= $0226			; System timer one jump address
+DLIST		:= $0230			; Starting address of the diplay list
+HATABS		:= $031A			; Handler Address Table
+ICCOM		:= $0342			 
+ICBA		:= $0344
+GRACTL		:= $D01D			; Turn on/off player missiles or latch triggers
+DMACTL		:= $D400			; Direct Memory Access (DMA) control
+
+;*******************************************************************************
+;*                                                                             *
+;*                         C A R T   S Y M B O L S                             *
+;*                                                                             *
+;*******************************************************************************
+
 L0070           := $0070
 L0080           := $0080
+
+byte_B2		:= $00B2
+byte_B7		:= $00B7
+byte_B8		:= $00B8
 byte_CC		:= $00CC
+byte_DD		:= $00DD
+byte_DE		:= $00DE
+byte_DF		:= $00DF
+byte_E0		:= $00E0
+byte_E1		:= $00E1
+byte_E2		:= $00E2
+
 off_E3		:= $00E3
 off_E5		:= $00E5
 off_EC		:= $00EC
 off_F4		:= $00F4
 off_FA		:= $00FA
-CDTMA1		:= $0226
-DLIST		:= $0230
-HATABS		:= $031A
-ICCOM		:= $0342
-ICBA		:= $0344
+byte_FF		:= $00FF
 byte_133a	:= $133A
 byte_133e	:= $133E
 byte_1340	:= $1340
@@ -62,6 +108,7 @@ L8850           := $8850
 L9000           := $9000
 L9040           := $9040
 L9050           := $9050
+charset_sm	:= $BC44			; 6x6 character set
 LC040           := $C040
 HPOSM0		:= $D004
 HPOSM1		:= $D005
@@ -78,7 +125,7 @@ XITVBV		:= $E462
 
 sub_a000:
 	jsr     sub_b799
-	jsr     sub_a214
+	jsr     sub_a214			; Initialize Display List
 	jsr     sub_a33d
 	ldy     #$08                            ; A009 A0 08                    ..
 	jsr     sub_b1f1
@@ -382,66 +429,127 @@ LA1FE:  jsr     LA120                           ; A1FE 20 20 A1                 
 	lda     #$68                            ; A20F A9 68                    .h
 	jmp     sub_ab54
 
-; ----------------------------------------------------------------------------
-sub_a214:
-	lda     #$00                            ; A214 A9 00                    ..
-	sta     $D400                           ; A216 8D 00 D4                 ...
-	sta     $D01D                           ; A219 8D 1D D0                 ...
-	sta     $02BE                           ; A21C 8D BE 02                 ...
-	ldx     #$7F                            ; A21F A2 7F                    ..
-LA221:  sta     $0580,x                         ; A221 9D 80 05                 ...
-	sta     L0080,x                         ; A224 95 80                    ..
-	dex                                     ; A226 CA                       .
-	bpl     LA221                           ; A227 10 F8                    ..
-	stx     $B8                             ; A229 86 B8                    ..
-	stx     $FF                             ; A22B 86 FF                    ..
-	lda     #$70                            ; A22D A9 70                    .p
-	ldx     #$02                            ; A22F A2 02                    ..
-	stx     $B7                             ; A231 86 B7                    ..
-	stx     $B2                             ; A233 86 B2                    ..
-	inx                                     ; A235 E8                       .
-LA236:  sta     $10C9,x                         ; A236 9D C9 10                 ...
-	sta     $0FFF,x                         ; A239 9D FF 0F                 ...
-	dex                                     ; A23C CA                       .
-	bne     LA236                           ; A23D D0 F7                    ..
-	lda     #$10                            ; A23F A9 10                    ..
-	sta     $1004                           ; A241 8D 04 10                 ...
-	sta     off_F4
-	lda     #$20                            ; A246 A9 20                    . 
-	sta     $1005                           ; A248 8D 05 10                 ...
-	sta     off_F4+1
-	lda     #$0F                            ; A24D A9 0F                    ..
-LA24F:  sta     $1006,x                         ; A24F 9D 06 10                 ...
-	inx                                     ; A252 E8                       .
-	cpx     #$C1                            ; A253 E0 C1                    ..
-	bne     LA24F                           ; A255 D0 F8                    ..
-	lda     #$4F                            ; A257 A9 4F                    .O
-	sta     $1003                           ; A259 8D 03 10                 ...
-	sta     $106B                           ; A25C 8D 6B 10                 .k.
-	lda     #$00                            ; A25F A9 00                    ..
-	sta     $106C                           ; A261 8D 6C 10                 .l.
-	lda     #$30                            ; A264 A9 30                    .0
-	sta     $106D                           ; A266 8D 6D 10                 .m.
-	lda     #$41                            ; A269 A9 41                    .A
-	sta     $1006,x                         ; A26B 9D 06 10                 ...
-	sta     $130D                           ; A26E 8D 0D 13                 ...
-	lda     #$00                            ; A271 A9 00                    ..
-	sta     $1007,x                         ; A273 9D 07 10                 ...
-	sta     DLIST
-	lda     #$10                            ; A279 A9 10                    ..
-	sta     $1008,x                         ; A27B 9D 08 10                 ...
-	sta     DLIST+1
-	lda     #$00                            ; A281 A9 00                    ..
-	sta     $DF                             ; A283 85 DF                    ..
-	sta     $E1                             ; A285 85 E1                    ..
-	lda     #$40                            ; A287 A9 40                    .@
-	sta     $E0                             ; A289 85 E0                    ..
-	sta     $E2                             ; A28B 85 E2                    ..
+;*******************************************************************************
+;*                                                                             *
+;*                                  sub_a214                                   *
+;*                                                                             *
+;*                         Display List Initialization                         *
+;*                                                                             *
+;*******************************************************************************
+
+; DESCRIPTION
+;
+; This subroutine initializes 2 display lists.
+;
+; Display List 1 is a mostly straightforward ANTIC mode F screen. Except 
+; that screen RAM shifts from a range beginning at $2010 to a 2nd range 
+; beginning at $3000 a little after midway down the screen.
+
+; Display List 2 is an ANTIC mode F screen with horizontal and vertical scrolling
+;
+; Display List 1         Display List 2
+; $1000: $70 8 SCANS     $10CA: $70
+; $1001: $70 8 SCANS     $10CB: $70
+; $1002: $70 8 SCANS     $10CC: $70
+; $1003: $4F ANTIC F     $10CD: $4F
+; $1004: $10 SCRNLO      $10CE: $00 SCRNLO
+; $1005: $20 SCRNHI      $10CD: $40 SCRNHI
+; $1006: $0F ANTIC F     $10CE: $4F
+; ...                    $10CF: $40 SCRNLO
+; ...                    $10D0: $40 SCRNHI
+; ...                    ...
+; ...                    $130A: $4F ANTIC F
+; ...                    $130B: $C0 SCRNLO
+; $10C6: $0F ANTIC F     $130C: $6F SCRNHI
+; $10C7: $41 WAIT SYNC   $130C: $41 WAIT SYNC
+; $10C8: $00 DLSTLO      $130D: $CA DLSTLO
+; $10C9: $10 DLSTHI      $130E: $10 DLSTHI
+
+sub_a214:					; A214
+	lda     #$00                            ; 
+	sta     DMACTL                          ; Turn off ANTIC
+	sta     GRACTL				; Turn off PMG, unlatch triggers
+	sta     SHFLOK				; Force keyboard to lower case
+
+;** (n) Clear RAM at 0080-00FF and  0580-05FF **********************************
+	ldx     #$7F                            ; Clear 128 bytes at ...
+:       sta     $0580,x                         ; 0580-05FF and ...
+	sta     L0080,x                         ; 0080-00FF 
+	dex                                     ; 
+	bpl     :-                              ; End Loop
+
+;** (n) TODO Why storing FF in these two locations??? **************************
+	stx     byte_B8				; Store FF in byte_B8 TODO
+	stx     byte_FF                         ; Store FF in byte_FF TODO
+
+;** (n) Prepare values for head of display lists *******************************
+	lda     #$70                            ;
+	ldx     #$02                            ; 
+	stx     byte_B7				; Let byte_B7 = 2 TODO
+	stx     byte_B2				; Let byte_B2 = 2 TODO
+
+;** (n) Write head of display list # 1 *****************************************
+	inx                                     ; Store 3 x $70 
+:       sta     $10C9,x                         ; at $1000 and $10CA
+	sta     $0FFF,x                         ; 8 blank scan lines each
+	dex                                     ; 
+	bne     :-                              ; End Loop
+
+;** (n) Point to screen RAM at $2010 in display list #1 ************************
+	lda     #$10                            ; 
+	sta     $1004                           ; 
+	sta     off_F4				; Store Screen location
+	lda     #$20                            ; in zero page varibles, too
+	sta     $1005                           ; 
+	sta     off_F4+1			; 
+
+;** (n) Write body of display list #1 ******************************************
+	lda     #$0F                            ; Store entry for ANTIC mode F
+:       sta     $1006,x                         ; in body of display list
+	inx                                     ; 
+	cpx     #$C1                            ; 
+	bne     :-                              ; End Loop
+
+;** (n) Write 2 display list entries to point to screen RAM ********************
+	lda     #$4F                            ; Write ANTIC mode F & screen
+	sta     $1003                           ; location at top of disp list
+	sta     $106B                           ; again after 102 mode F lines
+
+;** (n) Point to screen RAM at $3000 in display list #1 ************************
+	lda     #$00                            ; After 102 mode F scanlines
+	sta     $106C                           ; point to screen RAM to $3000
+	lda     #$30                            ; 
+	sta     $106D                           ; 
+
+;** (n) Write tail end of display list #1 **************************************
+	lda     #$41                            ; Write Wait for sync
+	sta     $1006,x                         ; to bottom of list
+	sta     $130D                           ; 
+	lda     #$00                            ; Tell ANTIC to jump
+	sta     $1007,x                         ; back to the top of the display
+	sta     DLIST				; list at $1000.
+	lda     #$10                            ; 
+	sta     $1008,x                         ; Also register the new display
+	sta     DLIST+1                         ; list loc with the hardware
+
+;** (n) Screen RAM for display list #2 will begin at $4000 *********************
+	lda     #$00                            ; 
+	sta     byte_DF                         ; Let byte_DF = $00 TODO
+	sta     byte_E1                         ; Let byte_E1 = $00 TODO
+
+	lda     #$40                            ; 
+	sta     byte_E0                         ; Let byte_E0 = $40 TODO
+	sta     byte_E2                         ; Let byte_E2 = $40 TODO
+
+;** (n) Call sub to derive body of display list #2 *****************************
 	jsr     LB1AB                           ; A28D 20 AB B1                  ..
-	lda     #$CA                            ; A290 A9 CA                    ..
-	sta     $130E                           ; A292 8D 0E 13                 ...
-	lda     #$10                            ; A295 A9 10                    ..
-	sta     $130F                           ; A297 8D 0F 13                 ...
+
+;** (n) Write tail of display list #2 ******************************************
+	lda     #$CA                            ; Tell ANTIC to jump
+	sta     $130E                           ; back to the top of the display
+	lda     #$10                            ; list at $10CA.
+	sta     $130F                           ; 
+
 	ldx     #$00                            ; A29A A2 00                    ..
 :	lda     off_F4+1
 	sta     $04C0,x                         ; A29E 9D C0 04                 ...
@@ -457,7 +565,7 @@ LA24F:  sta     $1006,x                         ; A24F 9D 06 10                 
 	inc     off_F4+1
 	bne	:-
 :	lda     #$03                            ; A2B7 A9 03                    ..
-	sta     $D01D                           ; A2B9 8D 1D D0                 ...
+	sta     GRACTL				; Turn on Player/Missiles
 	lda     #$04                            ; A2BC A9 04                    ..
 	sta     $D407                           ; A2BE 8D 07 D4                 ...
 	lda     #$55                            ; A2C1 A9 55                    .U
@@ -494,9 +602,9 @@ LA2DC:  lda     LBA67,x                         ; A2DC BD 67 BA                 
 	sta     $D2                             ; A306 85 D2                    ..
 	lda     #$CA                            ; A308 A9 CA                    ..
 	sta     $D0                             ; A30A 85 D0                    ..
-	lda     #>LBC44
+	lda     #>charset_sm
 	sta     $E9                             ; A30E 85 E9                    ..
-	lda     #<LBC44
+	lda     #<charset_sm
 	sta     $E8                             ; A312 85 E8                    ..
 	lda     POKMSK
 	and     #$7F                            ; A316 29 7F                    ).
@@ -668,7 +776,7 @@ LA3EE:  lda     $9C                             ; A3EE A5 9C                    
 	sta     $E9                             ; A41C 85 E9                    ..
 	lda     LB9A6,y                         ; A41E B9 A6 B9                 ...
 	sta     $EB                             ; A421 85 EB                    ..
-	sty     $B7                             ; A423 84 B7                    ..
+	sty     byte_B7
 	lda     LB9AA,y                         ; A425 B9 AA B9                 ...
 	sta     $EA                             ; A428 85 EA                    ..
 	rts                                     ; A42A 60                       `
@@ -866,7 +974,7 @@ LA582:  lda     $9F                             ; A582 A5 9F                    
 	adc     #$00                            ; A588 69 00                    i.
 	sta     $A6                             ; A58A 85 A6                    ..
 LA58C:  lda     #$62                            ; A58C A9 62                    .b
-	ldy     #$B8                            ; A58E A0 B8                    ..
+	ldy     #byte_B8
 	ldx     #$0C                            ; A590 A2 0C                    ..
 	jsr     sub_b84b
 	rts                                     ; A595 60                       `
@@ -1514,7 +1622,7 @@ LA9DD:  ldy     #$10                            ; A9DD A0 10                    
 LAA03:  cmp     #$1F                            ; AA03 C9 1F                    ..
 	bne     LAA12                           ; AA05 D0 0B                    ..
 	lda     #$00                            ; AA07 A9 00                    ..
-LAA09:  ldy     $B2                             ; AA09 A4 B2                    ..
+LAA09:  ldy     byte_B2
 	bne     LAA23                           ; AA0B D0 16                    ..
 	sta     $B1                             ; AA0D 85 B1                    ..
 	jmp     LB253                           ; AA0F 4C 53 B2                 LS.
@@ -1541,7 +1649,7 @@ LAA2C:  cmp     #$2D                            ; AA2C C9 2D                    
 	bne     LAA20                           ; AA32 D0 EC                    ..
 LAA34:  cmp     #$38                            ; AA34 C9 38                    .8
 	bne     LAA56                           ; AA36 D0 1E                    ..
-	ldx     $B8                             ; AA38 A6 B8                    ..
+	ldx     byte_B8
 	beq     LAA56                           ; AA3A F0 1A                    ..
 	lda     $C1                             ; AA3C A5 C1                    ..
 	beq     LAA44                           ; AA3E F0 04                    ..
@@ -1622,7 +1730,7 @@ LAAB8:  eor     #$FF                            ; AAB8 49 FF                    
 LAACA:  lda     $D2                             ; AACA A5 D2                    ..
 	sta     $02C5                           ; AACC 8D C5 02                 ...
 	ldy     #$80                            ; AACF A0 80                    ..
-	sty     $B8                             ; AAD1 84 B8                    ..
+	sty     byte_B8
 	ldy     $D3                             ; AAD3 A4 D3                    ..
 	lda     #$00                            ; AAD5 A9 00                    ..
 	ldx     #$10                            ; AAD7 A2 10                    ..
@@ -1630,7 +1738,7 @@ LAACA:  lda     $D2                             ; AACA A5 D2                    
 LAADB:  ldx     #$00                            ; AADB A2 00                    ..
 	stx     HPOSM1
 	stx     HPOSM0
-	stx     $B8                             ; AAE3 86 B8                    ..
+	stx     byte_B8
 	lda     $D0                             ; AAE5 A5 D0                    ..
 	sta     $02C5                           ; AAE7 8D C5 02                 ...
 	ldy     $D1                             ; AAEA A4 D1                    ..
@@ -1791,7 +1899,7 @@ LABEB:  lda     $9D                             ; ABEB A5 9D                    
 LABFE:  rts                                     ; ABFE 60                       `
 
 ; ----------------------------------------------------------------------------
-LABFF:  ldx     $B7                             ; ABFF A6 B7                    ..
+LABFF:  ldx     byte_B7
 	cpx     #$02                            ; AC01 E0 02                    ..
 	bcc     LAC24                           ; AC03 90 1F                    ..
 	bne     LAC11                           ; AC05 D0 0A                    ..
@@ -1808,7 +1916,7 @@ LAC11:  asl     a                               ; AC11 0A                       
 	asl     a                               ; AC17 0A                       .
 	rol     off_E5+1
 	sta     off_E5
-	ldx     $B7                             ; AC1C A6 B7                    ..
+	ldx     byte_B7
 	cpx     #$03                            ; AC1E E0 03                    ..
 	bcs     LAC37                           ; AC20 B0 15                    ..
 	bcc     LAC3C                           ; AC22 90 18                    ..
@@ -1845,7 +1953,7 @@ LAC58:  jsr     LADCB                           ; AC58 20 CB AD                 
 	ldx     #$0B                            ; AC5B A2 0B                    ..
 LAC5D:  ldy     #$00                            ; AC5D A0 00                    ..
 	sty     $D8                             ; AC5F 84 D8                    ..
-	lda     $B7                             ; AC61 A5 B7                    ..
+	lda     byte_B7
 	lsr     a                               ; AC63 4A                       J
 	beq     LAC78                           ; AC64 F0 12                    ..
 	cpx     #$0A                            ; AC66 E0 0A                    ..
@@ -2393,10 +2501,10 @@ LB01E:  lda     $0284                           ; B01E AD 84 02                 
 LB02B:  sta     $C7                             ; B02B 85 C7                    ..
 LB02D:  ldx     $0278                           ; B02D AE 78 02                 .x.
 	lda     LB87F,x                         ; B030 BD 7F B8                 ...
-	sta     $DD                             ; B033 85 DD                    ..
+	sta     byte_DD                         ; B033 85 DD                    ..
 	lda     LB86F,x                         ; B035 BD 6F B8                 .o.
-	sta     $DE                             ; B038 85 DE                    ..
-	ora     $DD                             ; B03A 05 DD                    ..
+	sta     byte_DE                         ; B038 85 DE                    ..
+	ora     byte_DD                         ; B03A 05 DD                    ..
 	bne     LB042                           ; B03C D0 04                    ..
 	sta     $C2                             ; B03E 85 C2                    ..
 	beq     LB045                           ; B040 F0 03                    ..
@@ -2411,7 +2519,7 @@ LB04B:  lda     $14                             ; B04B A5 14                    
 	and     #$03                            ; B054 29 03                    ).
 	cmp     #$01                            ; B056 C9 01                    ..
 	bne     LB087                           ; B058 D0 2D                    .-
-	lda     $B8                             ; B05A A5 B8                    ..
+	lda     byte_B8
 	asl     a                               ; B05C 0A                       .
 	ldy     $02C6                           ; B05D AC C6 02                 ...
 	bit     $1355                           ; B060 2C 55 13                 ,U.
@@ -2422,10 +2530,10 @@ LB04B:  lda     $14                             ; B04B A5 14                    
 	clc                                     ; B069 18                       .
 	adc     #$10                            ; B06A 69 10                    i.
 	and     #$F0                            ; B06C 29 F0                    ).
-	sta     $DD                             ; B06E 85 DD                    ..
+	sta     byte_DD                         ; B06E 85 DD                    ..
 	tya                                     ; B070 98                       .
 	and     #$0F                            ; B071 29 0F                    ).
-	ora     $DD                             ; B073 05 DD                    ..
+	ora     byte_DD                         ; B073 05 DD                    ..
 	plp                                     ; B075 28                       (
 LB076:  sta     $02C6                           ; B076 8D C6 02                 ...
 	sta     $02C8                           ; B079 8D C8 02                 ...
@@ -2446,11 +2554,11 @@ LB08A:  inc     $02C5                           ; B08A EE C5 02                 
 	bcc     LB087                           ; B098 90 ED                    ..
 LB09A:  tya                                     ; B09A 98                       .
 	and     #$F0                            ; B09B 29 F0                    ).
-	sta     $DD                             ; B09D 85 DD                    ..
+	sta     byte_DD                         ; B09D 85 DD                    ..
 	iny                                     ; B09F C8                       .
 	tya                                     ; B0A0 98                       .
 	and     #$0F                            ; B0A1 29 0F                    ).
-	ora     $DD                             ; B0A3 05 DD                    ..
+	ora     byte_DD                         ; B0A3 05 DD                    ..
 	jmp     LB076                           ; B0A5 4C 76 B0                 Lv.
 
 ; ----------------------------------------------------------------------------
@@ -2475,7 +2583,7 @@ LB0C5:  lda     $C1                             ; B0C5 A5 C1                    
 	lsr     a                               ; B0C7 4A                       J
 	ldx     $C7                             ; B0C8 A6 C7                    ..
 	inx                                     ; B0CA E8                       .
-	lda     $DE                             ; B0CB A5 DE                    ..
+	lda     byte_DE                         ; B0CB A5 DE                    ..
 	beq     LB0E8                           ; B0CD F0 19                    ..
 	bpl     LB0DE                           ; B0CF 10 0D                    ..
 	bcs     LB0D8                           ; B0D1 B0 05                    ..
@@ -2491,7 +2599,7 @@ LB0DE:  bcs     :+
 :  	jsr     sub_b137
 LB0E8:  lda     $C1                             ; B0E8 A5 C1                    ..
 	lsr     a                               ; B0EA 4A                       J
-	lda     $DD                             ; B0EB A5 DD                    ..
+	lda     byte_DD                         ; B0EB A5 DD                    ..
 	beq     LB136                           ; B0ED F0 47                    .G
 	bpl     LB0F8                           ; B0EF 10 07                    ..
 	bcs     LB157                           ; B0F1 B0 64                    .d
@@ -2578,56 +2686,60 @@ LB16E:  lda     $BF                             ; B16E A5 BF                    
 	clc                                     ; B178 18                       .
 	adc     #$0A                            ; B179 69 0A                    i.
 	bne     LB162                           ; B17B D0 E5                    ..
-LB17D:  lda     $DD                             ; B17D A5 DD                    ..
+LB17D:  lda     byte_DD                         ; B17D A5 DD                    ..
 	beq     LB18E                           ; B17F F0 0D                    ..
 	clc                                     ; B181 18                       .
-	lda     $E1                             ; B182 A5 E1                    ..
-	adc     $DD                             ; B184 65 DD                    e.
+	lda     byte_E1                         ; B182 A5 E1                    ..
+	adc     byte_DD                         ; B184 65 DD                    e.
 	cmp     #$19                            ; B186 C9 19                    ..
 	bcs     LB18E                           ; B188 B0 04                    ..
-	sta     $E1                             ; B18A 85 E1                    ..
-	sta     $DF                             ; B18C 85 DF                    ..
-LB18E:  lda     $E2                             ; B18E A5 E2                    ..
-	sta     $E0                             ; B190 85 E0                    ..
-	lda     $DE                             ; B192 A5 DE                    ..
+	sta     byte_E1                         ; B18A 85 E1                    ..
+	sta     byte_DF                         ; B18C 85 DF                    ..
+LB18E:  lda     byte_E2                         ; B18E A5 E2                    ..
+	sta     byte_E0                         ; B190 85 E0                    ..
+	lda     byte_DE                         ; B192 A5 DE                    ..
 	beq     LB1AB                           ; B194 F0 15                    ..
 	clc                                     ; B196 18                       .
-	lda     $E2                             ; B197 A5 E2                    ..
-	adc     $DE                             ; B199 65 DE                    e.
+	lda     byte_E2                         ; B197 A5 E2                    ..
+	adc     byte_DE                         ; B199 65 DE                    e.
 	cmp     #$40                            ; B19B C9 40                    .@
 	bcc     LB1AB                           ; B19D 90 0C                    ..
-	ldx     $DE                             ; B19F A6 DE                    ..
+	ldx     byte_DE                         ; B19F A6 DE                    ..
 	bmi     LB1A3                           ; B1A1 30 00                    0.
 LB1A3:  cmp     #$71                            ; B1A3 C9 71                    .q
 	bcs     LB1AB                           ; B1A5 B0 04                    ..
-	sta     $E2                             ; B1A7 85 E2                    ..
-	sta     $E0                             ; B1A9 85 E0                    ..
+	sta     byte_E2                         ; B1A7 85 E2                    ..
+	sta     byte_E0                         ; B1A9 85 E0                    ..
+
+; 
 LB1AB:  lda     #$CD                            ; B1AB A9 CD                    ..
-	sta     $DD                             ; B1AD 85 DD                    ..
+	sta     byte_DD                         ; B1AD 85 DD                    ..
+
 	lda     #$10                            ; B1AF A9 10                    ..
-	sta     $DE                             ; B1B1 85 DE                    ..
+	sta     byte_DE                         ; B1B1 85 DE                    ..
+
 	ldx     #$C0                            ; B1B3 A2 C0                    ..
 LB1B5:  ldy     #$00                            ; B1B5 A0 00                    ..
 	lda     #$4F                            ; B1B7 A9 4F                    .O
-	sta     ($DD),y                         ; B1B9 91 DD                    ..
+	sta     (byte_DD),y                     ; B1B9 91 DD                    ..
 	iny                                     ; B1BB C8                       .
-	lda     $DF                             ; B1BC A5 DF                    ..
-	sta     ($DD),y                         ; B1BE 91 DD                    ..
+	lda     byte_DF                         ; B1BC A5 DF                    ..
+	sta     (byte_DD),y                     ; B1BE 91 DD                    ..
 	iny                                     ; B1C0 C8                       .
-	lda     $E0                             ; B1C1 A5 E0                    ..
-	sta     ($DD),y                         ; B1C3 91 DD                    ..
+	lda     byte_E0                         ; B1C1 A5 E0                    ..
+	sta     (byte_DD),y                     ; B1C3 91 DD                    ..
 	clc                                     ; B1C5 18                       .
-	lda     $DF                             ; B1C6 A5 DF                    ..
+	lda     byte_DF                         ; B1C6 A5 DF                    ..
 	adc     #$40                            ; B1C8 69 40                    i@
-	sta     $DF                             ; B1CA 85 DF                    ..
+	sta     byte_DF                         ; B1CA 85 DF                    ..
 	bcc     LB1D0                           ; B1CC 90 02                    ..
-	inc     $E0                             ; B1CE E6 E0                    ..
+	inc     byte_E0                         ; B1CE E6 E0                    ..
 LB1D0:  clc                                     ; B1D0 18                       .
-	lda     $DD                             ; B1D1 A5 DD                    ..
+	lda     byte_DD                         ; B1D1 A5 DD                    ..
 	adc     #$03                            ; B1D3 69 03                    i.
-	sta     $DD                             ; B1D5 85 DD                    ..
+	sta     byte_DD                         ; B1D5 85 DD                    ..
 	bcc     LB1DB                           ; B1D7 90 02                    ..
-	inc     $DE                             ; B1D9 E6 DE                    ..
+	inc     byte_DE                         ; B1D9 E6 DE                    ..
 LB1DB:  dex                                     ; B1DB CA                       .
 	bne     LB1B5                           ; B1DC D0 D7                    ..
 	rts                                     ; B1DE 60                       `
@@ -2720,14 +2832,14 @@ LB272:  jsr     LB238                           ; B272 20 38 B2                 
 	ldy     #$00                            ; B278 A0 00                    ..
 	jsr     sub_b1f1
 	ldy     #$01                            ; B27D A0 01                    ..
-	sty     $B2                             ; B27F 84 B2                    ..
+	sty     byte_B2
 	ldy     #$10                            ; B281 A0 10                    ..
 	lda     #$25                            ; B283 A9 25                    .%
 	ldx     #$B9                            ; B285 A2 B9                    ..
 	jmp     sub_a89f
 
 ; ----------------------------------------------------------------------------
-LB28A:  ldx     $B2                             ; B28A A6 B2                    ..
+LB28A:  ldx     byte_B2
 	dex                                     ; B28C CA                       .
 	beq     LB292                           ; B28D F0 03                    ..
 	jsr     LB238                           ; B28F 20 38 B2                  8.
@@ -2745,7 +2857,7 @@ LB2A5:  jsr     LB2C6                           ; B2A5 20 C6 B2                 
 	bne     LB2A5                           ; B2AA D0 F9                    ..
 LB2AC:  ldx     #$30                            ; B2AC A2 30                    .0
 	jsr     LB23A                           ; B2AE 20 3A B2                  :.
-	ldx     $B2                             ; B2B1 A6 B2                    ..
+	ldx     byte_B2
 	dex                                     ; B2B3 CA                       .
 	beq     LB2F9                           ; B2B4 F0 43                    .C
 	bpl     LB2BB                           ; B2B6 10 03                    ..
@@ -3176,7 +3288,7 @@ sub_b581:
 	lda     byte_133a
 	beq     LB5A5                           ; B588 F0 1B                    ..
 	jsr     sub_b53a
-	lda     $B2                             ; B58D A5 B2                    ..
+	lda     byte_B2
 	bne     LB595                           ; B58F D0 04                    ..
 	lda     #$51                            ; B591 A9 51                    .Q
 	bne     LB597                           ; B593 D0 02                    ..
@@ -3386,7 +3498,7 @@ LB71C:  ldy     #$00                            ; B71C A0 00                    
 
 ; ----------------------------------------------------------------------------
 LB724:  lda     #$00                            ; B724 A9 00                    ..
-	sta     $B2                             ; B726 85 B2                    ..
+	sta     byte_B2
 	sta     byte_133e
 	sta     $133F                           ; B72B 8D 3F 13                 .?.
 	sta     $1342                           ; B72E 8D 42 13                 .B.
@@ -3454,7 +3566,7 @@ LB7A8:  lda     #$52                            ; B7A8 A9 52                    
 	sta     $031A,x                         ; B7AD 9D 1A 03                 ...
 	lda     #$1A                            ; B7B0 A9 1A                    ..
 	sta     $031B,x                         ; B7B2 9D 1B 03                 ...
-	lda     #$B8                            ; B7B5 A9 B8                    ..
+	lda     #byte_B8
 	sta     $031C,x                         ; B7B7 9D 1C 03                 ...
 	lda     #$EA                            ; B7BA A9 EA                    ..
 	sta     $0304                           ; B7BC 8D 04 03                 ...
@@ -3621,7 +3733,7 @@ LB93A:
 	.byte   $7F,$BF,$DF,$EF,$F7,$FB,$FD,$FE
 LB942:  .byte   $80,$40,$20,$10,$08,$04,$02,$01
 	.byte	$E3
-	sbc     ($E0,x)                         ; B94B E1 E0                    ..
+	sbc     (byte_E0,x)                         ; B94B E1 E0                    ..
 	.byte   $E2                             ; B94D E2                       .
 LB94E:  brk                                     ; B94E 00                       .
 LB94F:  .byte   $7F                             ; B94F 7F                       .
@@ -3639,7 +3751,7 @@ LB95C:  .byte   $FE                             ; B95C FE                       
 	brk                                     ; B95D 00                       .
 LB95E:  .byte   $07                             ; B95E 07                       .
 	.byte   $83                             ; B95F 83                       .
-	cmp     ($E0,x)                         ; B960 C1 E0                    ..
+	cmp     (byte_E0,x)                         ; B960 C1 E0                    ..
 	beq     LB95C                           ; B962 F0 F8                    ..
 	.byte   $FC                             ; B964 FC                       .
 	.byte   $FE                             ; B965 FE                       .
@@ -4301,7 +4413,7 @@ byte_BAEC:
 	.byte   %00010000                       ; ...#....
 	.byte   %00010000                       ; ...#....
 
-LBC44:
+chrset_6x6:
 	.byte   %00000000                       ; ........
 	.byte   %00000000                       ; ........
 	.byte   %00000000                       ; ........
@@ -4393,7 +4505,6 @@ LBC44:
 	.byte   %10000000                       ; #.......
 	.byte   %00000000                       ; ........
 
-
 	.byte   %00000000                       ; ........
 	.byte   %00000000                       ; ........
 	.byte   %11110000                       ; ####....
@@ -4492,14 +4603,12 @@ LBC44:
 	.byte   %00000000                       ; ........
 	.byte   %00000000                       ; ........
 
-
 	.byte   %00000000                       ; ........
 	.byte   %01000000                       ; .#......
 	.byte   %00000000                       ; ........
 	.byte   %01000000                       ; .#......
 	.byte   %10000000                       ; #.......
 	.byte   %00000000                       ; ........
-
 
 	.byte   %00100000                       ; ..#.....
 	.byte   %01000000                       ; .#......
@@ -4655,14 +4764,12 @@ LBC44:
 	.byte   %11111000                       ; #####...
 	.byte   %00000000                       ; ........
 
-
 	.byte   %11100000                       ; ###.....
 	.byte   %10010000                       ; #..#....
 	.byte   %11100000                       ; ###.....
 	.byte   %10100000                       ; #.#.....
 	.byte   %10010000                       ; #..#....
 	.byte   %00000000                       ; ........
-
 
 	.byte   %01110000                       ; .###....
 	.byte   %10000000                       ; #.......
@@ -4691,7 +4798,6 @@ LBC44:
 	.byte   %01100000                       ; .##.....
 	.byte   %01100000                       ; .##.....
 	.byte   %00000000                       ; ........
-
 
 	.byte   %10001000                       ; #...#...
 	.byte   %10001000                       ; #...#...
@@ -5106,102 +5212,180 @@ LBC44:
 	.byte   %11100000                       ; ###.....
 	.byte   %10000000                       ; #.......
 
-	.byte	$20,$40,$20
-	.byte	$50,$70
-	brk                                     ; BEF5 00                       .
-	.byte   $80                             ; BEF6 80                       .
-	rti                                     ; BEF7 40                       @
-	jsr     L9050                           ; BEF8 20 50 90                  P.
-	brk                                     ; BEFB 00                       .
-	brk                                     ; BEFC 00                       .
-	brk                                     ; BEFD 00                       .
-	.byte   $50                             ; BEFE 50                       P
-LBEFF:  bvc     LBF61                           ; BEFF 50 60                    P`
-	.byte   $80                             ; BF01 80                       .
-	php                                     ; BF02 08                       .
-	sei                                     ; BF03 78                       x
-	bne     LBF56                           ; BF04 D0 50                    .P
-	bvc     LBF08                           ; BF06 50 00                    P.
-LBF08:  brk                                     ; BF08 00                       .
-	jsr     L5050                           ; BF09 20 50 50                  PP
-	ldy     #$80                            ; BF0C A0 80                    ..
-	bmi     LBF50                           ; BF0E 30 40                    0@
-	ldy     #$A0                            ; BF10 A0 A0                    ..
-	rti                                     ; BF12 40                       @
-	brk                                     ; BF13 00                       .
-	brk                                     ; BF14 00                       .
-	brk                                     ; BF15 00                       .
-	.byte	$90,$B0
-	rts                                     ; BF18 60                       `
-	brk                                     ; BF19 00                       .
-	jsr     L8040                           ; BF1A 20 40 80                  @.
-	rti                                     ; BF1D 40                       @
-	jsr     L80E0                           ; BF1E 20 E0 80                  ..
-	rti                                     ; BF21 40                       @
-	jsr     L8040                           ; BF22 20 40 80                  @.
-	cpx     #$20                            ; BF25 E0 20                    . 
-	.byte	$50,$70
-	bvc     LBF4B                           ; BF29 50 20                    P 
-	brk                                     ; BF2B 00                       .
-	.byte	$30,$60
-	ldy     #$60                            ; BF2E A0 60                    .`
-	bmi     LBF32                           ; BF30 30 00                    0.
-LBF32:  jsr     L2050                           ; BF32 20 50 20                  P 
-	brk                                     ; BF35 00                       .
-	brk                                     ; BF36 00                       .
-	brk                                     ; BF37 00                       .
-	cpy     #$60                            ; BF38 C0 60                    .`
-	.byte	$50,$60
-	cpy     #$00                            ; BF3C C0 00                    ..
-	cpy     #$A0                            ; BF3E C0 A0                    ..
-	.byte	$50,$50
-	ldy     #$C0                            ; BF42 A0 C0                    ..
-	sed                                     ; BF44 F8                       .
-	.byte	$20,$40,$40
-	jsr     L50F8                           ; BF48 20 F8 50                  .P
-LBF4B:  brk                                     ; BF4B 00                       .
-	brk                                     ; BF4C 00                       .
-	brk                                     ; BF4D 00                       .
-	brk                                     ; BF4E 00                       .
-	brk                                     ; BF4F 00                       .
-LBF50:  brk                                     ; BF50 00                       .
-	bvs     LBFA3                           ; BF51 70 50                    pP
-	bvs     LBF55                           ; BF53 70 00                    p.
-LBF55:  brk                                     ; BF55 00                       .
-LBF56:  brk                                     ; BF56 00                       .
-	rts                                     ; BF57 60                       `
-	bcc     LBFBA                           ; BF58 90 60                    .`
-	brk                                     ; BF5A 00                       .
-	brk                                     ; BF5B 00                       .
-	.byte	$20,$70,$F8
-	.byte	$70,$20
-LBF61:  brk                                     ; BF61 00                       .
-	dey                                     ; BF62 88                       .
-	bvc     LBF85                           ; BF63 50 20                    P 
-	.byte	$50,$88
-	brk                                     ; BF67 00                       .
-	.byte	$10,$20
-	brk                                     ; BF6A 00                       .
-	brk                                     ; BF6B 00                       .
-	brk                                     ; BF6C 00                       .
-	brk                                     ; BF6D 00                       .
-	brk                                     ; BF6E 00                       .
-	brk                                     ; BF6F 00                       .
-	brk                                     ; BF70 00                       .
-	brk                                     ; BF71 00                       .
-	.byte	$10,$20
-	ldy     #$20                            ; BF74 A0 20                    . 
-	brk                                     ; BF76 00                       .
-	brk                                     ; BF77 00                       .
-	brk                                     ; BF78 00                       .
-	brk                                     ; BF79 00                       .
-	jsr     L2070                           ; BF7A 20 70 20                  p 
-	.byte	$70,$20
-	brk                                     ; BF7F 00                       .
-	.byte   $20                             ; BF80 20                        
-	.byte	$20,$20,$20
-	.byte   $20                             ; BF84 20                        
-LBF85:  .byte   $20                             ; BF85 20                        
+	.byte   %00100000                       ; ..#.....
+	.byte   %01000000                       ; .#......
+	.byte   %00100000                       ; ..#.....
+	.byte   %01010000                       ; .#.#....
+	.byte   %01110000                       ; .###....
+	.byte   %00000000                       ; ........
+
+	.byte   %10000000                       ; #.......
+	.byte   %01000000                       ; .#......
+	.byte   %00100000                       ; ..#.....
+	.byte   %01010000                       ; .#.#....
+	.byte   %10010000                       ; #..#....
+	.byte   %00000000                       ; ........
+
+	.byte   %00000000                       ; ........
+	.byte   %00000000                       ; ........
+	.byte   %01010000                       ; .#.#....
+	.byte   %01010000                       ; .#.#....
+	.byte   %01100000                       ; .##.....
+	.byte   %10000000                       ; #.......
+
+	.byte   %00001000                       ; ....#...
+	.byte   %01111000                       ; .####...
+	.byte   %11010000                       ; ##.#....
+	.byte   %01010000                       ; .#.#....
+	.byte   %01010000                       ; .#.#....
+	.byte   %00000000                       ; ........
+
+	.byte   %00000000                       ; ........
+	.byte   %00100000                       ; ..#.....
+	.byte   %01010000                       ; .#.#....
+	.byte   %01010000                       ; .#.#....
+	.byte   %10100000                       ; #.#.....
+	.byte   %10000000                       ; #.......
+
+	.byte   %00110000                       ; ..##....
+	.byte   %01000000                       ; .#......
+	.byte   %10100000                       ; #.#.....
+	.byte   %10100000                       ; #.#.....
+	.byte   %01000000                       ; .#......
+	.byte   %00000000                       ; ........
+
+	.byte   %00000000                       ; ........
+	.byte   %00000000                       ; ........
+	.byte   %10010000                       ; #..#....
+	.byte   %10110000                       ; #.##....
+	.byte   %01100000                       ; .##.....
+	.byte   %00000000                       ; ........
+
+	.byte   %00100000                       ; ..#.....
+	.byte   %01000000                       ; .#......
+	.byte   %10000000                       ; #.......
+	.byte   %01000000                       ; .#......
+	.byte   %00100000                       ; ..#.....
+	.byte   %11100000                       ; ###.....
+
+	.byte   %10000000                       ; #.......
+	.byte   %01000000                       ; .#......
+	.byte   %00100000                       ; ..#.....
+	.byte   %01000000                       ; .#......
+	.byte   %10000000                       ; #.......
+	.byte   %11100000                       ; ###.....
+
+	.byte   %00100000                       ; ..#.....
+	.byte   %01010000                       ; .#.#....
+	.byte   %01110000                       ; .###....
+	.byte   %01010000                       ; .#.#....
+	.byte   %00100000                       ; ..#.....
+	.byte   %00000000                       ; ........
+
+	.byte   %00110000                       ; ..##....
+	.byte   %01100000                       ; .##.....
+	.byte   %10100000                       ; #.#.....
+	.byte   %01100000                       ; .##.....
+	.byte   %00110000                       ; ..##....
+	.byte   %00000000                       ; ........
+
+	.byte   %00100000                       ; ..#.....
+	.byte   %01010000                       ; .#.#....
+	.byte   %00100000                       ; ..#.....
+	.byte   %00000000                       ; ........
+	.byte   %00000000                       ; ........
+	.byte   %00000000                       ; ........
+
+	.byte   %11000000                       ; ##......
+	.byte   %01100000                       ; .##.....
+	.byte   %01010000                       ; .#.#....
+	.byte   %01100000                       ; .##.....
+	.byte   %11000000                       ; ##......
+	.byte   %00000000                       ; ........
+
+	.byte   %11000000                       ; ##......
+	.byte   %10100000                       ; #.#.....
+	.byte   %01010000                       ; .#.#....
+	.byte   %01010000                       ; .#.#....
+	.byte   %10100000                       ; #.#.....
+	.byte   %11000000                       ; ##......
+
+	.byte   %11111000                       ; #####...
+	.byte   %00100000                       ; ..#.....
+	.byte   %01000000                       ; .#......
+	.byte   %01000000                       ; .#......
+	.byte   %00100000                       ; ..#.....
+	.byte   %11111000                       ; #####...
+
+	.byte   %01010000                       ; .#.#....
+	.byte   %00000000                       ; ........
+	.byte   %00000000                       ; ........
+	.byte   %00000000                       ; ........
+	.byte   %00000000                       ; ........
+	.byte   %00000000                       ; ........
+
+	.byte   %00000000                       ; ........
+	.byte   %01110000                       ; .###....
+	.byte   %01010000                       ; .#.#....
+	.byte   %01110000                       ; .###....
+	.byte   %00000000                       ; ........
+	.byte   %00000000                       ; ........
+
+	.byte   %00000000                       ; ........
+	.byte   %01100000                       ; .##.....
+	.byte   %10010000                       ; #..#....
+	.byte   %01100000                       ; .##.....
+	.byte   %00000000                       ; ........
+	.byte   %00000000                       ; ........
+
+	.byte   %00100000                       ; ..#.....
+	.byte   %01110000                       ; .###....
+	.byte   %11111000                       ; #####...
+	.byte   %01110000                       ; .###....
+	.byte   %00100000                       ; ..#.....
+	.byte   %00000000                       ; ........
+
+	.byte   %10001000                       ; #...#...
+	.byte   %01010000                       ; .#.#....
+	.byte   %00100000                       ; ..#.....
+	.byte   %01010000                       ; .#.#....
+	.byte   %10001000                       ; #...#...
+	.byte   %00000000                       ; ........
+
+	.byte   %00010000                       ; ...#....
+	.byte   %00100000                       ; ..#.....
+	.byte   %00000000                       ; ........
+	.byte   %00000000                       ; ........
+	.byte   %00000000                       ; ........
+	.byte   %00000000                       ; ........
+
+	.byte   %00000000                       ; ........
+	.byte   %00000000                       ; ........
+	.byte   %00000000                       ; ........
+	.byte   %00000000                       ; ........
+	.byte   %00010000                       ; ...#....
+	.byte   %00100000                       ; ..#.....
+
+	.byte   %10100000                       ; #.#.....
+	.byte   %00100000                       ; ..#.....
+	.byte   %00000000                       ; ........
+	.byte   %00000000                       ; ........
+	.byte   %00000000                       ; ........
+	.byte   %00000000                       ; ........
+
+	.byte   %00100000                       ; ..#.....
+	.byte   %01110000                       ; .###....
+	.byte   %00100000                       ; ..#.....
+	.byte   %01110000                       ; .###....
+	.byte   %00100000                       ; ..#.....
+	.byte   %00000000                       ; ........
+
+	.byte   %00100000                       ; ..#.....
+	.byte   %00100000                       ; ..#.....
+	.byte   %00100000                       ; ..#.....
+	.byte   %00100000                       ; ..#.....
+	.byte   %00100000                       ; ..#.....
+	.byte   %00100000                       ; ..#.....
 
 sub_bf86:
 	cmp     HATABS,x
@@ -5231,7 +5415,7 @@ LBFA3:  sta     $CB                             ; BFA3 85 CB                    
 	sta     byte_133a
 	lda     $08                             ; BFB0 A5 08                    ..
 	beq     LBFC2                           ; BFB2 F0 0E                    ..
-	ldx     $B2                             ; BFB4 A6 B2                    ..
+	ldx     byte_B2
 	cpx     #$02                            ; BFB6 E0 02                    ..
 	bcs     LBFBD                           ; BFB8 B0 03                    ..
 LBFBA:  sec                                     ; BFBA 38                       8
