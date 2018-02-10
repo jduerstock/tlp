@@ -96,19 +96,7 @@ L3020           := $3020
 L3030           := $3030
 L3E33           := $3E33
 L4000           := $4000
-L4040           := $4040
-L5050           := $5050
-L50F8           := $50F8
-L544F           := $544F
-L8040           := $8040
-L8070           := $8070
-L80E0           := $80E0
-L8850           := $8850
-L9000           := $9000
-L9040           := $9040
-L9050           := $9050
 charset_sm	:= $BC44			; 6x6 character set
-LC040           := $C040
 HPOSM0		:= $D004
 HPOSM1		:= $D005
 IRQEN		:= $D20E
@@ -515,9 +503,9 @@ sub_a214:					; A214
 	sta     $106B                           ; again after 102 mode F lines
 
 ;** (n) Point to screen RAM at $3000 in display list #1 ************************
-	lda     #$00                            ; After 102 mode F scanlines
+	lda     #<$3000				;
 	sta     $106C                           ; point to screen RAM to $3000
-	lda     #$30                            ; 
+	lda     #>$3000				;
 	sta     $106D                           ; 
 
 ;** (n) Write tail end of display list #1 **************************************
@@ -532,11 +520,11 @@ sub_a214:					; A214
 	sta     DLIST+1                         ; list loc with the hardware
 
 ;** (n) Screen RAM for display list #2 will begin at $4000 *********************
-	lda     #$00                            ; 
-	sta     byte_DF                         ; Let byte_DF = $00 TODO
-	sta     byte_E1                         ; Let byte_E1 = $00 TODO
+	lda     #<L4000				; 
+	sta     byte_DF				; Let byte_DF = $00 TODO
+	sta     byte_E1				; Let byte_E1 = $00 TODO
 
-	lda     #$40                            ; 
+	lda     #>L4000				; 
 	sta     byte_E0                         ; Let byte_E0 = $40 TODO
 	sta     byte_E2                         ; Let byte_E2 = $40 TODO
 
@@ -3559,13 +3547,13 @@ sub_b799:
 	rts                                     ; B7A7 60                       `
 
 ; ----------------------------------------------------------------------------
-LB7A8:  lda     #$52                            ; B7A8 A9 52                    .R
+LB7A8:  lda     #'R'
 	sta     byte_1346
-	sta     $031A,x                         ; B7AD 9D 1A 03                 ...
-	lda     #$1A                            ; B7B0 A9 1A                    ..
-	sta     $031B,x                         ; B7B2 9D 1B 03                 ...
-	lda     #byte_B8
-	sta     $031C,x                         ; B7B7 9D 1C 03                 ...
+	sta     HATABS,x
+	lda     #<LB81A
+	sta     HATABS+1,x
+	lda     #>LB81A
+	sta     HATABS+2,x
 	lda     #$EA                            ; B7BA A9 EA                    ..
 	sta     $0304                           ; B7BC 8D 04 03                 ...
 	lda     #$02                            ; B7BF A9 02                    ..
@@ -3611,6 +3599,8 @@ LB802:  sta     $0302                           ; B802 8D 02 03                 
 	jmp     SIOV
 
 ; ----------------------------------------------------------------------------
+
+LB81A:
 	.byte   $B7                             ; B81A B7                       .
 	ldx     $C8,y                           ; B81B B6 C8                    ..
 	ldx     $08,y                           ; B81D B6 08                    ..
