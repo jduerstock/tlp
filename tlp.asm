@@ -39,7 +39,6 @@
 ;*                                                                             *
 ;*******************************************************************************
 
-TSTDAT		:= $0007
 POKMSK		:= $0010			; POKEY Interrupts: used by IRQ service
 SHFLOK		:= $02BE			; Flag for shift and control keys
 CDTMA1		:= $0226			; System timer one jump address
@@ -56,6 +55,7 @@ DMACTL		:= $D400			; Direct Memory Access (DMA) control
 ;*                                                                             *
 ;*******************************************************************************
 
+TSTDAT		:= $0007
 L0070           := $0070
 L0080           := $0080
 
@@ -542,7 +542,7 @@ sub_a214:					; A214
 	sta     byte_E2                         ; Let byte_E2 = $40 TODO
 
 ;** (n) Call sub to derive body of display list #2 *****************************
-	jsr     LB1AB                           ; A28D 20 AB B1                  ..
+	jsr     LB1AB                           ; TODO
 
 ;** (n) Write tail of display list #2 ******************************************
 	lda     #$CA                            ; Tell ANTIC to jump
@@ -550,20 +550,22 @@ sub_a214:					; A214
 	lda     #$10                            ; list at $10CA.
 	sta     $130F                           ; 
 
-	ldx     #$00                            ; A29A A2 00                    ..
-:	lda     off_F4+1
-	sta     $04C0,x                         ; A29E 9D C0 04                 ...
-	lda     off_F4
-	sta     $0400,x                         ; A2A3 9D 00 04                 ...
-	inx                                     ; A2A6 E8                       .
-	cpx     #$C0                            ; A2A7 E0 C0                    ..
-	beq	:+
-	lda     off_F4
-	adc     #$28                            ; A2AD 69 28                    i(
-	sta     off_F4
-	bcc	:-
-	inc     off_F4+1
-	bne	:-
+;** (n) ************************************************************************
+	ldx     #$00                            ; Loop 192 times
+:	lda     off_F4+1                        ;
+	sta     $04C0,x                         ; 
+	lda     off_F4                          ;
+	sta     $0400,x                         ; 
+	inx                                     ; 
+	cpx     #$C0                            ; Quit at 192 iterations
+	beq	:+                              ;
+	lda     off_F4                          ;
+	adc     #$28                            ; 
+	sta     off_F4                          ;
+	bcc	:-                              ;
+	inc     off_F4+1                        ;
+	bne	:-				; End Loop
+
 :	lda     #$03                            ; A2B7 A9 03                    ..
 	sta     GRACTL				; Turn on Player/Missiles
 	lda     #$04                            ; A2BC A9 04                    ..
