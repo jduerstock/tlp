@@ -62,8 +62,9 @@ CONSOL		:= $D01F
 
 AUDCTL		:= $D208
 STIMER		:= $D209
+SIZEM		:= $D00C			; Size for all missiles
 IRQEN		:= $D20E
-PMBASE		:= $D407
+PMBASE		:= $D407			; MSB of the player/missile base address
 IRQST		:= IRQEN
 
 PORTA		:= $D300
@@ -87,8 +88,11 @@ L0070           := $0070
 L0080           := $0080
 
 byte_B2		:= $00B2
+byte_B3		:= $00B3
 byte_B7		:= $00B7
 byte_B8		:= $00B8
+byte_C0		:= $00C0
+byte_C4		:= $00C4
 byte_CC		:= $00CC
 off_DD		:= $00DD
 byte_DF		:= $00DF
@@ -175,7 +179,7 @@ LA05E:  jsr     sub_a963
 LA079:  ldy     #$20                            ; A079 A0 20                    . 
 	jsr     sub_b1f1
 	and     #$7F                            ; A07E 29 7F                    ).
-	bit     $B3                             ; A080 24 B3                    $.
+	bit     byte_B3                         ; A080 24 B3                    $.
 	bmi     LA0D2                           ; A082 30 4E                    0N
 	cmp     #$20                            ; A084 C9 20                    . 
 	bcs     LA08D                           ; A086 B0 05                    ..
@@ -222,7 +226,7 @@ LA0BC:  lda     LBAE2,y                         ; A0BC B9 E2 BA                 
 	rts                                     ; A0C4 60                       `
 
 ; ----------------------------------------------------------------------------
-LA0C5:  ldx     $B3                             ; A0C5 A6 B3                    ..
+LA0C5:  ldx     byte_B3                         ; A0C5 A6 B3                    ..
 	lda     LBACA,x                         ; A0C7 BD CA BA                 ...
 	beq     LA0D1                           ; A0CA F0 05                    ..
 	pha                                     ; A0CC 48                       H
@@ -231,8 +235,8 @@ LA0C5:  ldx     $B3                             ; A0C5 A6 B3                    
 LA0D1:  rts                                     ; A0D1 60                       `
 
 ; ----------------------------------------------------------------------------
-LA0D2:  asl     $B3                             ; A0D2 06 B3                    ..
-	lsr     $B3                             ; A0D4 46 B3                    F.
+LA0D2:  asl     byte_B3                         ; A0D2 06 B3                    ..
+	lsr     byte_B3                         ; A0D4 46 B3                    F.
 	jsr     LA0DB                           ; A0D6 20 DB A0                  ..
 	clc                                     ; A0D9 18                       .
 LA0DA:  rts                                     ; A0DA 60                       `
@@ -274,14 +278,14 @@ LA111:  ldy     $B5                             ; A111 A4 B5                    
 	sty     $1354                           ; A113 8C 54 13                 .T.
 	stx     $B5                             ; A116 86 B5                    ..
 LA118:  sta     $B4                             ; A118 85 B4                    ..
-	lda     $B3                             ; A11A A5 B3                    ..
+	lda     byte_B3                         ; A11A A5 B3                    ..
 	ora     #$40                            ; A11C 09 40                    .@
 	bne     LA129                           ; A11E D0 09                    ..
 LA120:  lda     $1354                           ; A120 AD 54 13                 .T.
 	sta     $B5                             ; A123 85 B5                    ..
-	lda     $B3                             ; A125 A5 B3                    ..
+	lda     byte_B3                         ; A125 A5 B3                    ..
 	and     #$BF                            ; A127 29 BF                    ).
-LA129:  sta     $B3                             ; A129 85 B3                    ..
+LA129:  sta     byte_B3                         ; A129 85 B3                    ..
 LA12B:  rts                                     ; A12B 60                       `
 
 ; ----------------------------------------------------------------------------
@@ -560,29 +564,36 @@ sub_a214:					; A214
 	inc     off_F4+1                        ;
 	bne	:-				; End Loop
 
+;** (n) Configure Player Missile Graphics ***************************************
 :	lda     #$03                            ; 
 	sta     GRACTL				; Enable display of PMG
 
-	lda     #$04                            ; PMG will be stored in page 4
-	sta     PMBASE                          ; 
+	lda     #$04                            ; TODO Confused - page 4 contains pointers to scan line addresses
+	sta     PMBASE                          ; PMG will be stored in page 4 
 
-	lda     #$55                            ; A2C1 A9 55                    .U
-	sta     $D00C                           ; A2C3 8D 0C D0                 ...
-	lda     #$00                            ; A2C6 A9 00                    ..
-	ldx     #$03                            ; A2C8 A2 03                    ..
-LA2CA:  sta     HPOSM0,x
-	dex                                     ; A2CD CA                       .
-	bpl     LA2CA                           ; A2CE 10 FA                    ..
-	ldx     #$32                            ; A2D0 A2 32                    .2
-	stx     $C4                             ; A2D2 86 C4                    ..
-	ldx     #$0F                            ; A2D4 A2 0F                    ..
-	stx     $C0                             ; A2D6 86 C0                    ..
-	ldx     #$07                            ; A2D8 A2 07                    ..
-	stx     $B3                             ; A2DA 86 B3                    ..
-LA2DC:  lda     LBA67,x                         ; A2DC BD 67 BA                 .g.
-	sta     $058C,x                         ; A2DF 9D 8C 05                 ...
-	dex                                     ; A2E2 CA                       .
-	bpl     LA2DC                           ; A2E3 10 F7                    ..
+	lda     #$55                            ; SIZEM = 01 01 01 01
+	sta     SIZEM                           ; Set missiles 0-3 to double wide
+
+	lda     #$00                            ; Loop through each missile
+	ldx     #$03                            ; Set horiz pos to 0 (offscreen)
+:       sta     HPOSM0,x                        ; 
+	dex                                     ; 
+	bpl     :-                              ; End Loop
+
+;** (n) *************************************************************************
+	ldx     #$32                            ; TODO
+	stx     byte_C4                         ;
+
+	ldx     #$0F                            ; TODO
+	stx     byte_C0                         ;
+
+	ldx     #$07                            ; 
+	stx     byte_B3                         ; 
+:       lda     LBA67,x                         ; Copy 7 bytes from ROM to RAM
+	sta     $058C,x                         ; Initial values 
+	dex                                     ; 70 40 70 40 40 06 0F
+	bpl     :-                              ; 
+
 	stx     $C7                             ; A2E5 86 C7                    ..
 	lda     #$01                            ; A2E7 A9 01                    ..
 	sta     $C3                             ; A2E9 85 C3                    ..
@@ -658,7 +669,7 @@ sub_a367:
 ; ----------------------------------------------------------------------------
 	txa                                     ; A36A 8A                       .
 	and     #$07                            ; A36B 29 07                    ).
-	sta     $B3                             ; A36D 85 B3                    ..
+	sta     byte_B3                         ; A36D 85 B3                    ..
 	tax                                     ; A36F AA                       .
 	lda     LBADA,x                         ; A370 BD DA BA                 ...
 	sta     $B5                             ; A373 85 B5                    ..
@@ -780,9 +791,9 @@ LA3EE:  lda     $9C                             ; A3EE A5 9C                    
 	rts                                     ; A42A 60                       `
 
 ; ----------------------------------------------------------------------------
-	asl     $B3                             ; A42B 06 B3                    ..
+	asl     byte_B3                         ; A42B 06 B3                    ..
 	sec                                     ; A42D 38                       8
-	ror     $B3                             ; A42E 66 B3                    f.
+	ror     byte_B3                         ; A42E 66 B3                    f.
 	rts                                     ; A430 60                       `
 
 ; ----------------------------------------------------------------------------
@@ -1022,7 +1033,7 @@ LA5CD:  lda     #$01                            ; A5CD A9 01                    
 LA5D1:  lda     #$FE                            ; A5D1 A9 FE                    ..
 	ldx     #$00                            ; A5D3 A2 00                    ..
 	beq     LA5D9                           ; A5D5 F0 02                    ..
-LA5D7:  ldx     $C4                             ; A5D7 A6 C4                    ..
+LA5D7:  ldx     byte_C4                         ; A5D7 A6 C4                    ..
 LA5D9:  sta     $C1                             ; A5D9 85 C1                    ..
 	stx     HPOSM1
 	inx                                     ; A5DE E8                       .
@@ -1730,7 +1741,7 @@ LAAB8:  eor     #$FF                            ; AAB8 49 FF                    
 	sta     $C1                             ; AABA 85 C1                    ..
 	bmi     LAADB                           ; AABC 30 1D                    0.
 	beq     LAACA                           ; AABE F0 0A                    ..
-	ldx     $C4                             ; AAC0 A6 C4                    ..
+	ldx     byte_C4                         ; AAC0 A6 C4                    ..
 	stx     HPOSM1
 	inx                                     ; AAC5 E8                       .
 	inx                                     ; AAC6 E8                       .
@@ -2631,10 +2642,10 @@ LB110:  stx     $C5                             ; B110 86 C5                    
 	jmp     LB0C5                           ; B112 4C C5 B0                 L..
 
 ; ----------------------------------------------------------------------------
-LB115:  lda     $C0                             ; B115 A5 C0                    ..
+LB115:  lda     byte_C0                         ; B115 A5 C0                    ..
 	cmp     #$0F                            ; B117 C9 0F                    ..
 	bcs     LB136                           ; B119 B0 1B                    ..
-	inc     $C0                             ; B11B E6 C0                    ..
+	inc     byte_C0                         ; B11B E6 C0                    ..
 	ldy     #$02                            ; B11D A0 02                    ..
 	ldx     $C3                             ; B11F A6 C3                    ..
 	txa                                     ; B121 8A                       .
@@ -2652,9 +2663,9 @@ LB136:  rts                                     ; B136 60                       
 
 ; ----------------------------------------------------------------------------
 sub_b137:
-	lda     $C0                             ; B137 A5 C0                    ..
+	lda     byte_C0                         ; B137 A5 C0                    ..
 	beq     LB156                           ; B139 F0 1B                    ..
-	dec     $C0                             ; B13B C6 C0                    ..
+	dec     byte_C0                         ; B13B C6 C0                    ..
 	ldy     #$02                            ; B13D A0 02                    ..
 	ldx     $C3                             ; B13F A6 C3                    ..
 	txa                                     ; B141 8A                       .
@@ -2674,10 +2685,10 @@ LB156:  rts                                     ; B156 60                       
 LB157:  lda     $BF                             ; B157 A5 BF                    ..
 	beq     LB16D                           ; B159 F0 12                    ..
 	dec     $BF                             ; B15B C6 BF                    ..
-	lda     $C4                             ; B15D A5 C4                    ..
+	lda     byte_C4                         ; B15D A5 C4                    ..
 	sec                                     ; B15F 38                       8
 	sbc     #$0A                            ; B160 E9 0A                    ..
-LB162:  sta     $C4                             ; B162 85 C4                    ..
+LB162:  sta     byte_C4                         ; B162 85 C4                    ..
 	sta     HPOSM1
 	tax                                     ; B167 AA                       .
 	inx                                     ; B168 E8                       .
@@ -2690,7 +2701,7 @@ LB16E:  lda     $BF                             ; B16E A5 BF                    
 	cmp     #$0F                            ; B170 C9 0F                    ..
 	beq     LB16D                           ; B172 F0 F9                    ..
 	inc     $BF                             ; B174 E6 BF                    ..
-	lda     $C4                             ; B176 A5 C4                    ..
+	lda     byte_C4                         ; B176 A5 C4                    ..
 	clc                                     ; B178 18                       .
 	adc     #$0A                            ; B179 69 0A                    i.
 	bne     LB162                           ; B17B D0 E5                    ..
