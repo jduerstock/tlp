@@ -2006,7 +2006,7 @@ LACB8:  dex                                     ; ACB8 CA                       
 	lda     $CA                             ; ACBB A5 CA                    ..
 	cmp     #$7F                            ; ACBD C9 7F                    ..
 	bne     LACC7                           ; ACBF D0 06                    ..
-	jsr     LACE3                           ; ACC1 20 E3 AC                  ..
+	jsr	sub_ace3
 	jmp     LAC5D                           ; ACC4 4C 5D AC                 L].
 
 ; ----------------------------------------------------------------------------
@@ -2028,7 +2028,8 @@ LACCD:  sec                                     ; ACCD 38                       
 LACE2:  rts                                     ; ACE2 60                       `
 
 ; ----------------------------------------------------------------------------
-LACE3:  sec                                     ; ACE3 38                       8
+sub_ace3:
+	sec                                     ; ACE3 38                       8
 	lda     off_E3
 	sbc     #$28                            ; ACE6 E9 28                    .(
 	sta     off_E3
@@ -2069,7 +2070,7 @@ LAD13:  adc     $E8                             ; AD13 65 E8                    
 LAD27:  jsr     LAD34                           ; AD27 20 34 AD                  4.
 	dex                                     ; AD2A CA                       .
 	bmi	:+
-	jsr     LACE3                           ; AD2D 20 E3 AC                  ..
+	jsr     sub_ace3
 	jmp     LAD27                           ; AD30 4C 27 AD                 L'.
 
 ; ----------------------------------------------------------------------------
