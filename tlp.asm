@@ -997,7 +997,8 @@ LA5A2:  lda     $A5                             ; A5A2 A5 A5                    
 	jmp     LA5AF                           ; A5A7 4C AF A5                 L..
 
 ; ----------------------------------------------------------------------------
-LA5AA:  lda     $9D                             ; A5AA A5 9D                    ..
+sub_a5aa:
+	lda     $9D                             ; A5AA A5 9D                    ..
 	lsr     a                               ; A5AC 4A                       J
 	lda     $9C                             ; A5AD A5 9C                    ..
 LA5AF:  ror     a                               ; A5AF 6A                       j
@@ -1854,7 +1855,7 @@ LAB8E:  ldx     #$7F                            ; AB8E A2 7F                    
 LAB94:  jsr     LAD05                           ; AB94 20 05 AD                  ..
 	bit     $B0                             ; AB97 24 B0                    $.
 	bvs     LABD3                           ; AB99 70 38                    p8
-	jsr     LA5AA                           ; AB9B 20 AA A5                  ..
+	jsr     sub_a5aa
 	lda     $9C                             ; AB9E A5 9C                    ..
 	and     #$04                            ; ABA0 29 04                    ).
 	beq     LABA6                           ; ABA2 F0 02                    ..
@@ -2158,7 +2159,7 @@ sub_ad8e:
 	clc                                     ; ADA3 18                       .
 	adc     #$40                            ; ADA4 69 40                    i@
 	sta     off_E3+1
-	jsr     LA5AA                           ; ADA8 20 AA A5                  ..
+	jsr     sub_a5aa
 	clc                                     ; ADAB 18                       .
 	adc     LB936,y                         ; ADAC 79 36 B9                 y6.
 	sta     off_E3
@@ -3811,15 +3812,8 @@ LB9B6:	.byte	$08,$10,$10
 	.byte	$20,$20,$40
 	.byte   $80                             ; B9BC 80                       .
 	.byte   $80                             ; B9BD 80                       .
-LB9BE:  brk                                     ; B9BE 00                       .
-	brk                                     ; B9BF 00                       .
-	brk                                     ; B9C0 00                       .
-	ora     ($01,x)                         ; B9C1 01 01                    ..
-	ora     ($02,x)                         ; B9C3 01 02                    ..
-	.byte   $02                             ; B9C5 02                       .
-	.byte   $03                             ; B9C6 03                       .
-	.byte   $03                             ; B9C7 03                       .
-	.byte   $04                             ; B9C8 04                       .
+LB9BE:	.byte	$00,$00,$00,$01,$01,$01,$02,$02
+	.byte	$03,$03,$04
 LB9C9:  .byte   $04                             ; B9C9 04                       .
 	.byte   $04                             ; B9CA 04                       .
 	ora     $05                             ; B9CB 05 05                    ..
