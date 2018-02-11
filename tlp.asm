@@ -41,11 +41,13 @@
 
 TSTDAT		:= $0007
 POKMSK		:= $0010			; POKEY Interrupts: used by IRQ service
+VTIMR1		:= $0210
 SHFLOK		:= $02BE			; Flag for shift and control keys
 CDTMA1		:= $0226			; System timer one jump address
 SRTIMR		:= $022B
 DLIST		:= $0230			; Starting address of the diplay list
 STICK0		:= $0278			; Joystick 0
+CH		:= $02FC
 HATABS		:= $031A			; Handler Address Table
 ICCOM		:= $0342			 
 ICBA		:= $0344
@@ -98,11 +100,13 @@ byte_FF		:= $00FF
 byte_133a	:= $133A
 byte_133e	:= $133E
 byte_1340	:= $1340
+byte_1343	:= $1343
 byte_1344	:= $1344
 byte_1345	:= $1345
 byte_1346	:= $1346
 byte_1347	:= $1347
-L134D           := $134D
+byte_134c	:= $134C
+off_134d	:= $134D
 L2000           := $2000
 L3E33           := $3E33
 L4000           := $4000
@@ -124,11 +128,11 @@ sub_a000:
 	lda     #<LB8DF
 	ldx     #>LB8DF
 	jsr     sub_a89f
-LA022:  lda     $02FC                           ; A022 AD FC 02                 ...
+LA022:  lda     CH
 	cmp     #$FF                            ; A025 C9 FF                    ..
 	beq     LA022                           ; A027 F0 F9                    ..
 	ldx     #$FF                            ; A029 A2 FF                    ..
-	stx     $02FC                           ; A02B 8E FC 02                 ...
+	stx     CH
 	cmp     #$1F                            ; A02E C9 1F                    ..
 	bne     LA04F                           ; A030 D0 1D                    ..
 	jsr     sub_a33d
@@ -152,7 +156,7 @@ LA054:  lda     #$46                            ; A054 A9 46                    
 	jsr     sub_b242
 	lda     $02EB                           ; A059 AD EB 02                 ...
 	bpl     LA054                           ; A05C 10 F6                    ..
-LA05E:  jsr     LA963                           ; A05E 20 63 A9                  c.
+LA05E:  jsr     sub_a963
 	jsr     LAB35                           ; A061 20 35 AB                  5.
 	jsr     LA12C                           ; A064 20 2C A1                  ,.
 	lda     byte_CC
@@ -278,7 +282,7 @@ LA12B:  rts                                     ; A12B 60                       
 ; ----------------------------------------------------------------------------
 LA12C:  lda     $B9                             ; A12C A5 B9                    ..
 	beq     LA12B                           ; A12E F0 FB                    ..
-	jmp     (L134D)                         ; A130 6C 4D 13                 lM.
+	jmp     (off_134d)
 
 ; ----------------------------------------------------------------------------
 
@@ -330,17 +334,17 @@ LA16D:  sty     $CF                             ; A16D 84 CF                    
 	jmp     LA1FE                           ; A171 4C FE A1                 L..
 
 ; ----------------------------------------------------------------------------
-LA174:  sty     $134E                           ; A174 8C 4E 13                 .N.
-	sta     L134D                           ; A177 8D 4D 13                 .M.
+LA174:  sty     off_134d+1
+	sta     off_134d
 	dex                                     ; A17A CA                       .
 	stx     $B9                             ; A17B 86 B9                    ..
 	jmp     LA1FE                           ; A17D 4C FE A1                 L..
 
 ; ----------------------------------------------------------------------------
-LA180:  sty     $134E                           ; A180 8C 4E 13                 .N.
-	sta     L134D                           ; A183 8D 4D 13                 .M.
+LA180:  sty     off_134d+1
+	sta     off_134d
 	jsr     LA1FE                           ; A186 20 FE A1                  ..
-	jmp     (L134D)                         ; A189 6C 4D 13                 lM.
+	jmp     (off_134d)
 
 ; ----------------------------------------------------------------------------
 LA18C:  bit     $1350                           ; A18C 2C 50 13                 ,P.
@@ -1526,7 +1530,8 @@ LA952:  sta     $A6                             ; A952 85 A6                    
 LA962:  rts                                     ; A962 60                       `
 
 ; ----------------------------------------------------------------------------
-LA963:  ldx     $02FC                           ; A963 AE FC 02                 ...
+sub_a963:  
+	ldx     CH
 	inx                                     ; A966 E8                       .
 	bne     LA976                           ; A967 D0 0D                    ..
 	lda     $02DC                           ; A969 AD DC 02                 ...
@@ -1590,7 +1595,7 @@ LA9D0:  stx     CONSOL
 	stx     $D40A                           ; A9D3 8E 0A D4                 ...
 	dex                                     ; A9D6 CA                       .
 	bpl     LA9D0                           ; A9D7 10 F7                    ..
-	stx     $02FC                           ; A9D9 8E FC 02                 ...
+	stx     CH
 	rts                                     ; A9DC 60                       `
 
 ; ----------------------------------------------------------------------------
@@ -2912,12 +2917,12 @@ sub_b2fa:
 ; ----------------------------------------------------------------------------
 LB312:  bpl     LB322                           ; B312 10 0E                    ..
 	lda     byte_1347
-	sta     $1343                           ; B317 8D 43 13                 .C.
+	sta     byte_1343
 	tax                                     ; B31A AA                       .
 	lda     #$00                            ; B31B A9 00                    ..
 	sta     byte_1346
 	beq     LB325                           ; B320 F0 03                    ..
-LB322:  ldx     $1343                           ; B322 AE 43 13                 .C.
+LB322:  ldx     byte_1343
 LB325:  cpx     #$46                            ; B325 E0 46                    .F
 	beq     LB339                           ; B327 F0 10                    ..
 	ldx     #$02                            ; B329 A2 02                    ..
@@ -2974,7 +2979,9 @@ LB380:  cli                                     ; B380 58                       
 	ldy     $133F                           ; B382 AC 3F 13                 .?.
 	cpy     byte_133e
 	beq     LB380                           ; B388 F0 F6                    ..
-LB38A:  lda     $0F00,y                         ; B38A B9 00 0F                 ...
+
+sub_b38a:  
+	lda     $0F00,y                         ; B38A B9 00 0F                 ...
 	and     #$7F                            ; B38D 29 7F                    ).
 	sta     byte_1347
 	iny                                     ; B392 C8                       .
@@ -3409,10 +3416,10 @@ LB655:  lda     byte_1340
 	sta     $D200                           ; B686 8D 00 D2                 ...
 	lda     #$A0                            ; B689 A9 A0                    ..
 	sta     $D201                           ; B68B 8D 01 D2                 ...
-	lda     #$DE                            ; B68E A9 DE                    ..
-	sta     $0210                           ; B690 8D 10 02                 ...
-	lda     #$B5                            ; B693 A9 B5                    ..
-	sta     $0211                           ; B695 8D 11 02                 ...
+	lda     #<sub_b5de
+	sta     VTIMR1
+	lda     #>sub_b5de
+	sta     VTIMR1+1
 	lda     POKMSK
 	ora     #$01                            ; B69A 09 01                    ..
 	jsr     sub_b549
@@ -3449,10 +3456,10 @@ sub_b6c9:
 	beq     sub_b6c9
 	ldy     #$05                            ; B6CD A0 05                    ..
 	sei                                     ; B6CF 78                       x
-LB6D0:  lda     $1330,y                         ; B6D0 B9 30 13                 .0.
+:	lda     $1330,y                         ; B6D0 B9 30 13                 .0.
 	sta     $020A,y                         ; B6D3 99 0A 02                 ...
 	dey                                     ; B6D6 88                       .
-	bpl     LB6D0                           ; B6D7 10 F7                    ..
+	bpl     :-
 	cli                                     ; B6D9 58                       X
 	sty     byte_1346
 	iny                                     ; B6DD C8                       .
@@ -3488,7 +3495,7 @@ sub_b709:
 	ldy     $133F                           ; B70B AC 3F 13                 .?.
 	cpy     byte_133e
 	beq     sub_b709
-	jsr     LB38A                           ; B713 20 8A B3                  ..
+	jsr     sub_b38a
 	ldy     #$01                            ; B716 A0 01                    ..
 	rts                                     ; B718 60                       `
 
