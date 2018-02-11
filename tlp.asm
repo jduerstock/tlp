@@ -293,6 +293,8 @@ LA12C:  lda     $B9                             ; A12C A5 B9                    
 	jmp     (L134D)                         ; A130 6C 4D 13                 lM.
 
 ; ----------------------------------------------------------------------------
+
+sub_a133:
 	ldy     $DC                             ; A133 A4 DC                    ..
 	lda     $DB                             ; A135 A5 DB                    ..
 	ldx     $FF                             ; A137 A6 FF                    ..
@@ -1000,6 +1002,8 @@ LA5AF:  ror     a                               ; A5AF 6A                       
 	rts                                     ; A5B4 60                       `
 
 ; ----------------------------------------------------------------------------
+
+sub_a5b5:
 	lda     $DC                             ; A5B5 A5 DC                    ..
 	and     #$04                            ; A5B7 29 04                    ).
 	beq     LA5E3                           ; A5B9 F0 28                    .(
@@ -1042,6 +1046,8 @@ LA5F6:  ldx     #$00                            ; A5F6 A2 00                    
 	rts                                     ; A5FE 60                       `
 
 ; ----------------------------------------------------------------------------
+
+sub_a5ff:
 	lda     $3E2E                           ; A5FF AD 2E 3E                 ..>
 	cmp     #$50                            ; A602 C9 50                    .P
 	bne     LA614                           ; A604 D0 0E                    ..
@@ -1075,6 +1081,8 @@ LA638:  jsr     sub_ab54
 LA63D:  jmp     sub_ab54
 
 ; ----------------------------------------------------------------------------
+
+sub_a640:
 	lda     $DC                             ; A640 A5 DC                    ..
 	ldx     $DB                             ; A642 A6 DB                    ..
 	and     #$07                            ; A644 29 07                    ).
@@ -1113,6 +1121,8 @@ LA67B:  sta     $3E10,x                         ; A67B 9D 10 3E                 
 	rts                                     ; A681 60                       `
 
 ; ----------------------------------------------------------------------------
+
+sub_A682:
 	jsr     sub_a8b3
 	lda     $BA                             ; A685 A5 BA                    ..
 	sta     $C9                             ; A687 85 C9                    ..
@@ -4006,13 +4016,16 @@ LBADA:  .byte   $03                             ; BADA 03                       
 	.byte   $01                             ; BAE1 01                       .
 
 LBAE2:	.byte	>(sub_a8b3-1)
-	lda     $A5                             ; BAE3 A5 A5                    ..
-	ldx     $A1                             ; BAE5 A6 A1                    ..
+	.byte	>(sub_a5b5-1)
+	.byte	>(sub_a5ff-1)
+	.byte	>(sub_a640-1)
+	.byte	>(sub_a133-1)
 
 LBAE7:	.byte   <(sub_a8b3-1)
-	ldy     $FE,x                           ; BAE8 B4 FE                    ..
-	.byte   $3F                             ; BAEA 3F                       ?
-	.byte   $32                             ; BAEB 32                       2
+	.byte	<(sub_a5b5-1)
+	.byte	<(sub_a5ff-1)
+	.byte	<(sub_a640-1)
+	.byte	<(sub_a133-1)
 
 byte_BAEC:
 	.byte   %00000000                       ; ........
