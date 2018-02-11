@@ -60,6 +60,7 @@ HPOSM1		:= $D005
 GRACTL		:= $D01D			; Turn on/off player missiles or latch triggers
 CONSOL		:= $D01F
 
+AUDCTL		:= $D208
 STIMER		:= $D209
 IRQEN		:= $D20E
 IRQST		:= IRQEN
@@ -3164,7 +3165,7 @@ sub_b4a5:
 	sta     $D20F                           ; B4AF 8D 0F D2                 ...
 	sta     $D20A                           ; B4B2 8D 0A D2                 ...
 	lda     #$78                            ; B4B5 A9 78                    .x
-	sta     $D208                           ; B4B7 8D 08 D2                 ...
+	sta     AUDCTL
 	ldx     #$07                            ; B4BA A2 07                    ..
 	lda     #$A0                            ; B4BC A9 A0                    ..
 LB4BE:  sta     $D200,x                         ; B4BE 9D 00 D2                 ...
@@ -3413,7 +3414,7 @@ LB655:  lda     byte_1340
 	sta     $FE                             ; B67A 85 FE                    ..
 	sta     $FD                             ; B67C 85 FD                    ..
 	sta     $134C                           ; B67E 8D 4C 13                 .L.
-	sta     $D208                           ; B681 8D 08 D2                 ...
+	sta     AUDCTL
 	lda     #$45                            ; B684 A9 45                    .E
 	sta     $D200                           ; B686 8D 00 D2                 ...
 	lda     #$A0                            ; B689 A9 A0                    ..
@@ -3468,7 +3469,7 @@ sub_b6c9:
 	sty     $030A                           ; B6DE 8C 0A 03                 ...
 	sty     byte_133a
 	lda     #$57                            ; B6E4 A9 57                    .W
-	jmp     LB802                           ; B6E6 4C 02 B8                 L..
+	jmp     sub_b802
 
 ; ----------------------------------------------------------------------------
 
@@ -3526,7 +3527,7 @@ LB724:  lda     #$00                            ; B724 A9 00                    
 	sta     $0308                           ; B749 8D 08 03                 ...
 	ldy     #$40                            ; B74C A0 40                    .@
 	lda     #$58                            ; B74E A9 58                    .X
-	jsr     LB802                           ; B750 20 02 B8                  ..
+	jsr     sub_b802
 	bpl     LB756                           ; B753 10 01                    ..
 	rts                                     ; B755 60                       `
 
@@ -3535,7 +3536,7 @@ LB756:  sei                                     ; B756 78                       
 	lda     #$73                            ; B757 A9 73                    .s
 	sta     $D20F                           ; B759 8D 0F D2                 ...
 	lda     $1338                           ; B75C AD 38 13                 .8.
-	sta     $D208                           ; B75F 8D 08 D2                 ...
+	sta     AUDCTL
 	ldy     #$07                            ; B762 A0 07                    ..
 LB764:  lda     $1330,y                         ; B764 B9 30 13                 .0.
 	sta     $D200,y                         ; B767 99 00 D2                 ...
@@ -3587,7 +3588,7 @@ LB7A8:  lda     #'R'
 	sta     $0308                           ; B7C4 8D 08 03                 ...
 	ldy     #$40                            ; B7C7 A0 40                    .@
 	lda     #$53                            ; B7C9 A9 53                    .S
-	jsr     LB802                           ; B7CB 20 02 B8                  ..
+	jsr     sub_b802
 	lda     byte_1347
 	ora     $02EA                           ; B7D1 0D EA 02                 ...
 	sta     $02EA                           ; B7D4 8D EA 02                 ...
@@ -3616,7 +3617,9 @@ LB7F3:  jsr     LB7FA                           ; B7F3 20 FA B7                 
 LB7FA:  stx     $030A                           ; B7FA 8E 0A 03                 ...
 	ldy     #$00                            ; B7FD A0 00                    ..
 	sty     $030B                           ; B7FF 8C 0B 03                 ...
-LB802:  sta     $0302                           ; B802 8D 02 03                 ...
+
+sub_b802:
+	sta     $0302                           ; B802 8D 02 03                 ...
 	ldx     #$01                            ; B805 A2 01                    ..
 	stx     $0301                           ; B807 8E 01 03                 ...
 	sty     $0303                           ; B80A 8C 03 03                 ...
@@ -5398,7 +5401,7 @@ sub_BF93:
 	lda	$CB
 	pha                                     ; BFA0 48                       H
 	lda     #$00                            ; BFA1 A9 00                    ..
-LBFA3:  sta     $CB                             ; BFA3 85 CB                    ..
+	sta     $CB                             ; BFA3 85 CB                    ..
 	jsr     sub_b420
 	pla                                     ; BFA8 68                       h
 	sta     $CB                             ; BFA9 85 CB                    ..
@@ -5408,10 +5411,10 @@ LBFA3:  sta     $CB                             ; BFA3 85 CB                    
 	beq     LBFC2                           ; BFB2 F0 0E                    ..
 	ldx     byte_B2
 	cpx     #$02                            ; BFB6 E0 02                    ..
-	bcs     LBFBD                           ; BFB8 B0 03                    ..
-LBFBA:  sec                                     ; BFBA 38                       8
+	bcs     :+
+	sec                                     ; BFBA 38                       8
 	bne     LBFD8                           ; BFBB D0 1B                    ..
-LBFBD:  ldx     #$02                            ; BFBD A2 02                    ..
+:	ldx     #$02                            ; BFBD A2 02                    ..
 	jsr     sub_b43f
 LBFC2:  lda     #$FF                            ; BFC2 A9 FF                    ..
 	sta     byte_133a
