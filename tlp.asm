@@ -49,6 +49,7 @@ STICK0		:= $0278			; Joystick 0
 HATABS		:= $031A			; Handler Address Table
 ICCOM		:= $0342			 
 ICBA		:= $0344
+ICAX1		:= $034A
 
 HPOSM0		:= $D004
 HPOSM1		:= $D005
@@ -898,11 +899,11 @@ LA50A:  ldy     #$FF                            ; A50A A0 FF                    
 LA514:  sta     $A7                             ; A514 85 A7                    ..
 	sty     $E7                             ; A516 84 E7                    ..
 	sec                                     ; A518 38                       8
-	lda     $FA                             ; A519 A5 FA                    ..
+	lda     off_FA
 	sbc     $F2                             ; A51B E5 F2                    ..
 	eor     #$FF                            ; A51D 49 FF                    I.
 	sta     $F6                             ; A51F 85 F6                    ..
-	lda     $FB                             ; A521 A5 FB                    ..
+	lda     off_FA+1
 	sbc     $F3                             ; A523 E5 F3                    ..
 	eor     #$FF                            ; A525 49 FF                    I.
 	sta     $F7                             ; A527 85 F7                    ..
@@ -1976,11 +1977,11 @@ LAC7C:  ldy     $CA                             ; AC7C A4 CA                    
 	and     #$0F                            ; AC8E 29 0F                    ).
 	tay                                     ; AC90 A8                       .
 	lda     LBA02,y                         ; AC91 B9 02 BA                 ...
-	sta     $FA                             ; AC94 85 FA                    ..
+	sta     off_FA
 	lda     #$80                            ; AC96 A9 80                    ..
 	sta     $CA                             ; AC98 85 CA                    ..
 LAC9A:  ldy     #$00                            ; AC9A A0 00                    ..
-	lda     $FB                             ; AC9C A5 FB                    ..
+	lda     off_FA+1
 	jsr     LAD3A                           ; AC9E 20 3A AD                  :.
 	lda     $FA                             ; ACA1 A5 FA                    ..
 	jsr     LAD3A                           ; ACA3 20 3A AD                  :.
@@ -2771,7 +2772,7 @@ sub_b206:
 	lda     LB96E+1,y
 	sta     ICCOM,x
 	lda     LB96E+2,y
-	sta     $034A,x
+	sta     ICAX1,x
 	lda     LB96E+3,y
 	sta     $034B,x
 	lda     LB96E+4,y
@@ -2880,18 +2881,18 @@ LB2D7:  sty     $0378                           ; B2D7 8C 78 03                 
 	ldx     #$30                            ; B2DA A2 30                    .0
 LB2DC:  ldy     #$09                            ; B2DC A0 09                    ..
 	sty     ICCOM+$30
-	ldy     $FA                             ; B2E1 A4 FA                    ..
+	ldy     off_FA
 	sty     ICBA+$30
-	ldy     $FB                             ; B2E6 A4 FB                    ..
+	ldy     off_FA+1
 	sty     ICBA+1+$30
 	jsr     CIOV
 	lda     #$40                            ; B2EE A9 40                    .@
 	clc                                     ; B2F0 18                       .
-	adc     $FA                             ; B2F1 65 FA                    e.
-	sta     $FA                             ; B2F3 85 FA                    ..
-	bcc     LB2F9                           ; B2F5 90 02                    ..
-	inc     $FB                             ; B2F7 E6 FB                    ..
-LB2F9:  rts                                     ; B2F9 60                       `
+	adc     off_FA
+	sta     off_FA
+	bcc     LB2F9
+	inc     off_FA+1
+LB2F9:	rts                                     ; B2F9 60                       `
 
 ; ----------------------------------------------------------------------------
 
@@ -3578,7 +3579,7 @@ LB7A8:  lda     #'R'
 	ldy     #$40                            ; B7C7 A0 40                    .@
 	lda     #$53                            ; B7C9 A9 53                    .S
 	jsr     LB802                           ; B7CB 20 02 B8                  ..
-	lda     $1347                           ; B7CE AD 47 13                 .G.
+	lda     byte_1347
 	ora     $02EA                           ; B7D1 0D EA 02                 ...
 	sta     $02EA                           ; B7D4 8D EA 02                 ...
 	cpy     #$00                            ; B7D7 C0 00                    ..
@@ -5383,7 +5384,7 @@ sub_bf86:
 sub_BF93:
 	jsr	sub_b47d
 	lda	#$51
-	sta	$1347
+	sta	byte_1347
 	sta	byte_133a
 	lda	$CB
 	pha                                     ; BFA0 48                       H
