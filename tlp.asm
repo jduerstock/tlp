@@ -57,6 +57,7 @@ CONSOL		:= $D01F
 
 STIMER		:= $D209
 IRQEN		:= $D20E
+PMBASE		:= $D407
 IRQST		:= IRQEN
 
 PORTA		:= $D300
@@ -431,7 +432,7 @@ LA1FE:  jsr     LA120                           ; A1FE 20 20 A1                 
 ;*                                                                             *
 ;*                                  sub_a214                                   *
 ;*                                                                             *
-;*                         Display List Initialization                         *
+;*                          Initialize Display List                            *
 ;*                                                                             *
 ;*******************************************************************************
 
@@ -548,26 +549,28 @@ sub_a214:					; A214
 	lda     #$10                            ; list at $10CA.
 	sta     $130F                           ; 
 
-;** (n) ************************************************************************
-	ldx     #$00                            ; Loop 192 times
-:	lda     off_F4+1                        ;
-	sta     $04C0,x                         ; 
-	lda     off_F4                          ;
-	sta     $0400,x                         ; 
+;** (n) Create a table of pointers to 192 scan lines ****************************
+	ldx     #$00                            ; Create a table of pointers...
+:	lda     off_F4+1                        ; to the screen RAM for 192 scan
+	sta     $04C0,x                         ; lines. LSB in $0400-$04BF...
+	lda     off_F4                          ; MSB in $04C0-$057F...
+	sta     $0400,x                         ; starting with $2010, $0238, ..., $3DE8
 	inx                                     ; 
 	cpx     #$C0                            ; Quit at 192 iterations
 	beq	:+                              ;
 	lda     off_F4                          ;
-	adc     #$28                            ; 
+	adc     #$28                            ; Add 40 bytes (1 row)
 	sta     off_F4                          ;
 	bcc	:-                              ;
 	inc     off_F4+1                        ;
 	bne	:-				; End Loop
 
-:	lda     #$03                            ; A2B7 A9 03                    ..
-	sta     GRACTL				; Turn on Player/Missiles
-	lda     #$04                            ; A2BC A9 04                    ..
-	sta     $D407                           ; A2BE 8D 07 D4                 ...
+:	lda     #$03                            ; 
+	sta     GRACTL				; Enable display of PMG
+
+	lda     #$04                            ; PMG will be stored in page 4
+	sta     PMBASE                          ; 
+
 	lda     #$55                            ; A2C1 A9 55                    .U
 	sta     $D00C                           ; A2C3 8D 0C D0                 ...
 	lda     #$00                            ; A2C6 A9 00                    ..
