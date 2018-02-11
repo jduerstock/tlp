@@ -51,7 +51,9 @@ CH		:= $02FC
 HATABS		:= $031A			; Handler Address Table
 ICCOM		:= $0342			 
 ICBA		:= $0344
+ICBL		:= $0348
 ICAX1		:= $034A
+ICAX2		:= $034B
 
 HPOSM0		:= $D004
 HPOSM1		:= $D005
@@ -2779,15 +2781,15 @@ sub_b206:
 	lda     LB96E+2,y
 	sta     ICAX1,x
 	lda     LB96E+3,y
-	sta     $034B,x
+	sta     ICAX2,x
 	lda     LB96E+4,y
 	sta     ICBA,x
 	lda     LB96E+5,y
 	sta     ICBA+1,x
 	lda     LB96E+6,y
-	sta     $0348,x
+	sta     ICBL,x
 	lda     LB96E+7,y
-	sta     $0349,x
+	sta     ICBL+1,x
 	pla
 	jmp     CIOV
 
@@ -3786,8 +3788,8 @@ LB96E:  .byte   $10,$03,$0D,$00
 	.addr	LB898
 	.byte	$40,$00
 
-LB9A6:	.byte	$06,$09,$00,$BA
-LB9AA:	.byte	$00,$00,$00,$EC
+LB9A6:	.byte	$06,$09,$00,>byte_BAEC
+LB9AA:	.byte	$00,$00,$00,<byte_BAEC
 LB9AE:	.byte	$00,$80,$44,$84
 LB9B2:  .byte   $0C,$0D,$BC,$BE
 LB9B6:	.byte	$08,$10,$10
