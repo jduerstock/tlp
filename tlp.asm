@@ -49,9 +49,26 @@ STICK0		:= $0278			; Joystick 0
 HATABS		:= $031A			; Handler Address Table
 ICCOM		:= $0342			 
 ICBA		:= $0344
+
+HPOSM0		:= $D004
+HPOSM1		:= $D005
 GRACTL		:= $D01D			; Turn on/off player missiles or latch triggers
 CONSOL		:= $D01F
+
+STIMER		:= $D209
+IRQEN		:= $D20E
+IRQST		:= IRQEN
+
+PORTA		:= $D300
+PACTL		:= $D302
+PBCTL		:= $D303
+
 DMACTL		:= $D400			; Direct Memory Access (DMA) control
+
+CIOV		:= $E456
+SIOV		:= $E459
+SETVBV		:= $E45C
+XITVBV		:= $E462
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -100,17 +117,6 @@ L3030           := $3030
 L3E33           := $3E33
 L4000           := $4000
 charset_sm	:= $BC44			; 6x6 character set
-HPOSM0		:= $D004
-HPOSM1		:= $D005
-IRQEN		:= $D20E
-PORTA		:= $D300
-PACTL		:= $D302
-PBCTL		:= $D303
-IRQST		:= IRQEN
-CIOV		:= $E456
-SIOV		:= $E459
-SETVBV		:= $E45C
-XITVBV		:= $E462
 ; ----------------------------------------------------------------------------
 
 sub_a000:
@@ -288,6 +294,8 @@ LA12C:  lda     $B9                             ; A12C A5 B9                    
 	jmp     (L134D)                         ; A130 6C 4D 13                 lM.
 
 ; ----------------------------------------------------------------------------
+
+sub_a133:
 	ldy     $DC                             ; A133 A4 DC                    ..
 	lda     $DB                             ; A135 A5 DB                    ..
 	ldx     $FF                             ; A137 A6 FF                    ..
@@ -793,7 +801,7 @@ LA433:  ldx     #$03                            ; A433 A2 03                    
 	bne     LA433                           ; A442 D0 EF                    ..
 	lda     #$04                            ; A444 A9 04                    ..
 	bne     LA433                           ; A446 D0 EB                    ..
-	jsr     LA8B3                           ; A448 20 B3 A8                  ..
+	jsr     sub_a8b3
 	ldx     $DA                             ; A44B A6 DA                    ..
 	bne     LA45F                           ; A44D D0 10                    ..
 	ldx     #$03                            ; A44F A2 03                    ..
@@ -997,6 +1005,8 @@ LA5AF:  ror     a                               ; A5AF 6A                       
 	rts                                     ; A5B4 60                       `
 
 ; ----------------------------------------------------------------------------
+
+sub_a5b5:
 	lda     $DC                             ; A5B5 A5 DC                    ..
 	and     #$04                            ; A5B7 29 04                    ).
 	beq     LA5E3                           ; A5B9 F0 28                    .(
@@ -1039,6 +1049,8 @@ LA5F6:  ldx     #$00                            ; A5F6 A2 00                    
 	rts                                     ; A5FE 60                       `
 
 ; ----------------------------------------------------------------------------
+
+sub_a5ff:
 	lda     $3E2E                           ; A5FF AD 2E 3E                 ..>
 	cmp     #$50                            ; A602 C9 50                    .P
 	bne     LA614                           ; A604 D0 0E                    ..
@@ -1072,6 +1084,8 @@ LA638:  jsr     sub_ab54
 LA63D:  jmp     sub_ab54
 
 ; ----------------------------------------------------------------------------
+
+sub_a640:
 	lda     $DC                             ; A640 A5 DC                    ..
 	ldx     $DB                             ; A642 A6 DB                    ..
 	and     #$07                            ; A644 29 07                    ).
@@ -1110,7 +1124,9 @@ LA67B:  sta     $3E10,x                         ; A67B 9D 10 3E                 
 	rts                                     ; A681 60                       `
 
 ; ----------------------------------------------------------------------------
-	jsr     LA8B3                           ; A682 20 B3 A8                  ..
+
+sub_A682:
+	jsr     sub_a8b3
 	lda     $BA                             ; A685 A5 BA                    ..
 	sta     $C9                             ; A687 85 C9                    ..
 	bne     LA695                           ; A689 D0 0A                    ..
@@ -1427,7 +1443,8 @@ sub_a89f:
 	jmp     LA3B2                           ; A8B0 4C B2 A3                 L..
 
 ; ----------------------------------------------------------------------------
-LA8B3:  jsr     sub_a7f6
+sub_a8b3:
+	jsr     sub_a7f6
 	cmp     #$40                            ; A8B6 C9 40                    .@
 	bcs     LA901                           ; A8B8 B0 47                    .G
 	jsr     LA8DC                           ; A8BA 20 DC A8                  ..
@@ -1437,7 +1454,7 @@ LA8B3:  jsr     sub_a7f6
 	sta     $BD                             ; A8C3 85 BD                    ..
 	lda     $DC                             ; A8C5 A5 DC                    ..
 	sta     $BE                             ; A8C7 85 BE                    ..
-	bcc     LA8B3                           ; A8C9 90 E8                    ..
+	bcc     sub_a8b3
 LA8CB:  jsr     LA8DC                           ; A8CB 20 DC A8                  ..
 	lda     $BB                             ; A8CE A5 BB                    ..
 	and     #$1F                            ; A8D0 29 1F                    ).
@@ -1445,7 +1462,7 @@ LA8CB:  jsr     LA8DC                           ; A8CB 20 DC A8                 
 	sta     $BB                             ; A8D4 85 BB                    ..
 	lda     $DC                             ; A8D6 A5 DC                    ..
 	sta     $BC                             ; A8D8 85 BC                    ..
-	bcc     LA8B3                           ; A8DA 90 D7                    ..
+	bcc     sub_a8b3
 LA8DC:  and     #$1F                            ; A8DC 29 1F                    ).
 	sta     $DC                             ; A8DE 85 DC                    ..
 	lda     #$00                            ; A8E0 A9 00                    ..
@@ -2179,7 +2196,7 @@ LADEE:  sta     $AB                             ; ADEE 85 AB                    
 	rts                                     ; ADF0 60                       `
 
 ; ----------------------------------------------------------------------------
-	jsr     LA8B3                           ; ADF1 20 B3 A8                  ..
+	jsr     sub_a8b3
 	lda     $BA                             ; ADF4 A5 BA                    ..
 	sta     $C9                             ; ADF6 85 C9                    ..
 	bne     LADFF                           ; ADF8 D0 05                    ..
@@ -2446,7 +2463,7 @@ LAFD7:  clc                                     ; AFD7 18                       
 	bne     LAFE2                           ; AFDE D0 02                    ..
 LAFE0:  lda     #$40                            ; AFE0 A9 40                    .@
 LAFE2:  adc     off_E3
-	sta     off_E3                             ; AFE4 85 E3                    ..
+	sta     off_E3
 	bcc     LAF91                           ; AFE6 90 A9                    ..
 	inc     off_E3+1
 	bne     LAF91                           ; AFEA D0 A5                    ..
@@ -3309,16 +3326,17 @@ LB5B0:  lda     #$00                            ; B5B0 A9 00                    
 	lda     #$3C                            ; B5BD A9 3C                    .<
 	sta     PACTL
 	ldx     #$00                            ; B5C2 A2 00                    ..
-	lda     #$52                            ; B5C4 A9 52                    .R
+	lda     #'R'
 	jsr     sub_bf86
 	bne     LB5D5                           ; B5C9 D0 0A                    ..
-	lda     #$D6                            ; B5CB A9 D6                    ..
-	sta     $031B,x                         ; B5CD 9D 1B 03                 ...
-	lda     #$B5                            ; B5D0 A9 B5                    ..
-	sta     $031C,x                         ; B5D2 9D 1C 03                 ...
+	lda     #<LB5D6
+	sta     HATABS+1,x
+	lda     #>LB5D6
+	sta     HATABS+2,x
 LB5D5:  rts                                     ; B5D5 60                       `
 
 ; ----------------------------------------------------------------------------
+LB5D6:
 	.addr	$B667
 	.addr	$B6A4
 	.addr	$B708
@@ -3411,7 +3429,7 @@ LB655:  lda     byte_1340
 	lda     POKMSK
 	ora     #$01                            ; B69A 09 01                    ..
 	jsr     sub_b549
-	sta     $D209                           ; B69F 8D 09 D2                 ...
+	sta     STIMER
 	ldy     #$01                            ; B6A2 A0 01                    ..
 	rts                                     ; B6A4 60                       `
 
@@ -3999,13 +4017,18 @@ LBADA:  .byte   $03                             ; BADA 03                       
 	.byte   $80                             ; BADF 80                       .
 	brk                                     ; BAE0 00                       .
 	.byte   $01                             ; BAE1 01                       .
-LBAE2:  tay                                     ; BAE2 A8                       .
-	lda     $A5                             ; BAE3 A5 A5                    ..
-	ldx     $A1                             ; BAE5 A6 A1                    ..
-LBAE7:  .byte   $B2                             ; BAE7 B2                       .
-	ldy     $FE,x                           ; BAE8 B4 FE                    ..
-	.byte   $3F                             ; BAEA 3F                       ?
-	.byte   $32                             ; BAEB 32                       2
+
+LBAE2:	.byte	>(sub_a8b3-1)
+	.byte	>(sub_a5b5-1)
+	.byte	>(sub_a5ff-1)
+	.byte	>(sub_a640-1)
+	.byte	>(sub_a133-1)
+
+LBAE7:	.byte   <(sub_a8b3-1)
+	.byte	<(sub_a5b5-1)
+	.byte	<(sub_a5ff-1)
+	.byte	<(sub_a640-1)
+	.byte	<(sub_a133-1)
 
 byte_BAEC:
 	.byte   %00000000                       ; ........
