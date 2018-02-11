@@ -63,6 +63,7 @@ CONSOL		:= $D01F
 AUDCTL		:= $D208
 STIMER		:= $D209
 IRQEN		:= $D20E
+PMBASE		:= $D407
 IRQST		:= IRQEN
 
 PORTA		:= $D300
@@ -82,6 +83,7 @@ XITVBV		:= $E462
 ;*                                                                             *
 ;*******************************************************************************
 
+L0070           := $0070
 L0080           := $0080
 
 byte_B2		:= $00B2
@@ -425,7 +427,7 @@ LA1FE:  jsr     LA120                           ; A1FE 20 20 A1                 
 ;*                                                                             *
 ;*                                  sub_a214                                   *
 ;*                                                                             *
-;*                         Display List Initialization                         *
+;*                          Initialize Display List                            *
 ;*                                                                             *
 ;*******************************************************************************
 
@@ -534,7 +536,7 @@ sub_a214:					; A214
 	sta     byte_E2                         ; Let byte_E2 = $40 TODO
 
 ;** (n) Call sub to derive body of display list #2 *****************************
-	jsr     LB1AB                           ; A28D 20 AB B1                  ..
+	jsr     LB1AB                           ; TODO
 
 ;** (n) Write tail of display list #2 ******************************************
 	lda     #$CA                            ; Tell ANTIC to jump
@@ -542,24 +544,28 @@ sub_a214:					; A214
 	lda     #$10                            ; list at $10CA.
 	sta     $130F                           ; 
 
-	ldx     #$00                            ; A29A A2 00                    ..
-:	lda     off_F4+1
-	sta     $04C0,x                         ; A29E 9D C0 04                 ...
-	lda     off_F4
-	sta     $0400,x                         ; A2A3 9D 00 04                 ...
-	inx                                     ; A2A6 E8                       .
-	cpx     #$C0                            ; A2A7 E0 C0                    ..
-	beq	:+
-	lda     off_F4
-	adc     #$28                            ; A2AD 69 28                    i(
-	sta     off_F4
-	bcc	:-
-	inc     off_F4+1
-	bne	:-
-:	lda     #$03                            ; A2B7 A9 03                    ..
-	sta     GRACTL				; Turn on Player/Missiles
-	lda     #$04                            ; A2BC A9 04                    ..
-	sta     $D407                           ; A2BE 8D 07 D4                 ...
+;** (n) Create a table of pointers to 192 scan lines ****************************
+	ldx     #$00                            ; Create a table of pointers...
+:	lda     off_F4+1                        ; to the screen RAM for 192 scan
+	sta     $04C0,x                         ; lines. LSB in $0400-$04BF...
+	lda     off_F4                          ; MSB in $04C0-$057F...
+	sta     $0400,x                         ; starting with $2010, $0238, ..., $3DE8
+	inx                                     ; 
+	cpx     #$C0                            ; Quit at 192 iterations
+	beq	:+                              ;
+	lda     off_F4                          ;
+	adc     #$28                            ; Add 40 bytes (1 row)
+	sta     off_F4                          ;
+	bcc	:-                              ;
+	inc     off_F4+1                        ;
+	bne	:-				; End Loop
+
+:	lda     #$03                            ; 
+	sta     GRACTL				; Enable display of PMG
+
+	lda     #$04                            ; PMG will be stored in page 4
+	sta     PMBASE                          ; 
+
 	lda     #$55                            ; A2C1 A9 55                    .U
 	sta     $D00C                           ; A2C3 8D 0C D0                 ...
 	lda     #$00                            ; A2C6 A9 00                    ..
