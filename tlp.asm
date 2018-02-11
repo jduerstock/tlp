@@ -49,9 +49,26 @@ STICK0		:= $0278			; Joystick 0
 HATABS		:= $031A			; Handler Address Table
 ICCOM		:= $0342			 
 ICBA		:= $0344
+
+HPOSM0		:= $D004
+HPOSM1		:= $D005
 GRACTL		:= $D01D			; Turn on/off player missiles or latch triggers
 CONSOL		:= $D01F
+
+STIMER		:= $D209
+IRQEN		:= $D20E
+IRQST		:= IRQEN
+
+PORTA		:= $D300
+PACTL		:= $D302
+PBCTL		:= $D303
+
 DMACTL		:= $D400			; Direct Memory Access (DMA) control
+
+CIOV		:= $E456
+SIOV		:= $E459
+SETVBV		:= $E45C
+XITVBV		:= $E462
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -99,17 +116,6 @@ L3030           := $3030
 L3E33           := $3E33
 L4000           := $4000
 charset_sm	:= $BC44			; 6x6 character set
-HPOSM0		:= $D004
-HPOSM1		:= $D005
-IRQEN		:= $D20E
-PORTA		:= $D300
-PACTL		:= $D302
-PBCTL		:= $D303
-IRQST		:= IRQEN
-CIOV		:= $E456
-SIOV		:= $E459
-SETVBV		:= $E45C
-XITVBV		:= $E462
 ; ----------------------------------------------------------------------------
 
 sub_a000:
@@ -2443,7 +2449,7 @@ LAFD7:  clc                                     ; AFD7 18                       
 	bne     LAFE2                           ; AFDE D0 02                    ..
 LAFE0:  lda     #$40                            ; AFE0 A9 40                    .@
 LAFE2:  adc     off_E3
-	sta     off_E3                             ; AFE4 85 E3                    ..
+	sta     off_E3
 	bcc     LAF91                           ; AFE6 90 A9                    ..
 	inc     off_E3+1
 	bne     LAF91                           ; AFEA D0 A5                    ..
@@ -3306,16 +3312,17 @@ LB5B0:  lda     #$00                            ; B5B0 A9 00                    
 	lda     #$3C                            ; B5BD A9 3C                    .<
 	sta     PACTL
 	ldx     #$00                            ; B5C2 A2 00                    ..
-	lda     #$52                            ; B5C4 A9 52                    .R
+	lda     #'R'
 	jsr     sub_bf86
 	bne     LB5D5                           ; B5C9 D0 0A                    ..
-	lda     #$D6                            ; B5CB A9 D6                    ..
-	sta     $031B,x                         ; B5CD 9D 1B 03                 ...
-	lda     #$B5                            ; B5D0 A9 B5                    ..
-	sta     $031C,x                         ; B5D2 9D 1C 03                 ...
+	lda     #<LB5D6
+	sta     HATABS+1,x
+	lda     #>LB5D6
+	sta     HATABS+2,x
 LB5D5:  rts                                     ; B5D5 60                       `
 
 ; ----------------------------------------------------------------------------
+LB5D6:
 	.addr	$B667
 	.addr	$B6A4
 	.addr	$B708
@@ -3408,7 +3415,7 @@ LB655:  lda     byte_1340
 	lda     POKMSK
 	ora     #$01                            ; B69A 09 01                    ..
 	jsr     sub_b549
-	sta     $D209                           ; B69F 8D 09 D2                 ...
+	sta     STIMER
 	ldy     #$01                            ; B6A2 A0 01                    ..
 	rts                                     ; B6A4 60                       `
 
@@ -3996,6 +4003,7 @@ LBADA:  .byte   $03                             ; BADA 03                       
 	.byte   $80                             ; BADF 80                       .
 	brk                                     ; BAE0 00                       .
 	.byte   $01                             ; BAE1 01                       .
+
 LBAE2:  tay                                     ; BAE2 A8                       .
 	lda     $A5                             ; BAE3 A5 A5                    ..
 	ldx     $A1                             ; BAE5 A6 A1                    ..
