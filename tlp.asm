@@ -796,7 +796,7 @@ LA433:  ldx     #$03                            ; A433 A2 03                    
 	bne     LA433                           ; A442 D0 EF                    ..
 	lda     #$04                            ; A444 A9 04                    ..
 	bne     LA433                           ; A446 D0 EB                    ..
-	jsr     LA8B3                           ; A448 20 B3 A8                  ..
+	jsr     sub_a8b3
 	ldx     $DA                             ; A44B A6 DA                    ..
 	bne     LA45F                           ; A44D D0 10                    ..
 	ldx     #$03                            ; A44F A2 03                    ..
@@ -1113,7 +1113,7 @@ LA67B:  sta     $3E10,x                         ; A67B 9D 10 3E                 
 	rts                                     ; A681 60                       `
 
 ; ----------------------------------------------------------------------------
-	jsr     LA8B3                           ; A682 20 B3 A8                  ..
+	jsr     sub_a8b3
 	lda     $BA                             ; A685 A5 BA                    ..
 	sta     $C9                             ; A687 85 C9                    ..
 	bne     LA695                           ; A689 D0 0A                    ..
@@ -1430,7 +1430,8 @@ sub_a89f:
 	jmp     LA3B2                           ; A8B0 4C B2 A3                 L..
 
 ; ----------------------------------------------------------------------------
-LA8B3:  jsr     sub_a7f6
+sub_a8b3:
+	jsr     sub_a7f6
 	cmp     #$40                            ; A8B6 C9 40                    .@
 	bcs     LA901                           ; A8B8 B0 47                    .G
 	jsr     LA8DC                           ; A8BA 20 DC A8                  ..
@@ -1440,7 +1441,7 @@ LA8B3:  jsr     sub_a7f6
 	sta     $BD                             ; A8C3 85 BD                    ..
 	lda     $DC                             ; A8C5 A5 DC                    ..
 	sta     $BE                             ; A8C7 85 BE                    ..
-	bcc     LA8B3                           ; A8C9 90 E8                    ..
+	bcc     sub_a8b3
 LA8CB:  jsr     LA8DC                           ; A8CB 20 DC A8                  ..
 	lda     $BB                             ; A8CE A5 BB                    ..
 	and     #$1F                            ; A8D0 29 1F                    ).
@@ -1448,7 +1449,7 @@ LA8CB:  jsr     LA8DC                           ; A8CB 20 DC A8                 
 	sta     $BB                             ; A8D4 85 BB                    ..
 	lda     $DC                             ; A8D6 A5 DC                    ..
 	sta     $BC                             ; A8D8 85 BC                    ..
-	bcc     LA8B3                           ; A8DA 90 D7                    ..
+	bcc     sub_a8b3
 LA8DC:  and     #$1F                            ; A8DC 29 1F                    ).
 	sta     $DC                             ; A8DE 85 DC                    ..
 	lda     #$00                            ; A8E0 A9 00                    ..
@@ -2182,7 +2183,7 @@ LADEE:  sta     $AB                             ; ADEE 85 AB                    
 	rts                                     ; ADF0 60                       `
 
 ; ----------------------------------------------------------------------------
-	jsr     LA8B3                           ; ADF1 20 B3 A8                  ..
+	jsr     sub_a8b3
 	lda     $BA                             ; ADF4 A5 BA                    ..
 	sta     $C9                             ; ADF6 85 C9                    ..
 	bne     LADFF                           ; ADF8 D0 05                    ..
@@ -4004,10 +4005,11 @@ LBADA:  .byte   $03                             ; BADA 03                       
 	brk                                     ; BAE0 00                       .
 	.byte   $01                             ; BAE1 01                       .
 
-LBAE2:  tay                                     ; BAE2 A8                       .
+LBAE2:	.byte	>(sub_a8b3-1)
 	lda     $A5                             ; BAE3 A5 A5                    ..
 	ldx     $A1                             ; BAE5 A6 A1                    ..
-LBAE7:  .byte   $B2                             ; BAE7 B2                       .
+
+LBAE7:	.byte   <(sub_a8b3-1)
 	ldy     $FE,x                           ; BAE8 B4 FE                    ..
 	.byte   $3F                             ; BAEA 3F                       ?
 	.byte   $32                             ; BAEB 32                       2
