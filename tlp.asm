@@ -49,6 +49,7 @@ DLIST		:= $0230			; Starting address of the diplay list
 STICK0		:= $0278			; Joystick 0
 CH		:= $02FC
 DCOMND		:= $0302
+DSTATS		:= $0303
 HATABS		:= $031A			; Handler Address Table
 ICCOM		:= $0342			 
 ICBA		:= $0344
@@ -3630,7 +3631,7 @@ sub_b802:
 	sta     DCOMND
 	ldx     #$01                            ; B805 A2 01                    ..
 	stx     $0301                           ; B807 8E 01 03                 ...
-	sty     $0303                           ; B80A 8C 03 03                 ...
+	sty     DSTATS
 	ldy     #$50                            ; B80D A0 50                    .P
 	sty     $0300                           ; B80F 8C 00 03                 ...
 	ldy     #$08                            ; B812 A0 08                    ..
