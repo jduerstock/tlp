@@ -48,6 +48,7 @@ SRTIMR		:= $022B
 DLIST		:= $0230			; Starting address of the diplay list
 STICK0		:= $0278			; Joystick 0
 CH		:= $02FC
+DCOMND		:= $0302
 HATABS		:= $031A			; Handler Address Table
 ICCOM		:= $0342			 
 ICBA		:= $0344
@@ -2024,14 +2025,14 @@ LACCD:  sec                                     ; ACCD 38                       
 	lda     off_E3
 	sbc     #$40                            ; ACD0 E9 40                    .@
 	sta     off_E3
-	bcs     LACE2                           ; ACD4 B0 0C                    ..
+	bcs     LACE2
 	dec     off_E3+1
 	lda     off_E3+1
 	cmp     #$40                            ; ACDA C9 40                    .@
-	bcs     LACE2                           ; ACDC B0 04                    ..
+	bcs     LACE2
 	lda     #$9F                            ; ACDE A9 9F                    ..
 	sta     $E4                             ; ACE0 85 E4                    ..
-LACE2:  rts                                     ; ACE2 60                       `
+LACE2:	rts                                     ; ACE2 60                       `
 
 ; ----------------------------------------------------------------------------
 sub_ace3:
@@ -2170,9 +2171,9 @@ LADB2:  lda     #$BF                            ; ADB2 A9 BF                    
 	clc                                     ; ADC0 18                       .
 	adc     $0400,x                         ; ADC1 7D 00 04                 }..
 	sta     off_E3
-	bcc     LADCA                           ; ADC6 90 02                    ..
+	bcc     :+
 	inc     $E4                             ; ADC8 E6 E4                    ..
-LADCA:  rts                                     ; ADCA 60                       `
+:	rts
 
 ; ----------------------------------------------------------------------------
 LADCB:  and     #$07                            ; ADCB 29 07                    ).
@@ -3626,7 +3627,7 @@ LB7FA:  stx     $030A                           ; B7FA 8E 0A 03                 
 	sty     $030B                           ; B7FF 8C 0B 03                 ...
 
 sub_b802:
-	sta     $0302                           ; B802 8D 02 03                 ...
+	sta     DCOMND
 	ldx     #$01                            ; B805 A2 01                    ..
 	stx     $0301                           ; B807 8E 01 03                 ...
 	sty     $0303                           ; B80A 8C 03 03                 ...
