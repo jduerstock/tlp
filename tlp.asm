@@ -48,6 +48,9 @@ SRTIMR		:= $022B
 DLIST		:= $0230			; Starting address of the diplay list
 STICK0		:= $0278			; Joystick 0
 CH		:= $02FC
+DCOMND		:= $0302
+DSTATS		:= $0303
+DBUF		:= $0304
 HATABS		:= $031A			; Handler Address Table
 ICCOM		:= $0342			 
 ICBA		:= $0344
@@ -106,6 +109,7 @@ off_EC		:= $00EC
 off_F4		:= $00F4
 off_FA		:= $00FA
 byte_FF		:= $00FF
+byte_1330	:= $1330
 byte_133a	:= $133A
 byte_133e	:= $133E
 byte_1340	:= $1340
@@ -890,7 +894,7 @@ LA4D1:  dex                                     ; A4D1 CA                       
 	rts                                     ; A4DC 60                       `
 
 ; ----------------------------------------------------------------------------
-LA4DD:  jsr     LAD8E                           ; A4DD 20 8E AD                  ..
+LA4DD:  jsr     sub_ad8e
 	bit     $B0                             ; A4E0 24 B0                    $.
 	lda     $F8                             ; A4E2 A5 F8                    ..
 	and     #$07                            ; A4E4 29 07                    ).
@@ -1139,11 +1143,11 @@ sub_A682:
 	lda     $BA                             ; A685 A5 BA                    ..
 	sta     $C9                             ; A687 85 C9                    ..
 	bne     LA695                           ; A689 D0 0A                    ..
-	jsr     LAD8E                           ; A68B 20 8E AD                  ..
+	jsr     sub_ad8e
 	lda     $9C                             ; A68E A5 9C                    ..
 	jsr     LA69A                           ; A690 20 9A A6                  ..
 	dec     $C9                             ; A693 C6 C9                    ..
-LA695:  jsr     LAD8E                           ; A695 20 8E AD                  ..
+LA695:  jsr     sub_ad8e
 	lda     $A4                             ; A698 A5 A4                    ..
 LA69A:  and     #$07                            ; A69A 29 07                    ).
 	tax                                     ; A69C AA                       .
@@ -1957,7 +1961,7 @@ LAC3C:  lda     $D8                             ; AC3C A5 D8                    
 	adc     $E6                             ; AC3E 65 E6                    e.
 	adc     $EB                             ; AC40 65 EB                    e.
 	sta     $E6                             ; AC42 85 E6                    ..
-	jsr     LAD8E                           ; AC44 20 8E AD                  ..
+	jsr     sub_ad8e
 	lda     $CA                             ; AC47 A5 CA                    ..
 	cmp     #$7F                            ; AC49 C9 7F                    ..
 	bne     LAC56                           ; AC4B D0 09                    ..
@@ -2023,7 +2027,7 @@ LACB8:  dex                                     ; ACB8 CA                       
 	lda     $CA                             ; ACBB A5 CA                    ..
 	cmp     #$7F                            ; ACBD C9 7F                    ..
 	bne     LACC7                           ; ACBF D0 06                    ..
-	jsr     LACE3                           ; ACC1 20 E3 AC                  ..
+	jsr	sub_ace3
 	jmp     LAC5D                           ; ACC4 4C 5D AC                 L].
 
 ; ----------------------------------------------------------------------------
@@ -2035,17 +2039,18 @@ LACCD:  sec                                     ; ACCD 38                       
 	lda     off_E3
 	sbc     #$40                            ; ACD0 E9 40                    .@
 	sta     off_E3
-	bcs     LACE2                           ; ACD4 B0 0C                    ..
+	bcs     LACE2
 	dec     off_E3+1
 	lda     off_E3+1
 	cmp     #$40                            ; ACDA C9 40                    .@
-	bcs     LACE2                           ; ACDC B0 04                    ..
+	bcs     LACE2
 	lda     #$9F                            ; ACDE A9 9F                    ..
 	sta     $E4                             ; ACE0 85 E4                    ..
-LACE2:  rts                                     ; ACE2 60                       `
+LACE2:	rts                                     ; ACE2 60                       `
 
 ; ----------------------------------------------------------------------------
-LACE3:  sec                                     ; ACE3 38                       8
+sub_ace3:
+	sec                                     ; ACE3 38                       8
 	lda     off_E3
 	sbc     #$28                            ; ACE6 E9 28                    .(
 	sta     off_E3
@@ -2071,22 +2076,22 @@ LAD05:  asl     a                               ; AD05 0A                       
 	rol     $E6                             ; AD09 26 E6                    &.
 	clc                                     ; AD0B 18                       .
 	adc     $D9                             ; AD0C 65 D9                    e.
-	bcc     LAD13                           ; AD0E 90 03                    ..
+	bcc     :+
 	inc     $E6                             ; AD10 E6 E6                    ..
 	clc                                     ; AD12 18                       .
-LAD13:  adc     $E8                             ; AD13 65 E8                    e.
+:	adc     $E8                             ; AD13 65 E8                    e.
 	sta     off_E5
 	lda     off_E5+1
 	adc     $E9                             ; AD19 65 E9                    e.
 	sta     off_E5+1
-	jsr     LAD8E                           ; AD1D 20 8E AD                  ..
+	jsr     sub_ad8e
 	lda     $A4                             ; AD20 A5 A4                    ..
 	jsr     LADCB                           ; AD22 20 CB AD                  ..
 	ldx     #$05                            ; AD25 A2 05                    ..
 LAD27:  jsr     LAD34                           ; AD27 20 34 AD                  4.
 	dex                                     ; AD2A CA                       .
 	bmi	:+
-	jsr     LACE3                           ; AD2D 20 E3 AC                  ..
+	jsr     sub_ace3
 	jmp     LAD27                           ; AD30 4C 27 AD                 L'.
 
 ; ----------------------------------------------------------------------------
@@ -2146,7 +2151,8 @@ LAD8B:  sta     (off_E3),y
 LAD8D:  rts                                     ; AD8D 60                       `
 
 ; ----------------------------------------------------------------------------
-LAD8E:  bit     $C9                             ; AD8E 24 C9                    $.
+sub_ad8e:
+	bit     $C9                             ; AD8E 24 C9                    $.
 	bvs     LADB2                           ; AD90 70 20                    p 
 	lda     #$7F                            ; AD92 A9 7F                    ..
 	sec                                     ; AD94 38                       8
@@ -2180,9 +2186,9 @@ LADB2:  lda     #$BF                            ; ADB2 A9 BF                    
 	clc                                     ; ADC0 18                       .
 	adc     $0400,x                         ; ADC1 7D 00 04                 }..
 	sta     off_E3
-	bcc     LADCA                           ; ADC6 90 02                    ..
+	bcc     :+
 	inc     $E4                             ; ADC8 E6 E4                    ..
-LADCA:  rts                                     ; ADCA 60                       `
+:	rts
 
 ; ----------------------------------------------------------------------------
 LADCB:  and     #$07                            ; ADCB 29 07                    ).
@@ -3534,10 +3540,10 @@ LB724:  lda     #$00                            ; B724 A9 00                    
 	sta     $1342                           ; B72E 8D 42 13                 .B.
 	sta     $1341                           ; B731 8D 41 13                 .A.
 	sta     $0309                           ; B734 8D 09 03                 ...
-	lda     #$30                            ; B737 A9 30                    .0
-	sta     $0304                           ; B739 8D 04 03                 ...
-	lda     #$13                            ; B73C A9 13                    ..
-	sta     $0305                           ; B73E 8D 05 03                 ...
+	lda     #<byte_1330
+	sta     DBUF
+	lda     #>byte_1330
+	sta     DBUF+1
 	lda     byte_133a
 	sta     $030A                           ; B744 8D 0A 03                 ...
 	lda     #$09                            ; B747 A9 09                    ..
@@ -3599,9 +3605,9 @@ LB7A8:  lda     #'R'
 	lda     #>LB81A
 	sta     HATABS+2,x
 	lda     #$EA                            ; B7BA A9 EA                    ..
-	sta     $0304                           ; B7BC 8D 04 03                 ...
+	sta     DBUF
 	lda     #$02                            ; B7BF A9 02                    ..
-	sta     $0305                           ; B7C1 8D 05 03                 ...
+	sta     DBUF+1
 	sta     $0308                           ; B7C4 8D 08 03                 ...
 	ldy     #$40                            ; B7C7 A0 40                    .@
 	lda     #$53                            ; B7C9 A9 53                    .S
@@ -3636,10 +3642,10 @@ LB7FA:  stx     $030A                           ; B7FA 8E 0A 03                 
 	sty     $030B                           ; B7FF 8C 0B 03                 ...
 
 sub_b802:
-	sta     $0302                           ; B802 8D 02 03                 ...
+	sta     DCOMND
 	ldx     #$01                            ; B805 A2 01                    ..
 	stx     $0301                           ; B807 8E 01 03                 ...
-	sty     $0303                           ; B80A 8C 03 03                 ...
+	sty     DSTATS
 	ldy     #$50                            ; B80D A0 50                    .P
 	sty     $0300                           ; B80F 8C 00 03                 ...
 	ldy     #$08                            ; B812 A0 08                    ..
