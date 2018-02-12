@@ -1208,18 +1208,18 @@ LA69A:  and     #$07                            ; A69A 29 07                    
 LA6A2:  ldy     #$00                            ; A6A2 A0 00                    ..
 	sty     $022F                           ; A6A4 8C 2F 02                 ./.
 	ldx     #$1B                            ; A6A7 A2 1B                    ..
-LA6A9:  lda     LA6D0,x                         ; A6A9 BD D0 A6                 ...
+:	lda     LA6D0,x                         ; A6A9 BD D0 A6                 ...
 	sta     a:L0080,x                       ; A6AC 9D 80 00                 ...
 	dex                                     ; A6AF CA                       .
-	bpl     LA6A9                           ; A6B0 10 F7                    ..
+	bpl     :-
 	tya                                     ; A6B2 98                       .
 	bit     $BA                             ; A6B3 24 BA                    $.
 	jsr     L0080                           ; A6B5 20 80 00                  ..
 	ldx     #$09                            ; A6B8 A2 09                    ..
-LA6BA:  lda     LA6EC,x                         ; A6BA BD EC A6                 ...
+:	lda     LA6EC,x                         ; A6BA BD EC A6                 ...
 	sta     a:$82,x                         ; A6BD 9D 82 00                 ...
 	dex                                     ; A6C0 CA                       .
-	bpl     LA6BA                           ; A6C1 10 F7                    ..
+	bpl     :-
 	ldx     #$08                            ; A6C3 A2 08                    ..
 	lda     #$20                            ; A6C5 A9 20                    . 
 	jsr     L0080                           ; A6C7 20 80 00                  ..
@@ -1229,11 +1229,11 @@ LA6BA:  lda     LA6EC,x                         ; A6BA BD EC A6                 
 
 ; ----------------------------------------------------------------------------
 LA6D0:  sta     L2000,y                         ; A6D0 99 00 20                 .. 
-	bvs     LA6DE                           ; A6D3 70 09                    p.
+	bvs     :+
 	sta     L4000,y                         ; A6D5 99 00 40                 ..@
 	sta     L6000,y                         ; A6D8 99 00 60                 ..`
 	sta     L8000,y                         ; A6DB 99 00 80                 ...
-LA6DE:  iny                                     ; A6DE C8                       .
+:	iny                                     ; A6DE C8                       .
 	bne     LA6D0                           ; A6DF D0 EF                    ..
 	inc     $82                             ; A6E1 E6 82                    ..
 	inc     $87                             ; A6E3 E6 87                    ..
@@ -1321,9 +1321,9 @@ LA771:  stx     byte_D9                         ; A771 86 D9                    
 	bit     byte_D9                         ; A773 24 D9                    $.
 	ldy     #$0F                            ; A775 A0 0F                    ..
 LA777:  lda     (off_E3),y
-	bvc     LA77D                           ; A779 50 02                    P.
+	bvc     :+
 	eor     #$FF                            ; A77B 49 FF                    I.
-LA77D:  sta     $D8                             ; A77D 85 D8                    ..
+:	sta     $D8                             ; A77D 85 D8                    ..
 	ldx     #$07                            ; A77F A2 07                    ..
 	lda     #$00                            ; A781 A9 00                    ..
 LA783:  rol     $D8                             ; A783 26 D8                    &.
@@ -1432,8 +1432,7 @@ LA82D:  adc     $A6                             ; A82D 65 A6                    
 	sta     $9E                             ; A836 85 9E                    ..
 	bcc     LA83C                           ; A838 90 02                    ..
 	inc     $9F                             ; A83A E6 9F                    ..
-LA83C:  .byte   $A5                             ; A83C A5                       .
-LA83D:  .byte   $9F                             ; A83D 9F                       .
+LA83C:	lda	$9F
 	cmp     #$01                            ; A83E C9 01                    ..
 	bcc     LA856                           ; A840 90 14                    ..
 	lda     $9E                             ; A842 A5 9E                    ..
@@ -4007,7 +4006,7 @@ LBA54:  .byte   $2F                             ; BA54 2F                       
 	.byte   $BB                             ; BA60 BB                       .
 	.byte   $5A                             ; BA61 5A                       Z
 	bmi     LBAC3                           ; BA62 30 5F                    0_
-	inc     LA83D                           ; BA64 EE 3D A8                 .=.
+	.byte	$EE,$3D,$A8
 LBA67:  bvs     LBAA9                           ; BA67 70 40                    p@
 	bvs     LBAAB                           ; BA69 70 40                    p@
 	rti                                     ; BA6B 40                       @
