@@ -67,6 +67,7 @@ ICAX2		:= $034B
 HPOSM0		:= $D004
 HPOSM1		:= $D005
 HPOSM2		:= $D006
+HPOSM3		:= $D007
 GRACTL		:= $D01D			; Turn on/off player missiles or latch triggers
 CONSOL		:= $D01F
 
@@ -1096,7 +1097,7 @@ LA5F0:  ldx     #$00                            ; A5F0 A2 00                    
 	lda     #$FF                            ; A5F2 A9 FF                    ..
 	bne     LA5D9                           ; A5F4 D0 E3                    ..
 LA5F6:  ldx     #$00                            ; A5F6 A2 00                    ..
-	stx     $D007                           ; A5F8 8E 07 D0                 ...
+	stx     HPOSM3
 	stx     HPOSM2
 	rts                                     ; A5FE 60                       `
 
@@ -1722,7 +1723,7 @@ LAA44:  eor     #$02                            ; AA44 49 02                    
 	tax                                     ; AA48 AA                       .
 	beq     LAA4D                           ; AA49 F0 02                    ..
 	ldx     #$32                            ; AA4B A2 32                    .2
-LAA4D:  stx     $D007                           ; AA4D 8E 07 D0                 ...
+LAA4D:  stx     HPOSM3
 	inx                                     ; AA50 E8                       .
 	inx                                     ; AA51 E8                       .
 	stx     HPOSM2
