@@ -3809,16 +3809,10 @@ LB942:  .byte   $80,$40,$20,$10,$08,$04,$02,$01
 	sbc     (byte_E0,x)                         ; B94B E1 E0                    ..
 	.byte   $E2                             ; B94D E2                       .
 LB94E:  brk                                     ; B94E 00                       .
-LB94F:  .byte   $7F                             ; B94F 7F                       .
-	.byte   $3F                             ; B950 3F                       ?
-	.byte   $1F                             ; B951 1F                       .
-	.byte   $0F                             ; B952 0F                       .
-LB953:  .byte   $07                             ; B953 07                       .
-	.byte   $03                             ; B954 03                       .
-	.byte   $01                             ; B955 01                       .
+LB94F:  .byte   $7F,$3F,$1F,$0F,$07,$03,$01
 LB956:  .byte   $80                             ; B956 80                       .
 	cpy     #$E0                            ; B957 C0 E0                    ..
-	beq     LB953                           ; B959 F0 F8                    ..
+	.byte	$F0,$F8
 	.byte   $FC                             ; B95B FC                       .
 LB95C:  .byte   $FE                             ; B95C FE                       .
 	brk                                     ; B95D 00                       .
