@@ -3101,13 +3101,15 @@ sub_b3c6:
 	jmp     LB3B5                           ; B3D5 4C B5 B3                 L..
 
 ; ----------------------------------------------------------------------------
-:	jsr     LB3E7                           ; B3D8 20 E7 B3                  ..
+:	jsr     sub_b3e7
 	sta     $D20D                           ; B3DB 8D 0D D2                 ...
 LB3DE:  lda     IRQST
 	and     #$08                            ; B3E1 29 08                    ).
 	beq     LB3DE                           ; B3E3 F0 F9                    ..
 	bne     LB3B5                           ; B3E5 D0 CE                    ..
-LB3E7:  ldy     $1341                           ; B3E7 AC 41 13                 .A.
+
+sub_b3e7:  
+	ldy     $1341                           ; B3E7 AC 41 13                 .A.
 	lda     $1310,y                         ; B3EA B9 10 13                 ...
 	pha                                     ; B3ED 48                       H
 	jsr     sub_b55c
@@ -3466,7 +3468,7 @@ LB652:  jmp     LB3B5                           ; B652 4C B5 B3                 
 ; ----------------------------------------------------------------------------
 LB655:  lda     byte_1340
 	beq     LB652                           ; B658 F0 F8                    ..
-	jsr     LB3E7                           ; B65A 20 E7 B3                  ..
+	jsr     sub_b3e7
 	eor     #$FF                            ; B65D 49 FF                    I.
 	sta     $1349                           ; B65F 8D 49 13                 .I.
 	lda     #$0A                            ; B662 A9 0A                    ..
