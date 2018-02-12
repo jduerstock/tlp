@@ -144,6 +144,8 @@ byte_1350	:= $1350
 L2000           := $2000
 L3E33           := $3E33
 L4000           := $4000
+L6000           := $6000
+L8000           := $8000
 charset_sm	:= $BC44			; 6x6 character set
 ; ----------------------------------------------------------------------------
 
@@ -961,15 +963,15 @@ LA4F2:  sta     $AB                             ; A4F2 85 AB                    
 	and     #$07                            ; A500 29 07                    ).
 	tax                                     ; A502 AA                       .
 	lda     LB956,x                         ; A503 BD 56 B9                 .V.
-	bne     LA50A                           ; A506 D0 02                    ..
+	bne     :+
 	inc     $F5                             ; A508 E6 F5                    ..
-LA50A:  ldy     #$FF                            ; A50A A0 FF                    ..
-	bvc     LA514                           ; A50C 50 06                    P.
+:	ldy     #$FF                            ; A50A A0 FF                    ..
+	bvc     :+
 	iny                                     ; A50E C8                       .
 	tax                                     ; A50F AA                       .
-	beq     LA514                           ; A510 F0 02                    ..
+	beq     :+
 	eor     #$FF                            ; A512 49 FF                    I.
-LA514:  sta     $A7                             ; A514 85 A7                    ..
+:	sta     $A7                             ; A514 85 A7                    ..
 	sty     $E7                             ; A516 84 E7                    ..
 	sec                                     ; A518 38                       8
 	lda     off_FA
@@ -1229,8 +1231,8 @@ LA6BA:  lda     LA6EC,x                         ; A6BA BD EC A6                 
 LA6D0:  sta     L2000,y                         ; A6D0 99 00 20                 .. 
 	bvs     LA6DE                           ; A6D3 70 09                    p.
 	sta     L4000,y                         ; A6D5 99 00 40                 ..@
-	sta     $6000,y                         ; A6D8 99 00 60                 ..`
-	sta     $8000,y                         ; A6DB 99 00 80                 ...
+	sta     L6000,y                         ; A6D8 99 00 60                 ..`
+	sta     L8000,y                         ; A6DB 99 00 80                 ...
 LA6DE:  iny                                     ; A6DE C8                       .
 	bne     LA6D0                           ; A6DF D0 EF                    ..
 	inc     $82                             ; A6E1 E6 82                    ..
@@ -1895,7 +1897,7 @@ LAB65:  pha                                     ; AB65 48                       
 	bne     LAB77                           ; AB6A D0 0B                    ..
 	stx     $E6                             ; AB6C 86 E6                    ..
 	stx     $D8                             ; AB6E 86 D8                    ..
-	jsr     LABFF                           ; AB70 20 FF AB                  ..
+	jsr	sub_abff
 	dec     $C9                             ; AB73 C6 C9                    ..
 	ldx     $C9                             ; AB75 A6 C9                    ..
 LAB77:  pla                                     ; AB77 68                       h
@@ -1907,12 +1909,16 @@ LAB77:  pla                                     ; AB77 68                       
 	ldx     #$FF                            ; AB82 A2 FF                    ..
 	stx     $CA                             ; AB84 86 CA                    ..
 	bne     LABD3                           ; AB86 D0 4B                    .K
+
+; ----------------------------------------------------------------------------
 LAB88:  inc     $A4                             ; AB88 E6 A4                    ..
 	bne     LAB8E                           ; AB8A D0 02                    ..
 	inc     $A5                             ; AB8C E6 A5                    ..
 LAB8E:  ldx     #$7F                            ; AB8E A2 7F                    ..
 	stx     $CA                             ; AB90 86 CA                    ..
-	bne     LABFF                           ; AB92 D0 6B                    .k
+	bne     sub_abff
+
+; ----------------------------------------------------------------------------
 LAB94:  jsr     LAD05                           ; AB94 20 05 AD                  ..
 	bit     $B0                             ; AB97 24 B0                    $.
 	bvs     LABD3                           ; AB99 70 38                    p8
@@ -1973,7 +1979,8 @@ LABEB:  lda     $9D                             ; ABEB A5 9D                    
 LABFE:  rts                                     ; ABFE 60                       `
 
 ; ----------------------------------------------------------------------------
-LABFF:  ldx     byte_B7
+sub_abff:
+	ldx     byte_B7
 	cpx     #$02                            ; AC01 E0 02                    ..
 	bcc     LAC24                           ; AC03 90 1F                    ..
 	bne     LAC11                           ; AC05 D0 0A                    ..
@@ -2464,10 +2471,10 @@ LAF53:  clc                                     ; AF53 18                       
 	bcc     LAF89                           ; AF6E 90 19                    ..
 LAF70:  lda     off_F4
 	sbc     $D4                             ; AF72 E5 D4                    ..
-	sta     off_F4                             ; AF74 85 F4                    ..
-	lda     $F5                             ; AF76 A5 F5                    ..
+	sta     off_F4                          ; AF74 85 F4                    ..
+	lda     off_F4+1
 	sbc     $D5                             ; AF78 E5 D5                    ..
-	sta     $F5                             ; AF7A 85 F5                    ..
+	sta     off_F4+1
 	clc                                     ; AF7C 18                       .
 	lda     off_E3
 	adc     $FA                             ; AF7F 65 FA                    e.
@@ -2502,15 +2509,15 @@ LAF9D:  lda     off_F4
 	cmp     $D7                             ; AFA9 C5 D7                    ..
 	bcc     LAFD7                           ; AFAB 90 2A                    .*
 	bne     LAFB5                           ; AFAD D0 06                    ..
-	lda     off_F4                             ; AFAF A5 F4                    ..
+	lda     off_F4                          ; AFAF A5 F4                    ..
 	cmp     $D6                             ; AFB1 C5 D6                    ..
 	bcc     LAFD7                           ; AFB3 90 22                    ."
-LAFB5:  lda     off_F4                             ; AFB5 A5 F4                    ..
+LAFB5:  lda     off_F4                          ; AFB5 A5 F4                    ..
 	sbc     $D6                             ; AFB7 E5 D6                    ..
-	sta     off_F4                             ; AFB9 85 F4                    ..
-	lda     $F5                             ; AFBB A5 F5                    ..
+	sta     off_F4                          ; AFB9 85 F4                    ..
+	lda     off_F4+1
 	sbc     $D7                             ; AFBD E5 D7                    ..
-	sta     $F5                             ; AFBF 85 F5                    ..
+	sta     off_F4+1
 	bit     $FB                             ; AFC1 24 FB                    $.
 	bvs     LAFCF                           ; AFC3 70 0A                    p.
 	inx                                     ; AFC5 E8                       .
