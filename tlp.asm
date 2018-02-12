@@ -68,12 +68,14 @@ HPOSM0		:= $D004
 HPOSM1		:= $D005
 HPOSM2		:= $D006
 HPOSM3		:= $D007
+SIZEM		:= $D00C			; Size for all missiles
 GRACTL		:= $D01D			; Turn on/off player missiles or latch triggers
 CONSOL		:= $D01F
 
 AUDCTL		:= $D208
 STIMER		:= $D209
-SIZEM		:= $D00C			; Size for all missiles
+SEROUT		:= $D20D
+SERIN		:= SEROUT
 IRQEN		:= $D20E
 PMBASE		:= $D407			; MSB of the player/missile base address
 IRQST		:= IRQEN
@@ -3067,7 +3069,7 @@ sub_b39c:
 	cld                                     ; B39C D8                       .
 	tya                                     ; B39D 98                       .
 	pha                                     ; B39E 48                       H
-	lda     $D20D                           ; B39F AD 0D D2                 ...
+	lda     SERIN
 	jsr     LB3B9                           ; B3A2 20 B9 B3                  ..
 	lda     $D20F                           ; B3A5 AD 0F D2                 ...
 	sta     $D20A                           ; B3A8 8D 0A D2                 ...
@@ -3102,12 +3104,13 @@ sub_b3c6:
 
 ; ----------------------------------------------------------------------------
 :	jsr     sub_b3e7
-	sta     $D20D                           ; B3DB 8D 0D D2                 ...
-LB3DE:  lda     IRQST
+	sta     SEROUT
+:	lda     IRQST
 	and     #$08                            ; B3E1 29 08                    ).
-	beq     LB3DE                           ; B3E3 F0 F9                    ..
+	beq     :-
 	bne     LB3B5                           ; B3E5 D0 CE                    ..
 
+; ----------------------------------------------------------------------------
 sub_b3e7:  
 	ldy     $1341                           ; B3E7 AC 41 13                 .A.
 	lda     $1310,y                         ; B3EA B9 10 13                 ...
