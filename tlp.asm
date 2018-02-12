@@ -1880,6 +1880,7 @@ sub_ab54:
 	jmp     sub_b54f
 
 ; ----------------------------------------------------------------------------
+sub_ab5a:
 	lda     $3E2E                           ; AB5A AD 2E 3E                 ..>
 LAB5D:  sta     $E7                             ; AB5D 85 E7                    ..
 	sec                                     ; AB5F 38                       8
@@ -4064,15 +4065,13 @@ LBAC3:  dex                                     ; BAC3 CA                       
 LBACA:	.byte	>(sub_a6f6-1)
 	.byte	>(sub_a448-1),0,0
 	.byte	>(sub_a682-1)
-	.byte	>(sub_adf1-1)
-	brk                                     ; BAD0 00                       .
-	.byte   $AB                             ; BAD1 AB                       .
+	.byte	>(sub_adf1-1),0
+	.byte   >(sub_ab5a-1)
 LBAD2:	.byte	<(sub_a6f6-1)
 	.byte	<(sub_a448-1),0,0
 	.byte	<(sub_a682-1)
-	.byte	<(sub_adf1-1)
-	brk                                     ; BAD8 00                       .
-	.byte   $59                             ; BAD9 59                       Y
+	.byte	<(sub_adf1-1),0
+	.byte	<(sub_ab5a-1)
 LBADA:  .byte   $03                             ; BADA 03                       .
 	.byte   $80                             ; BADB 80                       .
 	brk                                     ; BADC 00                       .
