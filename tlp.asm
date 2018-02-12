@@ -66,6 +66,7 @@ ICAX2		:= $034B
 
 HPOSM0		:= $D004
 HPOSM1		:= $D005
+HPOSM2		:= $D006
 GRACTL		:= $D01D			; Turn on/off player missiles or latch triggers
 CONSOL		:= $D01F
 
@@ -1096,7 +1097,7 @@ LA5F0:  ldx     #$00                            ; A5F0 A2 00                    
 	bne     LA5D9                           ; A5F4 D0 E3                    ..
 LA5F6:  ldx     #$00                            ; A5F6 A2 00                    ..
 	stx     $D007                           ; A5F8 8E 07 D0                 ...
-	stx     $D006                           ; A5FB 8E 06 D0                 ...
+	stx     HPOSM2
 	rts                                     ; A5FE 60                       `
 
 ; ----------------------------------------------------------------------------
@@ -1724,7 +1725,7 @@ LAA44:  eor     #$02                            ; AA44 49 02                    
 LAA4D:  stx     $D007                           ; AA4D 8E 07 D0                 ...
 	inx                                     ; AA50 E8                       .
 	inx                                     ; AA51 E8                       .
-	stx     $D006                           ; AA52 8E 06 D0                 ...
+	stx     HPOSM2
 	rts                                     ; AA55 60                       `
 
 ; ----------------------------------------------------------------------------
@@ -2944,9 +2945,9 @@ LB2C6:  ldy     #$3F                            ; B2C6 A0 3F                    
 	bpl     :-
 :	lda     #$9B                            ; B2D1 A9 9B                    ..
 	iny                                     ; B2D3 C8                       .
-	beq     LB2D7                           ; B2D4 F0 01                    ..
+	beq     :+
 	iny                                     ; B2D6 C8                       .
-LB2D7:  sty     $0378                           ; B2D7 8C 78 03                 .x.
+:	sty     ICBL+$30
 	ldx     #$30                            ; B2DA A2 30                    .0
 LB2DC:  ldy     #$09                            ; B2DC A0 09                    ..
 	sty     ICCOM+$30
