@@ -983,16 +983,16 @@ LA532:  bit     $B0                             ; A532 24 B0                    
 	ldy     #$00                            ; A534 A0 00                    ..
 	lda     $AB                             ; A536 A5 AB                    ..
 	beq     LA53D                           ; A538 F0 03                    ..
-	jsr     LA596                           ; A53A 20 96 A5                  ..
+	jsr     sub_a596
 LA53D:  ldx     off_F4
 	beq     LA549                           ; A53F F0 08                    ..
 	lda     $E7                             ; A541 A5 E7                    ..
-LA543:  jsr     LA596                           ; A543 20 96 A5                  ..
+LA543:  jsr     sub_a596
 	dex                                     ; A546 CA                       .
 	bne     LA543                           ; A547 D0 FA                    ..
 LA549:  lda     $A7                             ; A549 A5 A7                    ..
 	beq     LA550                           ; A54B F0 03                    ..
-	jsr     LA596                           ; A54D 20 96 A5                  ..
+	jsr     sub_a596
 LA550:  inc     $F6                             ; A550 E6 F6                    ..
 	bne     LA558                           ; A552 D0 04                    ..
 	inc     $F7                             ; A554 E6 F7                    ..
@@ -1032,16 +1032,18 @@ LA58C:  lda     #$62                            ; A58C A9 62                    
 	rts                                     ; A595 60                       `
 
 ; ----------------------------------------------------------------------------
-LA596:  bvc     LA59C                           ; A596 50 04                    P.
+sub_a596:  
+	bvc     :+
 	and     (off_E3),y
 	bvs     LA59E                           ; A59A 70 02                    p.
-LA59C:  ora     (off_E3),y
+:  	ora     (off_E3),y
 LA59E:  sta     (off_E3),y
 	iny                                     ; A5A0 C8                       .
 	rts                                     ; A5A1 60                       `
 
 ; ----------------------------------------------------------------------------
-LA5A2:  lda     $A5                             ; A5A2 A5 A5                    ..
+sub_a5a2:
+	lda     $A5                             ; A5A2 A5 A5                    ..
 	lsr     a                               ; A5A4 4A                       J
 	lda     $A4                             ; A5A5 A5 A4                    ..
 	jmp     LA5AF                           ; A5A7 4C AF A5                 L..
@@ -2222,7 +2224,7 @@ LADB2:  lda     #$BF                            ; ADB2 A9 BF                    
 	tax                                     ; ADB7 AA                       .
 	lda     $04C0,x                         ; ADB8 BD C0 04                 ...
 	sta     off_E3+1
-	jsr     LA5A2                           ; ADBD 20 A2 A5                  ..
+	jsr     sub_a5a2
 	clc                                     ; ADC0 18                       .
 	adc     $0400,x                         ; ADC1 7D 00 04                 }..
 	sta     off_E3
