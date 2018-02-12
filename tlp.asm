@@ -159,9 +159,9 @@ sub_a000:
 	lda     #<LB8DF
 	ldx     #>LB8DF
 	jsr     sub_a89f
-LA022:  lda     CH
+:	lda     CH
 	cmp     #$FF                            ; A025 C9 FF                    ..
-	beq     LA022                           ; A027 F0 F9                    ..
+	beq     :-
 	ldx     #$FF                            ; A029 A2 FF                    ..
 	stx     CH
 	cmp     #$1F                            ; A02E C9 1F                    ..
@@ -1035,9 +1035,9 @@ LA58C:  lda     #$62                            ; A58C A9 62                    
 sub_a596:  
 	bvc     :+
 	and     (off_E3),y
-	bvs     LA59E                           ; A59A 70 02                    p.
+	bvs     :++
 :  	ora     (off_E3),y
-LA59E:  sta     (off_E3),y
+:	sta     (off_E3),y
 	iny                                     ; A5A0 C8                       .
 	rts                                     ; A5A1 60                       `
 
@@ -2885,11 +2885,13 @@ LB253:  jsr     LB238                           ; B253 20 38 B2                 
 	ldy     #$08                            ; B25C A0 08                    ..
 	lda     $B1                             ; B25E A5 B1                    ..
 	bne     LB268                           ; B260 D0 06                    ..
-	lda     #$1C                            ; B262 A9 1C                    ..
-	ldx     #$B9                            ; B264 A2 B9                    ..
-	bne     LB26C                           ; B266 D0 04                    ..
-LB268:  lda     #$13                            ; B268 A9 13                    ..
-	ldx     #$B9                            ; B26A A2 B9                    ..
+	lda     #<LB91C
+	ldx     #>LB91C
+	bne     LB26C                           ; will always branch
+
+; ----------------------------------------------------------------------------
+LB268:  lda     #<LB913
+	ldx     #>LB913
 LB26C:  jsr     sub_a89f
 	jmp     LB719                           ; B26F 4C 19 B7                 L..
 
@@ -2902,8 +2904,8 @@ sub_b272:
 	ldy     #$01                            ; B27D A0 01                    ..
 	sty     byte_B2
 	ldy     #$10                            ; B281 A0 10                    ..
-	lda     #$25                            ; B283 A9 25                    .%
-	ldx     #$B9                            ; B285 A2 B9                    ..
+	lda     #<LB925
+	ldx     #>LB925
 	jmp     sub_a89f
 
 ; ----------------------------------------------------------------------------
@@ -3787,8 +3789,14 @@ LB8C2:
 
 LB8DF:
 	RString "After the phone has a high pitch tone, PRESS RETURN!"
+
+LB913:
 	RString "300  baud"
+
+LB91C:
 	RString "1200 baud"
+
+LB925:
 	RString "Microbit 300 baud"
 
 LB936:
