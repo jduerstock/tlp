@@ -797,7 +797,7 @@ LA3C8:  lda     #$BA                            ; A3C8 A9 BA                    
 LA3DD:  rts                                     ; A3DD 60                       `
 
 ; ----------------------------------------------------------------------------
-	jsr     LA890                           ; A3DE 20 90 A8                  ..
+	jsr     sub_a890
 	sta     byte_D9                         ; A3E1 85 D9                    ..
 	sec                                     ; A3E3 38                       8
 	lda     $A4                             ; A3E4 A5 A4                    ..
@@ -1479,13 +1479,15 @@ LA882:  lda     #$06                            ; A882 A9 06                    
 	ldy     #$0C                            ; A884 A0 0C                    ..
 LA886:  bit     $CA                             ; A886 24 CA                    $.
 	sty     $D8                             ; A888 84 D8                    ..
-	bvs     LA88D                           ; A88A 70 01                    p.
+	bvs     :+
 	rts                                     ; A88C 60                       `
 
 ; ----------------------------------------------------------------------------
-LA88D:  asl     a                               ; A88D 0A                       .
+:	asl     a                               ; A88D 0A                       .
 	bvs     LA89C                           ; A88E 70 0C                    p.
-LA890:  bit     $CA                             ; A890 24 CA                    $.
+
+sub_a890:  
+	bit     $CA                             ; A890 24 CA                    $.
 	lda     #$05                            ; A892 A9 05                    ..
 	ldy     #$08                            ; A894 A0 08                    ..
 	sty     $D8                             ; A896 84 D8                    ..
@@ -1952,7 +1954,7 @@ LABAB:  sbc     #$06                            ; ABAB E9 06                    
 	bne     LABD3                           ; ABCD D0 04                    ..
 	lda     #$5F                            ; ABCF A9 5F                    ._
 LABD1:  sta     (off_E3),y
-LABD3:  jsr     LA890                           ; ABD3 20 90 A8                  ..
+LABD3:  jsr     sub_a890
 	ldy     $D8                             ; ABD6 A4 D8                    ..
 	clc                                     ; ABD8 18                       .
 	adc     $A4                             ; ABD9 65 A4                    e.
@@ -3937,18 +3939,9 @@ LB9FA:  brk                                     ; B9FA 00                       
 	ora     ($01,x)                         ; B9FC 01 01                    ..
 	ora     ($01,x)                         ; B9FE 01 01                    ..
 	ora     ($02,x)                         ; BA00 01 02                    ..
-LBA02:  brk                                     ; BA02 00                       .
-	.byte   $03                             ; BA03 03                       .
-	.byte   $0C                             ; BA04 0C                       .
-	.byte   $0F                             ; BA05 0F                       .
-	bmi     LBA3B                           ; BA06 30 33                    03
-	.byte   $3C                             ; BA08 3C                       <
-	.byte   $3F                             ; BA09 3F                       ?
-	cpy     #$C3                            ; BA0A C0 C3                    ..
-	cpy     $F0CF                           ; BA0C CC CF F0                 ...
-	.byte   $F3                             ; BA0F F3                       .
-	.byte   $FC                             ; BA10 FC                       .
-	.byte   $FF                             ; BA11 FF                       .
+LBA02:	.byte	$00,$03,$0C,$0F,$30,$33,$3C,$3F
+	.byte	$C0,$C3,$CC,$CF,$F0,$F3,$FC,$FF
+
 LBA12:  asl     $23                             ; BA12 06 23                    .#
 	ror     $6026,x                         ; BA14 7E 26 60                 ~&`
 	.byte   $27                             ; BA17 27                       '
