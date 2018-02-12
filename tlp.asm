@@ -106,6 +106,7 @@ byte_C3		:= $00C3
 byte_C4		:= $00C4
 byte_C7		:= $00C7
 byte_CC		:= $00CC
+off_CE		:= $00CE
 byte_D0		:= $00D0			;
 byte_D1		:= $00D1			;
 byte_D2		:= $00D2			; TODO current text luminance?
@@ -134,6 +135,7 @@ byte_1346	:= $1346
 byte_1347	:= $1347
 byte_134c	:= $134C
 off_134d	:= $134D
+byte_1350	:= $1350
 L2000           := $2000
 L3E33           := $3E33
 L4000           := $4000
@@ -255,12 +257,13 @@ LA0D1:  rts                                     ; A0D1 60                       
 ; ----------------------------------------------------------------------------
 LA0D2:  asl     byte_B3                         ; A0D2 06 B3                    ..
 	lsr     byte_B3                         ; A0D4 46 B3                    F.
-	jsr     LA0DB                           ; A0D6 20 DB A0                  ..
+	jsr     sub_a0db
 	clc                                     ; A0D9 18                       .
 LA0DA:  rts                                     ; A0DA 60                       `
 
 ; ----------------------------------------------------------------------------
-LA0DB:  cmp     #$5B                            ; A0DB C9 5B                    .[
+sub_a0db:
+	cmp     #$5B                            ; A0DB C9 5B                    .[
 	bcs     LA0DA                           ; A0DD B0 FB                    ..
 	cmp     #$3D                            ; A0DF C9 3D                    .=
 	beq     LA105                           ; A0E1 F0 22                    ."
@@ -349,15 +352,15 @@ LA151:  ldx     $FF                             ; A151 A6 FF                    
 	rts                                     ; A161 60                       `
 
 ; ----------------------------------------------------------------------------
-LA162:  sty     $CF                             ; A162 84 CF                    ..
-	sta     $CE                             ; A164 85 CE                    ..
+LA162:  sty     off_CE+1
+	sta     off_CE
 	ldy     #$00                            ; A166 A0 00                    ..
-	lda     ($CE),y                         ; A168 B1 CE                    ..
+	lda     (off_CE),y
 	jmp     LA1DD                           ; A16A 4C DD A1                 L..
 
 ; ----------------------------------------------------------------------------
-LA16D:  sty     $CF                             ; A16D 84 CF                    ..
-	sta     $CE                             ; A16F 85 CE                    ..
+LA16D:  sty     off_CE+1
+	sta     off_CE
 	jmp     LA1FE                           ; A171 4C FE A1                 L..
 
 ; ----------------------------------------------------------------------------
@@ -374,18 +377,18 @@ LA180:  sty     off_134d+1
 	jmp     (off_134d)
 
 ; ----------------------------------------------------------------------------
-LA18C:  bit     $1350                           ; A18C 2C 50 13                 ,P.
+LA18C:  bit     byte_1350
 	bmi     LA19C                           ; A18F 30 0B                    0.
 	sta     $1351                           ; A191 8D 51 13                 .Q.
 	sty     $1352                           ; A194 8C 52 13                 .R.
 	dex                                     ; A197 CA                       .
-	stx     $1350                           ; A198 8E 50 13                 .P.
+	stx     byte_1350
 	rts                                     ; A19B 60                       `
 
 ; ----------------------------------------------------------------------------
 LA19C:  tya                                     ; A19C 98                       .
 	ldy     #$00                            ; A19D A0 00                    ..
-	sta     ($CE),y                         ; A19F 91 CE                    ..
+	sta     (off_CE),y
 	iny                                     ; A1A1 C8                       .
 	dec     $1351                           ; A1A2 CE 51 13                 .Q.
 	bne     LA1B0                           ; A1A5 D0 09                    ..
@@ -394,7 +397,7 @@ LA19C:  tya                                     ; A19C 98                       
 	beq     LA1C8                           ; A1AB F0 1B                    ..
 	dec     $1352                           ; A1AD CE 52 13                 .R.
 LA1B0:  lda     $DB                             ; A1B0 A5 DB                    ..
-	sta     ($CE),y                         ; A1B2 91 CE                    ..
+	sta     (off_CE),y
 	dec     $1351                           ; A1B4 CE 51 13                 .Q.
 	bne     LA1C4                           ; A1B7 D0 0B                    ..
 	ldx     $1352                           ; A1B9 AE 52 13                 .R.
@@ -407,14 +410,14 @@ LA1C4:  lda     #$02                            ; A1C4 A9 02                    
 LA1C8:  clv                                     ; A1C8 B8                       .
 LA1C9:  php                                     ; A1C9 08                       .
 	clc                                     ; A1CA 18                       .
-	adc     $CE                             ; A1CB 65 CE                    e.
-	sta     $CE                             ; A1CD 85 CE                    ..
-	bcc     LA1D3                           ; A1CF 90 02                    ..
-	inc     $CF                             ; A1D1 E6 CF                    ..
-LA1D3:  plp                                     ; A1D3 28                       (
+	adc     off_CE
+	sta     off_CE
+	bcc     :+
+	inc     off_CE+1
+:	plp                                     ; A1D3 28                       (
 	bvs     LA1DC                           ; A1D4 70 06                    p.
 	jsr     LA1FE                           ; A1D6 20 FE A1                  ..
-	inc     $1350                           ; A1D9 EE 50 13                 .P.
+	inc     byte_1350
 LA1DC:  rts                                     ; A1DC 60                       `
 
 ; ----------------------------------------------------------------------------
@@ -422,7 +425,7 @@ LA1DD:  lda     #$1B                            ; A1DD A9 1B                    
 	jsr     sub_ab54
 	ldy     #$00                            ; A1E2 A0 00                    ..
 	sty     $E7                             ; A1E4 84 E7                    ..
-	lda     ($CE),y                         ; A1E6 B1 CE                    ..
+	lda     (off_CE),y
 	tay                                     ; A1E8 A8                       .
 	asl     a                               ; A1E9 0A                       .
 	rol     $E7                             ; A1EA 26 E7                    &.
