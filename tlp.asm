@@ -3255,7 +3255,8 @@ LB4DF:  lda     $0202,x                         ; B4DF BD 02 02                 
 	rts                                     ; B4F6 60                       `
 
 ; ----------------------------------------------------------------------------
-LB4F7:  sei                                     ; B4F7 78                       x
+sub_b4f7:
+	sei                                     ; B4F7 78                       x
 	ldy     #$05                            ; B4F8 A0 05                    ..
 LB4FA:  lda     $1330,y                         ; B4FA B9 30 13                 .0.
 	sta     $020A,y                         ; B4FD 99 0A 02                 ...
@@ -3362,7 +3363,7 @@ sub_b581:
 LB595:  lda     #$5A                            ; B595 A9 5A                    .Z
 LB597:  sta     byte_1347
 	jsr     sub_b420
-	jsr     LB4F7                           ; B59D 20 F7 B4                  ..
+	jsr     sub_b4f7
 	lda     #$00                            ; B5A0 A9 00                    ..
 	sta     byte_133a
 LB5A5:  ldy     #$01                            ; B5A5 A0 01                    ..
@@ -5479,7 +5480,7 @@ LBFC2:  lda     #$FF                            ; BFC2 A9 FF                    
 	lda     #$51                            ; BFD0 A9 51                    .Q
 	sta     byte_133a
 	jsr     sub_b420
-LBFD8:  jsr     LB4F7                           ; BFD8 20 F7 B4                  ..
+LBFD8:  jsr     sub_b4f7
 	bcs	:+
 	lda     #$00                            ; BFDD A9 00                    ..
 	sta     byte_133a
