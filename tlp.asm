@@ -2148,7 +2148,7 @@ sub_ace3:
 	bcs     LAD04   			; ACEA B0 18                    ..
 	dec     off_E3+1
 	lda     off_E3+1
-	cmp     #$20
+	cmp     #>L2000
 	beq     :+
 	bcs     LAD04   			; ACF4 B0 0E                    ..
 	lda     #$3D    			; ACF6 A9 3D                    .=
