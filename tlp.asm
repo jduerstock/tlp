@@ -83,6 +83,8 @@ CONSOL		:= $D01F
 
 ; POKEY
 
+AUDF1		:= $D200
+AUDC1		:= $D201
 AUDCTL		:= $D208
 STIMER		:= $D209
 SEROUT		:= $D20D
@@ -157,6 +159,7 @@ byte_1344	:= $1344
 byte_1345	:= $1345
 byte_1346	:= $1346			; Handler Device Type (R:)???
 byte_1347	:= $1347
+byte_1348	:= $1348
 byte_134c	:= $134C
 off_134d	:= $134D
 byte_1350	:= $1350
@@ -3507,10 +3510,10 @@ LB607:  lda     #$20    			; B607 A9 20                    .
 	sec             			; B60E 38                       8
 	bcs     LB612   			; B60F B0 01                    ..
 LB611:  clc             			; B611 18                       .
-LB612:  ror     $1348   			; B612 6E 48 13                 nH.
+LB612:  ror     byte_1348   			; B612 6E 48 13                 nH.
 	dec     $FD     			; B615 C6 FD                    ..
 	bne     LB626   			; B617 D0 0D                    ..
-	lda     $1348   			; B619 AD 48 13                 .H.
+	lda     byte_1348   			; B619 AD 48 13                 .H.
 	eor     #$FF    			; B61C 49 FF                    I.
 	jsr     sub_b3b9
 	inc     $FD     			; B621 E6 FD                    ..
@@ -3557,9 +3560,9 @@ LB655:  lda     byte_1340
 	sta     $134C   			; B67E 8D 4C 13                 .L.
 	sta     AUDCTL
 	lda     #$45    			; B684 A9 45                    .E
-	sta     $D200   			; B686 8D 00 D2                 ...
+	sta     AUDF1
 	lda     #$A0    			; B689 A9 A0                    ..
-	sta     $D201   			; B68B 8D 01 D2                 ...
+	sta     AUDC1
 	lda     #<sub_b5de
 	sta     VTIMR1
 	lda     #>sub_b5de
@@ -3853,7 +3856,7 @@ LB82C:  txa             			; B82C 8A                       .
 	and     #$0F    			; B82D 29 0F                    ).
 	ora     #$10    			; B82F 09 10                    ..
 	sta     WSYNC
-	sta     $D201   			; B834 8D 01 D2                 ...
+	sta     AUDC1
 	inx             			; B837 E8                       .
 	inx             			; B838 E8                       .
 	sta     WSYNC
