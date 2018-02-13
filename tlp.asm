@@ -53,10 +53,17 @@ COLOR1		:= $02C5			; Playfield 1 color register
 COLOR2		:= $02C6			; Playfield 2 color register
 COLOR3		:= $02C7			; Playfield 3 color register
 COLOR4		:= $02C8			; Playfield 4 color register
+DVSTAT		:= $02EA			; Device Status Registerjkj
 CH		:= $02FC
-DCOMND		:= $0302
+DDEVIC		:= $0300                        ; Device Serial Bus ID (RS232 is $50)
+DUNIT		:= $0301                        ; Device Unit number
+DCOMND		:= $0302                        ; The number of the disk or device operation (command)
 DSTATS		:= $0303
 DBUF		:= $0304
+DTIMLO		:= $0306                        ; Time-out value for a handler in seconds
+DBYT		:= $0308                        ; Number of bytes transferred to/from data buffer
+DAUX1		:= $030A                        ; Device Command Arg 1
+DAUX2		:= $030B                        ; Device Command Arg 1
 HATABS		:= $031A			; Handler Address Table
 ICCOM		:= $0342			 
 ICBA		:= $0344
@@ -87,7 +94,7 @@ PBCTL		:= $D303
 DMACTL		:= $D400			; Direct Memory Access (DMA) control
 
 CIOV		:= $E456
-SIOV		:= $E459
+SIOV		:= $E459                        ; Serial Input/Output utility entry point
 SETVBV		:= $E45C
 XITVBV		:= $E462
 
@@ -137,7 +144,7 @@ byte_1340	:= $1340
 byte_1343	:= $1343
 byte_1344	:= $1344
 byte_1345	:= $1345
-byte_1346	:= $1346
+byte_1346	:= $1346                        ; Handler Device Type (R:)???
 byte_1347	:= $1347
 byte_134c	:= $134C
 off_134d	:= $134D
@@ -151,7 +158,7 @@ charset_sm	:= $BC44			; 6x6 character set
 ; ----------------------------------------------------------------------------
 
 sub_a000:
-	jsr     sub_b799
+	jsr     sub_b799                        ; Attempt to load R: Handler?
 	jsr     sub_a214			; Initialize Graphics
 	jsr     sub_a33d
 	ldy     #$08                            ; A009 A0 08                    ..
@@ -650,7 +657,7 @@ sub_a214:					; A214
 	lda     #$CA                            ; Default text luminance value for Display List #2
 	sta     FG_COLOR_DL2                    ; Save color value to RAM
 
-;** (n) Store base address of 6x6 charset in RAM ********************************
+;** (n) Store base address of 6x6 charset in Zero Page RAM **********************
 	lda     #>charset_sm
 	sta     chset6_base+1                   ; Save MSB of charset_sm to RAM
 
@@ -3040,7 +3047,7 @@ LB339:  lda     $133C                           ; B339 AD 3C 13                 
 	sta     $02EB                           ; B33E 8D EB 02                 ...
 	lda     $133D                           ; B341 AD 3D 13                 .=.
 	and     #$F1                            ; B344 29 F1                    ).
-	sta     $02EA                           ; B346 8D EA 02                 ...
+	sta     DVSTAT                          ; B346 8D EA 02                 ...
 	ldy     #$00                            ; B349 A0 00                    ..
 	sty     $02ED                           ; B34B 8C ED 02                 ...
 	sty     $133D                           ; B34E 8C 3D 13                 .=.
@@ -3092,7 +3099,13 @@ sub_b38a:
 	ldy     #$01                            ; B399 A0 01                    ..
 	rts                                     ; B39B 60                       `
 
-; ----------------------------------------------------------------------------
+;*******************************************************************************
+;*                                                                             *
+;*                                 sub_b39c                                    *
+;*                                                                             *
+;*                            RS232 Get Status???                              *
+;*                                                                             *
+;*******************************************************************************
 
 sub_b39c:
 	cld                                     ; B39C D8                       .
@@ -3551,8 +3564,13 @@ LB6A5:  lda     byte_1340
 	ldy     #$01                            ; B6B5 A0 01                    ..
 	rts                                     ; B6B7 60                       `
 
-; ----------------------------------------------------------------------------
-
+;*******************************************************************************
+;*                                                                             *
+;*                                 sub_b6b8                                    *
+;*                                                                             *
+;*                                RS232 OPEN???                                *
+;*                                                                             *
+;*******************************************************************************
 sub_b6b8:
 	lda     #$8D                            ; B6B8 A9 8D                    ..
 	sta     byte_133a
@@ -3563,7 +3581,13 @@ sub_b6b8:
 	sty     $CB                             ; B6C6 84 CB                    ..
 	rts                                     ; B6C8 60                       `
 
-; ----------------------------------------------------------------------------
+;*******************************************************************************
+;*                                                                             *
+;*                                 sub_b6c9                                    *
+;*                                                                             *
+;*                                RS232 CLOSE??                                *
+;*                                                                             *
+;*******************************************************************************
 sub_b6c9:  
 	lda     $CB                             ; B6C9 A5 CB                    ..
 	beq     sub_b6c9
@@ -3576,13 +3600,18 @@ sub_b6c9:
 	cli                                     ; B6D9 58                       X
 	sty     byte_1346
 	iny                                     ; B6DD C8                       .
-	sty     $030A                           ; B6DE 8C 0A 03                 ...
+	sty     DAUX1                           ; B6DE 8C 0A 03                 ...
 	sty     byte_133a
-	lda     #$57                            ; B6E4 A9 57                    .W
+	lda     #$57                            ; Let A = Write (verify) command
 	jmp     sub_b802
 
-; ----------------------------------------------------------------------------
-
+;*******************************************************************************
+;*                                                                             *
+;*                                 sub_b6e9                                    *
+;*                                                                             *
+;*                              RS232 PUT BYTE???                              *
+;*                                                                             *
+;*******************************************************************************
 sub_b6e9:
 	sta     byte_1347
 	ldx     #$01                            ; B6EC A2 01                    ..
@@ -3601,7 +3630,13 @@ sub_b6e9:
 	iny                                     ; B707 C8                       .
 	rts                                     ; B708 60                       `
 
-; ----------------------------------------------------------------------------
+;*******************************************************************************
+;*                                                                             *
+;*                                 sub_b709                                    *
+;*                                                                             *
+;*                              RS232 GET BYTE???                              *
+;*                                                                             *
+;*******************************************************************************
 sub_b709:
 	cli                                     ; B709 58                       X
 	sei                                     ; B70A 78                       x
@@ -3632,7 +3667,7 @@ LB724:  lda     #$00                            ; B724 A9 00                    
 	lda     #>byte_1330
 	sta     DBUF+1
 	lda     byte_133a
-	sta     $030A                           ; B744 8D 0A 03                 ...
+	sta     DAUX1                           ; B744 8D 0A 03                 ...
 	lda     #$09                            ; B747 A9 09                    ..
 	sta     $0308                           ; B749 8D 08 03                 ...
 	ldy     #$40                            ; B74C A0 40                    .@
@@ -3673,35 +3708,54 @@ LB76F:  lda     $0209,x                         ; B76F BD 09 02                 
 	cpy     #$00                            ; B796 C0 00                    ..
 	rts                                     ; B798 60                       `
 
-; ----------------------------------------------------------------------------
+;*******************************************************************************
+;*                                                                             *
+;*                                  sub_b799                                   *
+;*                                                                             *
+;*                      Attempt to load R: Handler from 850???                 *
+;*                                                                             *
+;*******************************************************************************
 sub_b799:
-	lda     #$00                            ; B799 A9 00                    ..
-	sta     byte_133a
-	sta     $0309                           ; B79E 8D 09 03                 ...
-	tax                                     ; B7A1 AA                       .
-	jsr     sub_bf86
-	beq     LB7A8                           ; B7A5 F0 01                    ..
-	rts                                     ; B7A7 60                       `
 
-; ----------------------------------------------------------------------------
-LB7A8:  lda     #'R'
-	sta     byte_1346
-	sta     HATABS,x
-	lda     #<LB81A
-	sta     HATABS+1,x
-	lda     #>LB81A
-	sta     HATABS+2,x
-	lda     #$EA                            ; B7BA A9 EA                    ..
-	sta     DBUF
-	lda     #$02                            ; B7BF A9 02                    ..
-	sta     DBUF+1
-	sta     $0308                           ; B7C4 8D 08 03                 ...
-	ldy     #$40                            ; B7C7 A0 40                    .@
-	lda     #$53                            ; B7C9 A9 53                    .S
-	jsr     sub_b802
+;** (n) Initialize some variables to 0 *****************************************
+	lda     #$00                            ; Init variables to 0
+	sta     byte_133a                       ; Let byte_133a = 0
+	sta     DBYT+1                          ; Let DBYTHI = 0
+	tax                                     ; Let X = 0, too
+
+;** (n) Find first available Handler Table slot ********************************
+	jsr     sub_bf86                        ; 
+	beq     LB7A8                           ; If slot was found, create new handler entry
+	rts                                     ; otherwise return
+
+LB7A8:  
+;** (n) Create new handler table record (3 bytes) ******************************
+	lda     #'R'                            ; RS232 Device
+	sta     byte_1346                       ; Save "R" in RAM
+	sta     HATABS,x                        ; Save "R" in the new slot
+
+	lda     #<LB81A                         ; LSB of start of handler vector table
+	sta     HATABS+1,x                      ; Save LSB in the new slot
+
+	lda     #>LB81A                         ; MSB of start of handler vector table
+	sta     HATABS+2,x                      ; Save MSB in the new slot
+
+;** (n) ************************************************************************
+	lda     #$EA                            ; LSB of data buffer address
+	sta     DBUF                            ;
+
+	lda     #$02                            ; MSB of data buffer address
+	sta     DBUF+1                          ;
+	sta     DBYT                            ; TODO
+
+;** (n) ************************************************************************
+	ldy     #$40                            ; Let Y = $40
+	lda     #$53                            ; Let A = STATUS operation
+	jsr     sub_b802                        ; Call ???
+
 	lda     byte_1347
-	ora     $02EA                           ; B7D1 0D EA 02                 ...
-	sta     $02EA                           ; B7D4 8D EA 02                 ...
+	ora     DVSTAT                          ; B7D1 0D EA 02                 ...
+	sta     DVSTAT                          ; B7D4 8D EA 02                 ...
 	cpy     #$00                            ; B7D7 C0 00                    ..
 	rts                                     ; B7D9 60                       `
 
@@ -3723,32 +3777,54 @@ LB7E7:  lda     #$42                            ; B7E7 A9 42                    
 :	ldx	#$00                            ; B7F1 A2 00                    ..
 LB7F3:  jsr     LB7FA                           ; B7F3 20 FA B7                  ..
 	lda     #$41                            ; B7F6 A9 41                    .A
+
 	ldx     #$F3                            ; B7F8 A2 F3                    ..
-LB7FA:  stx     $030A                           ; B7FA 8E 0A 03                 ...
+LB7FA:  stx     DAUX1                           ; B7FA 8E 0A 03                 ...
+
 	ldy     #$00                            ; B7FD A0 00                    ..
-	sty     $030B                           ; B7FF 8C 0B 03                 ...
+	sty     DAUX2                           ; B7FF 8C 0B 03                 ...
 
+;*******************************************************************************
+;*                                                                             *
+;*                                  sub_b802                                   *
+;*                                                                             *
+;*                    Send SIO Command to RS232 Device 1                       *
+;*                                                                             *
+;*******************************************************************************
 sub_b802:
-	sta     DCOMND
-	ldx     #$01                            ; B805 A2 01                    ..
-	stx     $0301                           ; B807 8E 01 03                 ...
-	sty     DSTATS
-	ldy     #$50                            ; B80D A0 50                    .P
-	sty     $0300                           ; B80F 8C 00 03                 ...
-	ldy     #$08                            ; B812 A0 08                    ..
-	sty     $0306                           ; B814 8C 06 03                 ...
-	jmp     SIOV
+	sta     DCOMND                          ; Command code is set in caller
 
-; ----------------------------------------------------------------------------
+;**(n) Set Device Unit number **************************************************
+	ldx     #$01                            ; Device 1 (as in R1:)
+	stx     DUNIT                           ; 
+	sty     DSTATS                          ; Set the data direction? (usually $40 or $80) TODO
 
+;**(n) Set Device Serial bus ID ************************************************
+	ldy     #$50                            ; $50 = ID for RS232 R1
+	sty     DDEVIC                          ; 
+
+;**(n) Set Device handler time-out *********************************************
+	ldy     #$08                            ; 8 seconds time-out
+	sty     DTIMLO                          ; 
+
+;**(n) Send command frame (DCOMND DAUX1 DAUX2, etc) to SIO bus *****************
+	jmp     SIOV                            ; SIOV will execute an RTS
+
+;*******************************************************************************
+;*                                                                             *
+;*                                   LB81A                                     *
+;*                                                                             *
+;*                         RS232 Handler Vector Table?????                     *
+;*                                                                             *
+;*******************************************************************************
 LB81A:
-	.addr	sub_b6b8-1
-	.addr	sub_b6c9-1
-	.addr	sub_b709-1
-LB820:	.addr	sub_b6e9-1
-	.addr	sub_b39c
-	.addr	sub_b7da
-	.addr	sub_b7da
+	.addr	sub_b6b8-1                      ; OPEN vector???
+	.addr	sub_b6c9-1                      ; CLOSE vector???
+	.addr	sub_b709-1                      ; GET BYTE vector???
+LB820:	.addr	sub_b6e9-1                      ; PUT BYTE vector???
+	.addr	sub_b39c                        ; GET STATUS vector???
+	.addr	sub_b7da                        ; SPECIAL vector???
+	.addr	sub_b7da                        ; 
 
 sub_b828:
 	ldx     #$00                            ; B828 A2 00                    ..
@@ -5474,15 +5550,24 @@ chrset_6x6:
 	.byte   %00100000                       ; ..#.....
 	.byte   %00100000                       ; ..#.....
 
+;*******************************************************************************
+;*                                                                             *
+;*                                  sub_bf86                                   *
+;*                                                                             *
+;*                              Poll Handler Table???                          *
+;*                                                                             *
+;*******************************************************************************
 sub_bf86:
-	cmp     HATABS,x
-	beq	:+
+
+;** (n) Return the first empty slot in the Handler Address Table *****************
+	cmp     HATABS,x                        ; Is entry empty?
+	beq	:+                              ; Quit. Z will be set
+	inx                                     ; Skip the 3 byte entry
 	inx
 	inx
-	inx
-	cpx     #$20
-	bcc     sub_bf86
-:	rts
+	cpx     #$20                            ; If >= 32 Then Quit. Z will be clear
+	bcc     sub_bf86                        ; Otherwise continue trying.
+:	rts                                     ; Return with Z and X (offset)
 
 ; ----------------------------------------------------------------------------
 
