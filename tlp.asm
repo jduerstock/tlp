@@ -1528,7 +1528,7 @@ sub_a89f:
 	stx     off_EC+1
 :	ldy     $EE     			; A8A5 A4 EE                    ..
 	lda     (off_EC),y
-	jsr     LAB5D   			; A8A9 20 5D AB                  ].
+	jsr     sub_ab5d
 	dec     $EE     			; A8AC C6 EE                    ..
 	bpl     :-
 	jmp     LA3B2   			; A8B0 4C B2 A3                 L..
@@ -1854,7 +1854,7 @@ LAAF0:  sta	DLIST
 	rts             			; AAFC 60                       `
 
 ; ----------------------------------------------------------------------------
-LAAFD:  jsr     LAB5D   			; AAFD 20 5D AB                  ].
+LAAFD:  jsr     sub_ab5d   			; AAFD 20 5D AB                  ].
 LAB00:  lda     $E7     			; AB00 A5 E7                    ..
 LAB02:  jmp     sub_b1df
 
@@ -1914,14 +1914,16 @@ sub_ab54:
 ; ----------------------------------------------------------------------------
 sub_ab5a:
 	lda     $3E2E   			; AB5A AD 2E 3E                 ..>
-LAB5D:  sta     $E7     			; AB5D 85 E7                    ..
+
+sub_ab5d:
+	sta     $E7     			; AB5D 85 E7                    ..
 	sec             			; AB5F 38                       8
 	sbc     #$20    			; AB60 E9 20                    . 
-	bcs     LAB65   			; AB62 B0 01                    ..
+	bcs     :+
 	rts             			; AB64 60                       `
 
 ; ----------------------------------------------------------------------------
-LAB65:  pha             			; AB65 48                       H
+:	pha             			; AB65 48                       H
 	ldx     $BA     			; AB66 A6 BA                    ..
 	stx     $C9     			; AB68 86 C9                    ..
 	bne     :+
@@ -1961,9 +1963,9 @@ LAB94:  jsr     LAD05   			; AB94 20 05 AD                  ..
 LABA6:  lda     $A6     			; ABA6 A5 A6                    ..
 	ldy     #$20    			; ABA8 A0 20                    . 
 	sec             			; ABAA 38                       8
-LABAB:  sbc     #$06    			; ABAB E9 06                    ..
+:	sbc     #$06    			; ABAB E9 06                    ..
 	dey             			; ABAD 88                       .
-	bcs     LABAB   			; ABAE B0 FB                    ..
+	bcs     :-
 	tya             			; ABB0 98                       .
 	and     #$03    			; ABB1 29 03                    ).
 	tax             			; ABB3 AA                       .
@@ -2146,7 +2148,7 @@ sub_ace3:
 	bcs     LAD04   			; ACEA B0 18                    ..
 	dec     off_E3+1
 	lda     off_E3+1
-	cmp     #' '
+	cmp     #$20
 	beq     :+
 	bcs     LAD04   			; ACF4 B0 0E                    ..
 	lda     #$3D    			; ACF6 A9 3D                    .=
