@@ -104,17 +104,17 @@ byte_B2		:= $00B2
 byte_B3		:= $00B3
 byte_B5		:= $00B5
 byte_B7		:= $00B7
-byte_B8		:= $00B8
+CURRENT_DL	:= $00B8                        ; Current Display List (80 or FF = DL #1, 00 = DL #2)
 byte_C0		:= $00C0
 byte_C3		:= $00C3
 byte_C4		:= $00C4
 byte_C7		:= $00C7
 byte_CC		:= $00CC
 off_CE		:= $00CE
-byte_D0		:= $00D0			;
-byte_D1		:= $00D1			;
-byte_D2		:= $00D2			; TODO current text luminance?
-byte_D3		:= $00D3			; TODO current background color?
+FG_COLOR_DL2	:= $00D0			; Text luminance used in Display List #2 (zoomed)
+BG_COLOR_DL2	:= $00D1			; Background / border hue/luminance used in Display List #2
+FG_COLOR_DL1	:= $00D2			; Text luminance used in Display List #1 (small text)
+BG_COLOR_DL1	:= $00D3			; Background / border hue/luminance used in Display List #1
 byte_D9		:= $00D9
 off_DD		:= $00DD
 byte_DF		:= $00DF
@@ -124,6 +124,7 @@ byte_E2		:= $00E2
 
 off_E3		:= $00E3
 off_E5		:= $00E5
+chset6_base 	:= $00E8                        ; charset_sm address lo/hi at E8/E9
 off_EC		:= $00EC
 off_F4		:= $00F4
 off_FA		:= $00FA
@@ -326,13 +327,13 @@ LA12C:  lda     $B9                             ; A12C A5 B9                    
 sub_a133:
 	ldy     $DC                             ; A133 A4 DC                    ..
 	lda     $DB                             ; A135 A5 DB                    ..
-	ldx     $FF                             ; A137 A6 FF                    ..
+	ldx     byte_FF                         ; A137 A6 FF                    ..
 	bpl     LA14B                           ; A139 10 10                    ..
 	iny                                     ; A13B C8                       .
 	bne     LA143                           ; A13C D0 05                    ..
 	tax                                     ; A13E AA                       .
 	bmi     LA144                           ; A13F 30 03                    0.
-	sta     $FF                             ; A141 85 FF                    ..
+	sta     byte_FF                         ; A141 85 FF                    ..
 LA143:  rts                                     ; A143 60                       `
 
 ; ----------------------------------------------------------------------------
@@ -346,7 +347,7 @@ LA14B:  bit     $134F                           ; A14B 2C 4F 13                 
 	rts                                     ; A150 60                       `
 
 ; ----------------------------------------------------------------------------
-LA151:  ldx     $FF                             ; A151 A6 FF                    ..
+LA151:  ldx     byte_FF                         ; A151 A6 FF                    ..
 	beq     LA162                           ; A153 F0 0D                    ..
 	dex                                     ; A155 CA                       .
 	beq     LA16D                           ; A156 F0 15                    ..
@@ -447,7 +448,7 @@ LA1DD:  lda     #$1B                            ; A1DD A9 1B                    
 	jsr     sub_ab54
 LA1FE:  jsr     LA120                           ; A1FE 20 20 A1                   .
 	lda     #$FF                            ; A201 A9 FF                    ..
-	sta     $FF                             ; A203 85 FF                    ..
+	sta     byte_FF                         ; A203 85 FF                    ..
 	lda     #$1B                            ; A205 A9 1B                    ..
 	jsr     sub_ab54
 	lda     #$46                            ; A20A A9 46                    .F
@@ -465,7 +466,7 @@ LA1FE:  jsr     LA120                           ; A1FE 20 20 A1                 
 
 ; DESCRIPTION
 ;
-; This subroutine initializes 2 display lists.
+; This subroutine initializes 2 display lists, colors, player missiles
 ;
 ; Display List 1 is a mostly straightforward ANTIC mode F screen. Except 
 ; that screen RAM shifts from a range beginning at $2010 to a 2nd range 
@@ -505,7 +506,7 @@ sub_a214:					; A214
 	bpl     :-                              ; End Loop
 
 ;** (n) TODO Why storing FF in these two locations??? **************************
-	stx     byte_B8				; Store FF in byte_B8 TODO
+	stx     CURRENT_DL			; byte_B8 maybe which DL is active
 	stx     byte_FF                         ; Store FF in byte_FF TODO
 
 ;** (n) Prepare values for head of display lists *******************************
@@ -613,17 +614,18 @@ sub_a214:					; A214
 	stx     byte_C4                         ;
 
 	ldx     #$0F                            ; TODO
-	stx     byte_C0                         ;
+	stx     byte_C0                         ; 
 
-	ldx     #$07                            ; 
-	stx     byte_B3                         ; 
-:       lda     LBA67,x                         ; Copy 7 bytes from ROM to RAM
-	sta     $058C,x                         ; Initial values 
-	dex                                     ; 70 40 70 40 40 06 0F
-	bpl     :-                              ; 
-	stx     byte_C7                         ; Save FF
+	ldx     #$07                            ; Copy 7 bytes from ROM to RAM locations
+	stx     byte_B3                         ; $058C-$0592
+:       lda     LBA67,x                         ; Initial values 
+	sta     $058C,x                         ; 70 40 70 40 40 06 0F
+	dex                                     ; 
+	bpl     :-                              ; End loop
 
-;** (n) Set default background and border color *********************************
+	stx     byte_C7                         ; Save FF to RAM
+
+;** (n) Set default background and border color for Display List #1 *************
 	lda     #$01                            ; 
 	sta     byte_C3                         ; 
 	sta     byte_B5                         ; Set priority for screen objects...
@@ -631,38 +633,40 @@ sub_a214:					; A214
 	lda     #$16				; Set initial background color
 	sta     COLOR4                          ; for the border and background
 	sta     COLOR2                          ; to hue: 1 (Rust), luminance: 6
-	sta     byte_D3                         ; Save color value to RAM
+	sta     BG_COLOR_DL1                    ; Save color value to RAM
 
 ;** (n) Change Player/Missile colors to something different than background *****
 	jsr     sub_a324
 
-;** (n) *************************************************************************
-	lda     #$94                            ; TODO
-	sta     byte_D1                         ; TODO
+;** (n) Set default background and border color for Display List #2 *************
+	lda     #$94                            ; Default background and border for Display List #2
+	sta     BG_COLOR_DL2                    ; Save color value to RAM
 
 ;** (n) Set default text luminance **********************************************
-	lda     #$E1                            ; Default luminance value
-	sta     COLOR1                          ; 
-	sta     byte_D2                         ; Save luminance to RAM
+	lda     #$E1                            ; Default text luminance value for Display List #1
+	sta     COLOR1                          ; Save value to color register
+	sta     FG_COLOR_DL1                    ; Save color value to RAM
 
-;** (n) *************************************************************************
-	lda     #$CA                            ; A308 A9 CA                    ..
-	sta     byte_D0                         ; A30A 85 D0                    ..
+	lda     #$CA                            ; Default text luminance value for Display List #2
+	sta     FG_COLOR_DL2                    ; Save color value to RAM
 
+;** (n) Store base address of 6x6 charset in RAM ********************************
 	lda     #>charset_sm
-	sta     $E9                             ; A30E 85 E9                    ..
+	sta     chset6_base+1                   ; Save MSB of charset_sm to RAM
+
 	lda     #<charset_sm
-	sta     $E8                             ; A312 85 E8                    ..
+	sta     chset6_base                     ; Save LSB of charset_sm to RAM
 
-	lda     POKMSK
-	and     #$7F                            ; A316 29 7F                    ).
+;** (n) Disable break key interrupt *********************************************
+	lda     POKMSK				; 1100 000 is the default on power up
+	and     #$7F                            ; Clear flag for break key interrupt
+	jsr     sub_b549			; Enable new set of interrupts
 
-	jsr     sub_b549
-
-	ldy     #<sub_b013
-	ldx     #>sub_b013
-	lda     #$07                            ; A31F A9 07                    ..
-	jmp     SETVBV
+;** (n) Set system timer for vector #7  ******************************************
+	ldy     #<sub_b013                      ; MSB of new vector routine
+	ldx     #>sub_b013                      ; LSB of new vector routine
+	lda     #$07                            ; Number of the vector to change
+	jmp     SETVBV                          ; Set system timers (SETVBV will rts)
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -684,7 +688,7 @@ sub_a324:
 	ora     byte_D9                         ; Merge new hue with new luminance
 
 	ldx     #$03                            ; 
-:	sta     $02C0,x                         ; Store new hue and luminance
+:	sta     PCOLR0,x                        ; Store new hue and luminance
 	dex                                     ; to PCOLR0-PCOLR3
 	bpl     :-                              ; End Loop
 	rts                                     ; 
@@ -828,9 +832,9 @@ LA3EE:  lda     $9C                             ; A3EE A5 9C                    
 	and     #$03                            ; A411 29 03                    ).
 	tay                                     ; A413 A8                       .
 	lda     LB9AE,y                         ; A414 B9 AE B9                 ...
-	sta     $E8                             ; A417 85 E8                    ..
+	sta     chset6_base                     ; A417 85 E8                    ..
 	lda     LB9B2,y                         ; A419 B9 B2 B9                 ...
-	sta     $E9                             ; A41C 85 E9                    ..
+	sta     chset6_base+1                   ; A41C 85 E9                    ..
 	lda     LB9A6,y                         ; A41E B9 A6 B9                 ...
 	sta     $EB                             ; A421 85 EB                    ..
 	sty     byte_B7
@@ -1034,7 +1038,7 @@ LA582:  lda     $9F                             ; A582 A5 9F                    
 	adc     #$00                            ; A588 69 00                    i.
 	sta     $A6                             ; A58A 85 A6                    ..
 LA58C:  lda     #$62                            ; A58C A9 62                    .b
-	ldy     #byte_B8
+	ldy     #$B8
 	ldx     #$0C                            ; A590 A2 0C                    ..
 	jsr     sub_b84b
 	rts                                     ; A595 60                       `
@@ -1725,7 +1729,7 @@ LAA2C:  cmp     #$2D                            ; AA2C C9 2D                    
 	bne     LAA20                           ; AA32 D0 EC                    ..
 LAA34:  cmp     #$38                            ; AA34 C9 38                    .8
 	bne     LAA56                           ; AA36 D0 1E                    ..
-	ldx     byte_B8
+	ldx     CURRENT_DL
 	beq     LAA56                           ; AA3A F0 1A                    ..
 	lda     $C1                             ; AA3C A5 C1                    ..
 	beq     LAA44                           ; AA3E F0 04                    ..
@@ -1803,27 +1807,29 @@ LAAB8:  eor     #$FF                            ; AAB8 49 FF                    
 	inx                                     ; AAC5 E8                       .
 	inx                                     ; AAC6 E8                       .
 	stx     HPOSM0
-LAACA:  lda     byte_D2                         ; AACA A5 D2                    ..
+LAACA:  lda     FG_COLOR_DL1                    ; AACA A5 D2                    ..
 	sta     COLOR1                          ; AACC 8D C5 02                 ...
 	ldy     #$80                            ; AACF A0 80                    ..
-	sty     byte_B8
-	ldy     byte_D3                         ; AAD3 A4 D3                    ..
-	lda     #$00                            ; AAD5 A9 00                    ..
-	ldx     #$10                            ; AAD7 A2 10                    ..
-	bne     LAAF0                           ; AAD9 D0 15                    ..
+	sty     CURRENT_DL
+	ldy     BG_COLOR_DL1                    ; AAD3 A4 D3                    ..
+	lda     #$00                            ; LSB of Display List #1
+	ldx     #$10                            ; MSB of Display List #2
+	bne     LAAF0                           ; Jump to save DLIST pointer
+
 LAADB:  ldx     #$00                            ; AADB A2 00                    ..
 	stx     HPOSM1
 	stx     HPOSM0
-	stx     byte_B8
-	lda     byte_D0                         ; AAE5 A5 D0                    ..
+	stx     CURRENT_DL
+	lda     FG_COLOR_DL2                    ; AAE5 A5 D0                    ..
 	sta     COLOR1                          ; AAE7 8D C5 02                 ...
-	ldy     byte_D1                         ; AAEA A4 D1                    ..
+	ldy     BG_COLOR_DL2                    ; AAEA A4 D1                    ..
 	lda     #<$10CA
 	ldx     #>$10CA
+
 LAAF0:  sta	DLIST
 	stx	DLIST+1
 	sty     COLOR2                          ; AAF6 8C C6 02                 ...
-	sty     $02C8                           ; AAF9 8C C8 02                 ...
+	sty     COLOR4                          ; AAF9 8C C8 02                 ...
 	rts                                     ; AAFC 60                       `
 
 ; ----------------------------------------------------------------------------
@@ -2138,10 +2144,10 @@ LAD05:  asl     a                               ; AD05 0A                       
 	bcc     :+
 	inc     $E6                             ; AD10 E6 E6                    ..
 	clc                                     ; AD12 18                       .
-:	adc     $E8                             ; AD13 65 E8                    e.
+:	adc     chset6_base                     ; AD13 65 E8                    e.
 	sta     off_E5
 	lda     off_E5+1
-	adc     $E9                             ; AD19 65 E9                    e.
+	adc     chset6_base+1                   ; AD19 65 E9                    e.
 	sta     off_E5+1
 	jsr     sub_ad8e
 	lda     $A4                             ; AD20 A5 A4                    ..
@@ -2568,7 +2574,13 @@ sub_b004:
 :	sta     (off_E3),y
 	rts                                     ; B012 60                       `
 
-; ----------------------------------------------------------------------------
+;*******************************************************************************
+;*                                                                             *
+;*                                  sub_b013                                   *
+;*                                                                             *
+;*                              ?????????????????                              *
+;*                                                                             *
+;*******************************************************************************
 
 sub_b013:
 	sec                                     ; B013 38                       8
@@ -2604,7 +2616,7 @@ LB04B:  lda     $14                             ; B04B A5 14                    
 	and     #$03                            ; B054 29 03                    ).
 	cmp     #$01                            ; B056 C9 01                    ..
 	bne     LB087                           ; B058 D0 2D                    .-
-	lda     byte_B8
+	lda     CURRENT_DL
 	asl     a                               ; B05C 0A                       .
 	ldy     COLOR2                          ; B05D AC C6 02                 ...
 	bit     $1355                           ; B060 2C 55 13                 ,U.
@@ -2621,21 +2633,21 @@ LB04B:  lda     $14                             ; B04B A5 14                    
 	ora     off_DD
 	plp                                     ; B075 28                       (
 LB076:  sta     COLOR2                          ; B076 8D C6 02                 ...
-	sta     $02C8                           ; B079 8D C8 02                 ...
+	sta     COLOR4                          ; B079 8D C8 02                 ...
 	bcc     LB085                           ; B07C 90 07                    ..
-	sta     byte_D3                         ; B07E 85 D3                    ..
+	sta     BG_COLOR_DL1                    ; B07E 85 D3                    ..
 	jsr     sub_a324
 	bmi     LB087                           ; B083 30 02                    0.
-LB085:  sta     byte_D1                         ; B085 85 D1                    ..
+LB085:  sta     BG_COLOR_DL2                    ; B085 85 D1                    ..
 LB087:  jmp     XITVBV
 
 ; ----------------------------------------------------------------------------
 LB08A:  inc     COLOR1                          ; B08A EE C5 02                 ...
 	lda     COLOR1                          ; B08D AD C5 02                 ...
 	bcc	:+
-	sta     byte_D2                         ; B092 85 D2                    ..
+	sta     FG_COLOR_DL1                    ; B092 85 D2                    ..
 	bcs     LB087                           ; B094 B0 F1                    ..
-:	sta     byte_D0                         ; B096 85 D0                    ..
+:	sta     FG_COLOR_DL2                    ; B096 85 D0                    ..
 	bcc     LB087                           ; B098 90 ED                    ..
 LB09A:  tya                                     ; B09A 98                       .
 	and     #$F0                            ; B09B 29 F0                    ).
@@ -3338,10 +3350,18 @@ sub_b545:
 	lda     POKMSK
 	ora     #$18                            ; B547 09 18                    ..
 
+
+;*******************************************************************************
+;*                                                                             *
+;*                                  sub_b549                                   *
+;*                                                                             *
+;*                              Enable Interrupts                              *
+;*                                                                             *
+;*******************************************************************************
 sub_b549:  
-	sta     POKMSK
-	sta     IRQEN
-	rts                                     ; B54E 60                       `
+	sta     POKMSK                         ; Update registers with new ...
+	sta     IRQEN                          ; ...set of interrupt flags
+	rts                                    ; done
 
 ; ----------------------------------------------------------------------------
 sub_b54f:
