@@ -215,7 +215,7 @@ LA054:  lda     #$46    			; A054 A9 46                    .F
 	lda     $02EB   			; A059 AD EB 02                 ...
 	bpl     LA054   			; A05C 10 F6                    ..
 LA05E:  jsr     sub_a963
-	jsr     LAB35   			; A061 20 35 AB                  5.
+	jsr     sub_ab35
 	jsr     LA12C   			; A064 20 2C A1                  ,.
 	lda     byte_CC
 	beq     LA05E   			; A069 F0 F3                    ..
@@ -1885,8 +1885,10 @@ LAB05:  dey             			; AB05 88                       .
 	jsr     sub_ab54
 	pla             			; AB30 68                       h
 	ora     #$44    			; AB31 09 44                    .D
-	bne     LAB02   			; AB33 D0 CD                    ..
-LAB35:  ldx     $C1     			; AB35 A6 C1                    ..
+	bne     LAB02   			; always jumps
+
+sub_ab35:
+	ldx     $C1     			; AB35 A6 C1                    ..
 	cpx     #$02    			; AB37 E0 02                    ..
 	bne     LAB4F   			; AB39 D0 14                    ..
 	lda     $C8     			; AB3B A5 C8                    ..
@@ -2175,27 +2177,28 @@ LAD05:  asl     a       			; AD05 0A                       .
 	lda     $A4     			; AD20 A5 A4                    ..
 	jsr     sub_adcb
 	ldx     #$05    			; AD25 A2 05                    ..
-LAD27:  jsr     LAD34   			; AD27 20 34 AD                  4.
+:	jsr     sub_ad34   			; AD27 20 34 AD                  4.
 	dex             			; AD2A CA                       .
 	bmi	:+
 	jsr     sub_ace3
-	jmp     LAD27   			; AD30 4C 27 AD                 L'.
+	jmp     :-
 
 ; ----------------------------------------------------------------------------
 :	rts
 
 ; ----------------------------------------------------------------------------
-LAD34:  txa             			; AD34 8A                       .
+sub_ad34:  
+	txa             			; AD34 8A                       .
 	tay             			; AD35 A8                       .
 	lda     (off_E5),y
 	ldy     #$00    			; AD38 A0 00                    ..
 LAD3A:  bit     $B0     			; AD3A 24 B0                    $.
-	bvc     LAD46   			; AD3C 50 08                    P.
+	bvc     :+
 	eor     #$FF    			; AD3E 49 FF                    I.
 	bit     $C9     			; AD40 24 C9                    $.
-	bvc     LAD46   			; AD42 50 02                    P.
+	bvc     :+
 	and     #$F8    			; AD44 29 F8                    ).
-LAD46:  sty     $FC     			; AD46 84 FC                    ..
+:	sty     $FC     			; AD46 84 FC                    ..
 	ldy     #$00    			; AD48 A0 00                    ..
 	sty     $D8     			; AD4A 84 D8                    ..
 	ldy     off_F4
