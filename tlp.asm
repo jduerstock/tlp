@@ -1819,8 +1819,8 @@ LAACA:  lda     FG_COLOR_DL1                    ; AACA A5 D2                    
 	ldy     #$80                            ; AACF A0 80                    ..
 	sty     CURRENT_DL
 	ldy     BG_COLOR_DL1                    ; AAD3 A4 D3                    ..
-	lda     #$00                            ; LSB of Display List #1
-	ldx     #$10                            ; MSB of Display List #2
+	lda     #<$1000                         ; LSB of Display List #1
+	ldx     #>$1000                         ; MSB of Display List #2
 	bne     LAAF0                           ; Jump to save DLIST pointer
 
 LAADB:  ldx     #$00                            ; AADB A2 00                    ..
@@ -1908,27 +1908,28 @@ LAB5D:  sta     $E7                             ; AB5D 85 E7                    
 LAB65:  pha                                     ; AB65 48                       H
 	ldx     $BA                             ; AB66 A6 BA                    ..
 	stx     $C9                             ; AB68 86 C9                    ..
-	bne     LAB77                           ; AB6A D0 0B                    ..
+	bne     :+
 	stx     $E6                             ; AB6C 86 E6                    ..
 	stx     $D8                             ; AB6E 86 D8                    ..
 	jsr	sub_abff
 	dec     $C9                             ; AB73 C6 C9                    ..
 	ldx     $C9                             ; AB75 A6 C9                    ..
-LAB77:  pla                                     ; AB77 68                       h
+:	pla                                     ; AB77 68                       h
 	inx                                     ; AB78 E8                       .
 	stx     $E6                             ; AB79 86 E6                    ..
 	ldx     $CA                             ; AB7B A6 CA                    ..
 	beq     LAB94                           ; AB7D F0 15                    ..
-	jsr     LAB88                           ; AB7F 20 88 AB                  ..
+	jsr     sub_ab88
 	ldx     #$FF                            ; AB82 A2 FF                    ..
 	stx     $CA                             ; AB84 86 CA                    ..
-	bne     LABD3                           ; AB86 D0 4B                    .K
+	bne     LABD3                           ; always branches
 
 ; ----------------------------------------------------------------------------
-LAB88:  inc     $A4                             ; AB88 E6 A4                    ..
-	bne     LAB8E                           ; AB8A D0 02                    ..
+sub_ab88:
+	inc     $A4                             ; AB88 E6 A4                    ..
+	bne     :+
 	inc     $A5                             ; AB8C E6 A5                    ..
-LAB8E:  ldx     #$7F                            ; AB8E A2 7F                    ..
+:	ldx     #$7F                            ; AB8E A2 7F                    ..
 	stx     $CA                             ; AB90 86 CA                    ..
 	bne     sub_abff
 
@@ -2044,7 +2045,7 @@ LAC3C:  lda     $D8                             ; AC3C A5 D8                    
 
 ; ----------------------------------------------------------------------------
 LAC56:  lda     $9C                             ; AC56 A5 9C                    ..
-LAC58:  jsr     LADCB                           ; AC58 20 CB AD                  ..
+LAC58:  jsr     sub_adcb
 	ldx     #$0B                            ; AC5B A2 0B                    ..
 LAC5D:  ldy     #$00                            ; AC5D A0 00                    ..
 	sty     $D8                             ; AC5F 84 D8                    ..
@@ -2158,7 +2159,7 @@ LAD05:  asl     a                               ; AD05 0A                       
 	sta     off_E5+1
 	jsr     sub_ad8e
 	lda     $A4                             ; AD20 A5 A4                    ..
-	jsr     LADCB                           ; AD22 20 CB AD                  ..
+	jsr     sub_adcb
 	ldx     #$05                            ; AD25 A2 05                    ..
 LAD27:  jsr     LAD34                           ; AD27 20 34 AD                  4.
 	dex                                     ; AD2A CA                       .
@@ -2263,7 +2264,8 @@ LADB2:  lda     #$BF                            ; ADB2 A9 BF                    
 :	rts
 
 ; ----------------------------------------------------------------------------
-LADCB:  and     #$07                            ; ADCB 29 07                    ).
+sub_adcb:
+	and     #$07                            ; ADCB 29 07                    ).
 	sta     off_F4
 	bit     $C9                             ; ADCF 24 C9                    $.
 	bvs     :+
@@ -3992,9 +3994,7 @@ LB9C9:  .byte   $04                             ; B9C9 04                       
 	.byte   $04                             ; B9CA 04                       .
 	ora     $05                             ; B9CB 05 05                    ..
 	.byte   $05                             ; B9CD 05                       .
-LB9CE:  brk                                     ; B9CE 00                       .
-	brk                                     ; B9CF 00                       .
-	ora     ($02,x)                         ; B9D0 01 02                    ..
+LB9CE:	.byte	$00,$00,$01,$02
 	.byte   $02                             ; B9D2 02                       .
 	.byte   $03                             ; B9D3 03                       .
 	.byte   $03                             ; B9D4 03                       .
@@ -4094,7 +4094,7 @@ LBA54:  .byte   $2F                             ; BA54 2F                       
 	.byte   $02                             ; BA5F 02                       .
 	.byte   $BB                             ; BA60 BB                       .
 	.byte   $5A                             ; BA61 5A                       Z
-	bmi     LBAC3                           ; BA62 30 5F                    0_
+	.byte	$30,$5F
 	.byte	$EE,$3D,$A8
 LBA67:  bvs     LBAA9                           ; BA67 70 40                    p@
 	bvs     LBAAB                           ; BA69 70 40                    p@
@@ -4153,7 +4153,7 @@ LBAAB:  ror     $76,x                           ; BAAB 76 76                    
 	.byte   $03                             ; BABF 03                       .
 	cmp     $CA,x                           ; BAC0 D5 CA                    ..
 	dex                                     ; BAC2 CA                       .
-LBAC3:  dex                                     ; BAC3 CA                       .
+	dex                                     ; BAC3 CA                       .
 	cmp     ($CA),y                         ; BAC4 D1 CA                    ..
 	cmp     $D976,x                         ; BAC6 DD 76 D9                 .v.
 	.byte   $37                             ; BAC9 37                       7
