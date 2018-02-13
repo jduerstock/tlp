@@ -71,6 +71,8 @@ ICBL		:= $0348
 ICAX1		:= $034A
 ICAX2		:= $034B
 
+; GTIA
+
 HPOSM0		:= $D004
 HPOSM1		:= $D005
 HPOSM2		:= $D006
@@ -79,19 +81,28 @@ SIZEM		:= $D00C			; Size for all missiles
 GRACTL		:= $D01D			; Turn on/off player missiles or latch triggers
 CONSOL		:= $D01F
 
+; POKEY
+
 AUDCTL		:= $D208
 STIMER		:= $D209
 SEROUT		:= $D20D
 SERIN		:= SEROUT
 IRQEN		:= $D20E
-PMBASE		:= $D407			; MSB of the player/missile base address
 IRQST		:= IRQEN
+
+; PIA
 
 PORTA		:= $D300
 PACTL		:= $D302
 PBCTL		:= $D303
 
+; ANTIC
+
 DMACTL		:= $D400			; Direct Memory Access (DMA) control
+PMBASE		:= $D407			; MSB of the player/missile base address
+WSYNC		:= $D40A
+
+; OS ROM
 
 CIOV		:= $E456
 SIOV		:= $E459			; Serial Input/Output utility entry point
@@ -181,7 +192,7 @@ sub_a000:
 	bne     LA04F   			; A030 D0 1D                    ..
 	jsr     sub_a33d
 LA035:  jsr     sub_b238
-	jsr     LB719   			; A038 20 19 B7                  ..
+	jsr     sub_b719
 	bmi     LA049   			; A03B 30 0C                    0.
 	lda     #$1C    			; A03D A9 1C                    ..
 	ldx     #$B9    			; A03F A2 B9                    ..
@@ -1680,7 +1691,7 @@ LA9C5:  cmp     #$7C    			; A9C5 C9 7C                    .|
 LA9CB:  sta     $02BE   			; A9CB 8D BE 02                 ...
 LA9CE:  ldx     #$7F    			; A9CE A2 7F                    ..
 LA9D0:  stx     CONSOL
-	stx     $D40A   			; A9D3 8E 0A D4                 ...
+	stx     WSYNC
 	dex             			; A9D6 CA                       .
 	bpl     LA9D0   			; A9D7 10 F7                    ..
 	stx     CH
@@ -2936,7 +2947,7 @@ LB253:  jsr     sub_b238
 LB268:  lda     #<LB913
 	ldx     #>LB913
 LB26C:  jsr     sub_a89f
-	jmp     LB719   			; B26F 4C 19 B7                 L..
+	jmp     sub_b719
 
 ; ----------------------------------------------------------------------------
 sub_b272:
@@ -3118,7 +3129,7 @@ sub_b39c:
 	tya             			; B39D 98                       .
 	pha             			; B39E 48                       H
 	lda     SERIN
-	jsr     LB3B9   			; B3A2 20 B9 B3                  ..
+	jsr     sub_b3b9
 	lda     $D20F   			; B3A5 AD 0F D2                 ...
 	sta     $D20A   			; B3A8 8D 0A D2                 ...
 	eor     #$FF    			; B3AB 49 FF                    I.
@@ -3131,7 +3142,8 @@ LB3B5:  pla             			; B3B5 68                       h
 	rti             			; B3B8 40                       @
 
 ; ----------------------------------------------------------------------------
-LB3B9:  ldy     byte_133e
+sub_b3b9:
+	ldy     byte_133e
 	sta     $0F00,y 			; B3BC 99 00 0F                 ...
 	iny             			; B3BF C8                       .
 	sty     byte_133e
@@ -3500,7 +3512,7 @@ LB612:  ror     $1348   			; B612 6E 48 13                 nH.
 	bne     LB626   			; B617 D0 0D                    ..
 	lda     $1348   			; B619 AD 48 13                 .H.
 	eor     #$FF    			; B61C 49 FF                    I.
-	jsr     LB3B9   			; B61E 20 B9 B3                  ..
+	jsr     sub_b3b9
 	inc     $FD     			; B621 E6 FD                    ..
 	inc     $134C   			; B623 EE 4C 13                 .L.
 LB626:  lda     #$03    			; B626 A9 03                    ..
@@ -3654,7 +3666,8 @@ sub_b709:
 	rts             			; B718 60                       `
 
 ; ----------------------------------------------------------------------------
-LB719:  jsr     LB7E7   			; B719 20 E7 B7                  ..
+sub_b719:
+	jsr     sub_b7e7
 LB71C:  ldy     #$00    			; B71C A0 00                    ..
 	jsr     sub_b206
 	bpl     LB724   			; B721 10 01                    ..
@@ -3775,7 +3788,8 @@ sub_b7da:
 :	jmp	sub_b3c6
 
 ; ----------------------------------------------------------------------------
-LB7E7:  lda     #$42    			; B7E7 A9 42                    .B
+sub_b7e7:
+	lda     #$42    			; B7E7 A9 42                    .B
 	bit     $B1     			; B7E9 24 B1                    $.
 	bmi     :+
 	ldx     #$0A    			; B7ED A2 0A                    ..
@@ -3838,11 +3852,11 @@ sub_b828:
 LB82C:  txa             			; B82C 8A                       .
 	and     #$0F    			; B82D 29 0F                    ).
 	ora     #$10    			; B82F 09 10                    ..
-	sta     $D40A   			; B831 8D 0A D4                 ...
+	sta     WSYNC
 	sta     $D201   			; B834 8D 01 D2                 ...
 	inx             			; B837 E8                       .
 	inx             			; B838 E8                       .
-	sta     $D40A   			; B839 8D 0A D4                 ...
+	sta     WSYNC
 	bne     LB82C   			; B83C D0 EE                    ..
 	dey             			; B83E 88                       .
 	bne     LB82C   			; B83F D0 EB                    ..
