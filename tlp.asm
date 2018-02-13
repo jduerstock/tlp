@@ -2535,14 +2535,14 @@ LAFB5:  lda     off_F4                          ; AFB5 A5 F4                    
 	sbc     $D7                             ; AFBD E5 D7                    ..
 	sta     off_F4+1
 	bit     $FB                             ; AFC1 24 FB                    $.
-	bvs     LAFCF                           ; AFC3 70 0A                    p.
+	bvs     :+
 	inx                                     ; AFC5 E8                       .
 	cpx     #$08                            ; AFC6 E0 08                    ..
 	bcc     LAFD7                           ; AFC8 90 0D                    ..
 	ldx     #$00                            ; AFCA A2 00                    ..
 	iny                                     ; AFCC C8                       .
 	bne     LAFD7                           ; AFCD D0 08                    ..
-LAFCF:  dex                                     ; AFCF CA                       .
+:	dex                                     ; AFCF CA                       .
 	bpl     LAFD7                           ; AFD0 10 05                    ..
 	ldx     #$07                            ; AFD2 A2 07                    ..
 	dey                                     ; AFD4 88                       .
@@ -2695,7 +2695,7 @@ LB0C5:  lda     $C1                             ; B0C5 A5 C1                    
 	bcs     LB0D8                           ; B0D1 B0 05                    ..
 	lda     LBA43,x                         ; B0D3 BD 43 BA                 .C.
 	bne     LB0FD                           ; B0D6 D0 25                    .%
-LB0D8:  jsr     LB115                           ; B0D8 20 15 B1                  ..
+LB0D8:  jsr     sub_b115
 	jmp     LB0E8                           ; B0DB 4C E8 B0                 L..
 
 ; ----------------------------------------------------------------------------
@@ -2729,7 +2729,8 @@ LB110:  stx     $C5                             ; B110 86 C5                    
 	jmp     LB0C5                           ; B112 4C C5 B0                 L..
 
 ; ----------------------------------------------------------------------------
-LB115:  lda     byte_C0                         ; B115 A5 C0                    ..
+sub_b115:
+	lda     byte_C0                         ; B115 A5 C0                    ..
 	cmp     #$0F                            ; B117 C9 0F                    ..
 	bcs     LB136                           ; B119 B0 1B                    ..
 	inc     byte_C0                         ; B11B E6 C0                    ..
@@ -2739,13 +2740,13 @@ LB115:  lda     byte_C0                         ; B115 A5 C0                    
 	sec                                     ; B122 38                       8
 	sbc     #$06                            ; B123 E9 06                    ..
 	sta     byte_C3                         ; B125 85 C3                    ..
-LB127:  lda     $0590,x                         ; B127 BD 90 05                 ...
+:	lda     $0590,x                         ; B127 BD 90 05                 ...
 	sta     $058A,x                         ; B12A 9D 8A 05                 ...
 	lda     #$00                            ; B12D A9 00                    ..
 	sta     $0590,x                         ; B12F 9D 90 05                 ...
 	inx                                     ; B132 E8                       .
 	dey                                     ; B133 88                       .
-	bpl     LB127                           ; B134 10 F1                    ..
+	bpl     :-
 LB136:  rts                                     ; B136 60                       `
 
 ; ----------------------------------------------------------------------------
@@ -2837,9 +2838,9 @@ LB1B5:  ldy     #$00                            ; B1B5 A0 00                    
 	lda     byte_DF                         ; B1C6 A5 DF                    ..
 	adc     #$40                            ; B1C8 69 40                    i@
 	sta     byte_DF                         ; B1CA 85 DF                    ..
-	bcc     LB1D0                           ; B1CC 90 02                    ..
+	bcc     :+
 	inc     byte_E0                         ; B1CE E6 E0                    ..
-LB1D0:  clc                                     ; B1D0 18                       .
+:	clc                                     ; B1D0 18                       .
 	lda     off_DD
 	adc     #$03                            ; B1D3 69 03                    i.
 	sta     off_DD
