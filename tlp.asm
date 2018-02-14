@@ -3090,7 +3090,7 @@ LB339:  lda     $133C   			; B339 AD 3C 13                 .<.
 	and     #$F1    			; B344 29 F1                    ).
 	sta     DVSTAT  			; B346 8D EA 02                 ...
 	ldy     #$00    			; B349 A0 00                    ..
-	sty     $02ED   			; B34B 8C ED 02                 ...
+	sty     DVSTAT+3
 	sty     $133D   			; B34E 8C 3D 13                 .=.
 	iny             			; B351 C8                       .
 	rts             			; B352 60                       `
@@ -3102,9 +3102,9 @@ LB353:  lda     byte_1340
 	sei             			; B35A 78                       x
 	jsr     sub_b369
 	lda     $CB     			; B35E A5 CB                    ..
-	bne     LB365   			; B360 D0 03                    ..
+	bne     :+
 	jsr     sub_b545
-LB365:  cli             			; B365 58                       X
+:	cli             			; B365 58                       X
 	ldy     #$01    			; B366 A0 01                    ..
 	rts             			; B368 60                       `
 
