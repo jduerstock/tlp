@@ -42,17 +42,18 @@
 TSTDAT		:= $0007
 POKMSK		:= $0010			; POKEY Interrupts: used by IRQ service
 VTIMR1		:= $0210
-SHFLOK		:= $02BE			; Flag for shift and control keys
 CDTMA1		:= $0226			; System timer one jump address
 SRTIMR		:= $022B
 DLIST		:= $0230			; Starting address of the diplay list
 GPRIOR		:= $026F			; Priority selection register for screen objects
 STICK0		:= $0278			; Joystick 0
+SHFLOK		:= $02BE			; Flag for shift and control keys
 PCOLR0		:= $02C0			; Color for player 0 and missile 0
 COLOR1		:= $02C5			; Playfield 1 color register
 COLOR2		:= $02C6			; Playfield 2 color register
 COLOR3		:= $02C7			; Playfield 3 color register
 COLOR4		:= $02C8			; Playfield 4 color register
+HELPFG		:= $02DC
 DVSTAT		:= $02EA			; Device Status Registerjkj
 CH		:= $02FC
 DDEVIC		:= $0300			; Device Serial Bus ID (RS232 is $50)
@@ -1636,9 +1637,9 @@ sub_a963:
 	ldx     CH
 	inx             			; A966 E8                       .
 	bne     LA976   			; A967 D0 0D                    ..
-	lda     $02DC   			; A969 AD DC 02                 ...
+	lda     HELPFG
 	beq     LA962   			; A96C F0 F4                    ..
-	stx     $02DC   			; A96E 8E DC 02                 ...
+	stx     HELPFG
 	lda     #$0B    			; A971 A9 0B                    ..
 	jmp     sub_b1df
 
