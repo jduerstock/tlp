@@ -54,7 +54,7 @@ COLOR2		:= $02C6			; Playfield 2 color register
 COLOR3		:= $02C7			; Playfield 3 color register
 COLOR4		:= $02C8			; Playfield 4 color register
 HELPFG		:= $02DC
-DVSTAT		:= $02EA			; Device Status Registerjkj
+DVSTAT		:= $02EA			; Device Status Register
 CH		:= $02FC
 DDEVIC		:= $0300			; Device Serial Bus ID (RS232 is $50)
 DUNIT		:= $0301			; Device Unit number
@@ -165,6 +165,7 @@ byte_134c	:= $134C
 off_134d	:= $134D
 byte_1350	:= $1350
 L2000           := $2000
+L3E2E		:= $3E2E
 L3E33           := $3E33
 L4000           := $4000
 L6000           := $6000
@@ -213,7 +214,7 @@ LA04F:	lda	#$4C
 	jsr	sub_b242
 LA054:  lda     #$46    			; A054 A9 46                    .F
 	jsr     sub_b242
-	lda     $02EB   			; A059 AD EB 02                 ...
+	lda     DVSTAT+1
 	bpl     LA054   			; A05C 10 F6                    ..
 LA05E:  jsr     sub_a963
 	jsr     sub_ab35
@@ -239,7 +240,7 @@ LA08B:  clc             			; A08B 18                       .
 
 ; ----------------------------------------------------------------------------
 LA08D:  ldx     $B6     			; A08D A6 B6                    ..
-	sta     $3E2E,x 			; A08F 9D 2E 3E                 ..>
+	sta     L3E2E,x 			; A08F 9D 2E 3E                 ..>
 	inx             			; A092 E8                       .
 	stx     $B6     			; A093 86 B6                    ..
 	ldy     byte_B5 			; A095 A4 B5                    ..
@@ -1140,22 +1141,22 @@ LA5F6:  ldx     #$00    			; A5F6 A2 00                    ..
 ; ----------------------------------------------------------------------------
 
 sub_a5ff:
-	lda     $3E2E   			; A5FF AD 2E 3E                 ..>
+	lda     L3E2E   			; A5FF AD 2E 3E                 ..>
 	cmp     #$50    			; A602 C9 50                    .P
-	bne     LA614   			; A604 D0 0E                    ..
+	bne     :+
 	lda     #$1B    			; A606 A9 1B                    ..
 	jsr     sub_ab54
 	lda     #$50    			; A60B A9 50                    .P
 	jsr     sub_ab54
 	lda     #$43    			; A610 A9 43                    .C
 	bne     LA63D   			; A612 D0 29                    .)
-LA614:  cmp     #$71    			; A614 C9 71                    .q
-	bne     LA621   			; A616 D0 09                    ..
+:	cmp     #$71    			; A614 C9 71                    .q
+	bne     :+
 	lda     #$1B    			; A618 A9 1B                    ..
 	jsr     sub_ab54
 	lda     #$4E    			; A61D A9 4E                    .N
 	bne     LA638   			; A61F D0 17                    ..
-LA621:  cmp     #$72    			; A621 C9 72                    .r
+:	cmp     #$72    			; A621 C9 72                    .r
 	beq     LA631   			; A623 F0 0C                    ..
 	cmp     #$73    			; A625 C9 73                    .s
 	beq     LA631   			; A627 F0 08                    ..
@@ -3054,7 +3055,7 @@ sub_b2fa:
 	stx     byte_1344
 	sta     byte_1347
 	ldx     byte_1346
-	bne     LB312   			; B304 D0 0C                    ..
+	bne     :+
 	ldx     TSTDAT
 	beq     LB353   			; B308 F0 49                    .I
 	lda     #$80    			; B30A A9 80                    ..
@@ -3063,14 +3064,14 @@ sub_b2fa:
 	rts             			; B311 60                       `
 
 ; ----------------------------------------------------------------------------
-LB312:  bpl     LB322   			; B312 10 0E                    ..
+:	bpl     :+
 	lda     byte_1347
 	sta     byte_1343
 	tax             			; B31A AA                       .
 	lda     #$00    			; B31B A9 00                    ..
 	sta     byte_1346
 	beq     LB325   			; B320 F0 03                    ..
-LB322:  ldx     byte_1343
+:	ldx     byte_1343
 LB325:  cpx     #$46    			; B325 E0 46                    .F
 	beq     LB339   			; B327 F0 10                    ..
 	ldx     #$02    			; B329 A2 02                    ..
@@ -3084,7 +3085,7 @@ LB325:  cpx     #$46    			; B325 E0 46                    .F
 ; ----------------------------------------------------------------------------
 LB339:  lda     $133C   			; B339 AD 3C 13                 .<.
 	and     #$F1    			; B33C 29 F1                    ).
-	sta     $02EB   			; B33E 8D EB 02                 ...
+	sta     DVSTAT+1
 	lda     $133D   			; B341 AD 3D 13                 .=.
 	and     #$F1    			; B344 29 F1                    ).
 	sta     DVSTAT  			; B346 8D EA 02                 ...
