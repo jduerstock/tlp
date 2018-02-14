@@ -1523,7 +1523,7 @@ LA89C:  asl     $D8     			; A89C 06 D8                    ..
 LA89E:  rts             			; A89E 60                       `
 
 ; ----------------------------------------------------------------------------
-sub_a89f:
+sub_a89f:					; print string
 	sty     $EE     			; A89F 84 EE                    ..
 	sta     off_EC
 	stx     off_EC+1
