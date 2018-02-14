@@ -4041,8 +4041,8 @@ LB96E:  .byte   $10,$03,$0D,$00
 
 LB9A6:	.byte	$06,$09,$00,>byte_BAEC
 LB9AA:	.byte	$00,$00,$00,<byte_BAEC
-LB9AE:	.byte	$00,$80,$44,$84
-LB9B2:  .byte   $0C,$0D,$BC,$BE
+LB9AE:	.byte	$00,$80,$44,<LBE84
+LB9B2:  .byte   $0C,$0D,$BC,>LBE84
 LB9B6:	.byte	$08,$10,$10
 	.byte	$20,$20,$40
 	.byte   $80     			; B9BC 80                       .
@@ -5308,6 +5308,7 @@ chrset_6x6:
 	.byte   %00000000       		; ........
 	.byte   %00000000       		; ........
 
+LBE84:
 	.byte   %00000000       		; ........
 	.byte   %00000000       		; ........
 	.byte   %00000000       		; ........
