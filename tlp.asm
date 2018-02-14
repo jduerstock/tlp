@@ -92,6 +92,8 @@ SEROUT		:= $D20D
 SERIN		:= SEROUT
 IRQEN		:= $D20E
 IRQST		:= IRQEN
+SKCTL		:= $D20F
+SKSTAT		:= $D20F
 
 ; PIA
 
@@ -3161,7 +3163,7 @@ sub_b39c:
 	pha             			; B39E 48                       H
 	lda     SERIN
 	jsr     sub_b3b9
-	lda     $D20F   			; B3A5 AD 0F D2                 ...
+	lda     SKSTAT
 	sta     $D20A   			; B3A8 8D 0A D2                 ...
 	eor     #$FF    			; B3AB 49 FF                    I.
 	and     #$C0    			; B3AD 29 C0                    ).
@@ -3327,7 +3329,7 @@ sub_b4a5:
 	and     $0232   			; B4A7 2D 32 02                 -2.
 	ora     #$70    			; B4AA 09 70                    .p
 	sta     $0232   			; B4AC 8D 32 02                 .2.
-	sta     $D20F   			; B4AF 8D 0F D2                 ...
+	sta     SKCTL
 	sta     $D20A   			; B4B2 8D 0A D2                 ...
 	lda     #$78    			; B4B5 A9 78                    .x
 	sta     AUDCTL
@@ -3579,7 +3581,7 @@ LB655:  lda     byte_1340
 	sta     $FE     			; B664 85 FE                    ..
 	bne     LB645   			; B666 D0 DD                    ..
 	lda     #$13    			; B668 A9 13                    ..
-	sta     $D20F   			; B66A 8D 0F D2                 ...
+	sta     SKCTL
 	sta     $0232   			; B66D 8D 32 02                 .2.
 	lda     PORTA
 	and     #$BF    			; B673 29 BF                    ).
@@ -3731,7 +3733,7 @@ LB724:  lda     #$00    			; B724 A9 00                    ..
 ; ----------------------------------------------------------------------------
 LB756:  sei             			; B756 78                       x
 	lda     #$73    			; B757 A9 73                    .s
-	sta     $D20F   			; B759 8D 0F D2                 ...
+	sta     SKCTL
 	lda     $1338   			; B75C AD 38 13                 .8.
 	sta     AUDCTL
 	ldy     #$07    			; B762 A0 07                    ..
