@@ -171,7 +171,7 @@ L8000           := $8000
 charset_sm	:= $BC44			; 6x6 character set
 ; ----------------------------------------------------------------------------
 
-sub_a000:
+cart_start:
 	jsr     sub_b799			; Attempt to load R: Handler?
 	jsr     sub_a214			; Initialize Graphics
 	jsr     sub_a33d
@@ -3287,11 +3287,13 @@ LB47A:  php             			; B47A 08                       .
 sub_b47d:
 	sei             			; B47D 78                       x
 	jsr     sub_b4a5
+
 	ldy     #$07    			; B481 A0 07                    ..
 	lda     #$00    			; B483 A9 00                    ..
 :	sta     $133C,y
 	dey             			; B488 88                       .
 	bpl     :-
+
 	sta     TSTDAT
 	sta     byte_1346
 	lda     #$C7    			; B490 A9 C7                    ..
@@ -5617,9 +5619,15 @@ sub_bf86:
 	bcc     sub_bf86			; Otherwise continue trying.
 :	rts             			; Return with Z and X (offset)
 
-; ----------------------------------------------------------------------------
+;*******************************************************************************
+;*                                                                             *
+;*                                 cart_init                                   *
+;*                                                                             *
+;*         OS calls this code before jumping to cart start address             *
+;*                                                                             *
+;*******************************************************************************
 
-sub_BF93:
+cart_init:
 	jsr	sub_b47d
 	lda	#$51
 	sta	byte_1347
@@ -5666,9 +5674,15 @@ LBFD8:  jsr     sub_b4f7
 	sta     HATABS+2,x
 :	rts
 
-; ----------------------------------------------------------------------------
-	.byte	$00,$00
-
-	.addr	sub_a000
-	.byte   $00,$04
-	.addr	sub_BF93
+	.byte	$00,$00                         
+;*******************************************************************************
+;*                                                                             *
+;*                                   LBFFA                                     *
+;*                                                                             *
+;*                              Cartridge Header                               *
+;*                                                                             *
+;*******************************************************************************
+LBFFA:	.addr	cart_start                      ; Cart start address
+	.byte   $00                             ; Used by OS to determine if this is ROM
+	.byte	$04                             ; Option byte: run Cart init, then run Cart start
+	.addr	cart_init                       ; Cart init address - entry point
