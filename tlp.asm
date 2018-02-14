@@ -1916,7 +1916,7 @@ sub_ab54:
 sub_ab5a:
 	lda     $3E2E   			; AB5A AD 2E 3E                 ..>
 
-sub_ab5d:
+sub_ab5d:					; print character
 	sta     $E7     			; AB5D 85 E7                    ..
 	sec             			; AB5F 38                       8
 	sbc     #$20    			; AB60 E9 20                    . 
