@@ -3076,14 +3076,14 @@ LB325:  cpx     #$46    			; B325 E0 46                    .F
 	beq     LB339   			; B327 F0 10                    ..
 	ldx     #$02    			; B329 A2 02                    ..
 	jsr     sub_b422
-	lda     $133C   			; B32E AD 3C 13                 .<.
+	lda     byte_133c   			; B32E AD 3C 13                 .<.
 	ora     #$01    			; B331 09 01                    ..
-	sta     $133C   			; B333 8D 3C 13                 .<.
+	sta     byte_133c   			; B333 8D 3C 13                 .<.
 	ldy     #$01    			; B336 A0 01                    ..
 	rts             			; B338 60                       `
 
 ; ----------------------------------------------------------------------------
-LB339:  lda     $133C   			; B339 AD 3C 13                 .<.
+LB339:  lda     byte_133c   			; B339 AD 3C 13                 .<.
 	and     #$F1    			; B33C 29 F1                    ).
 	sta     DVSTAT+1
 	lda     $133D   			; B341 AD 3D 13                 .=.
@@ -3221,14 +3221,14 @@ sub_b406:
 	cld             			; B406 D8                       .
 	tya             			; B407 98                       .
 	pha             			; B408 48                       H
-	lda     $133C   			; B409 AD 3C 13                 .<.
+	lda     byte_133c   			; B409 AD 3C 13                 .<.
 	eor     #$80    			; B40C 49 80                    I.
-	sta     $133C   			; B40E 8D 3C 13                 .<.
+	sta     byte_133c   			; B40E 8D 3C 13                 .<.
 	and     #$80    			; B411 29 80                    ).
 	bne     LB3B5   			; B413 D0 A0                    ..
-LB415:  lda     $133C   			; B415 AD 3C 13                 .<.
+LB415:  lda     byte_133c   			; B415 AD 3C 13                 .<.
 	and     #$3E    			; B418 29 3E                    )>
-	sta     $133C   			; B41A 8D 3C 13                 .<.
+	sta     byte_133c   			; B41A 8D 3C 13                 .<.
 	jmp     LB3B5   			; B41D 4C B5 B3                 L..
 
 ; ----------------------------------------------------------------------------
@@ -3292,7 +3292,7 @@ sub_b47d:
 
 	ldy     #$07    			; B481 A0 07                    ..
 	lda     #$00    			; B483 A9 00                    ..
-:	sta     $133C,y
+:	sta     byte_133c,y
 	dey             			; B488 88                       .
 	bpl     :-
 
