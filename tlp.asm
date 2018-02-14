@@ -138,8 +138,7 @@ FG_COLOR_DL1	:= $00D2			; Text luminance used in Display List #1 (small text)
 BG_COLOR_DL1	:= $00D3			; Background / border hue/luminance used in Display List #1
 byte_D9		:= $00D9
 off_DD		:= $00DD
-byte_DF		:= $00DF
-byte_E0		:= $00E0
+off_DF		:= $00DF
 byte_E1		:= $00E1
 byte_E2		:= $00E2
 
@@ -165,6 +164,7 @@ byte_134c	:= $134C
 off_134d	:= $134D
 byte_134f	:= $134F
 byte_1350	:= $1350
+word_1351	:= $1351
 L2000           := $2000
 L3E2E		:= $3E2E
 L3E33           := $3E33
@@ -367,16 +367,16 @@ LA143:  rts             			; A143 60                       `
 ; ----------------------------------------------------------------------------
 LA144:  inx             			; A144 E8                       .
 	stx     byte_134f
-	jmp     LA1FE   			; A148 4C FE A1                 L..
+	jmp     sub_a1fe
 
 ; ----------------------------------------------------------------------------
 LA14B:  bit     byte_134f
-	bpl     LA151   			; A14E 10 01                    ..
+	bpl     :+
 	rts             			; A150 60                       `
 
 ; ----------------------------------------------------------------------------
-LA151:  ldx     byte_FF 			; A151 A6 FF                    ..
-	beq     LA162   			; A153 F0 0D                    ..
+:	ldx     byte_FF 			; A151 A6 FF                    ..
+	beq     :+
 	dex             			; A155 CA                       .
 	beq     LA16D   			; A156 F0 15                    ..
 	dex             			; A158 CA                       .
@@ -388,7 +388,7 @@ LA151:  ldx     byte_FF 			; A151 A6 FF                    ..
 	rts             			; A161 60                       `
 
 ; ----------------------------------------------------------------------------
-LA162:  sty     off_CE+1
+:	sty     off_CE+1
 	sta     off_CE
 	ldy     #$00    			; A166 A0 00                    ..
 	lda     (off_CE),y
@@ -397,50 +397,50 @@ LA162:  sty     off_CE+1
 ; ----------------------------------------------------------------------------
 LA16D:  sty     off_CE+1
 	sta     off_CE
-	jmp     LA1FE   			; A171 4C FE A1                 L..
+	jmp     sub_a1fe
 
 ; ----------------------------------------------------------------------------
 LA174:  sty     off_134d+1
 	sta     off_134d
 	dex             			; A17A CA                       .
 	stx     $B9     			; A17B 86 B9                    ..
-	jmp     LA1FE   			; A17D 4C FE A1                 L..
+	jmp     sub_a1fe
 
 ; ----------------------------------------------------------------------------
 LA180:  sty     off_134d+1
 	sta     off_134d
-	jsr     LA1FE   			; A186 20 FE A1                  ..
+	jsr     sub_a1fe
 	jmp     (off_134d)
 
 ; ----------------------------------------------------------------------------
 LA18C:  bit     byte_1350
-	bmi     LA19C   			; A18F 30 0B                    0.
-	sta     $1351   			; A191 8D 51 13                 .Q.
-	sty     $1352   			; A194 8C 52 13                 .R.
+	bmi     :+
+	sta     word_1351
+	sty     word_1351+1
 	dex             			; A197 CA                       .
 	stx     byte_1350
 	rts             			; A19B 60                       `
 
 ; ----------------------------------------------------------------------------
-LA19C:  tya             			; A19C 98                       .
+:	tya             			; A19C 98                       .
 	ldy     #$00    			; A19D A0 00                    ..
 	sta     (off_CE),y
 	iny             			; A1A1 C8                       .
-	dec     $1351   			; A1A2 CE 51 13                 .Q.
+	dec     word_1351   			; A1A2 CE 51 13                 .Q.
 	bne     LA1B0   			; A1A5 D0 09                    ..
 	tya             			; A1A7 98                       .
-	ldx     $1352   			; A1A8 AE 52 13                 .R.
+	ldx     word_1351+1
 	beq     LA1C8   			; A1AB F0 1B                    ..
-	dec     $1352   			; A1AD CE 52 13                 .R.
+	dec     word_1351+1
 LA1B0:  lda     $DB     			; A1B0 A5 DB                    ..
 	sta     (off_CE),y
-	dec     $1351   			; A1B4 CE 51 13                 .Q.
+	dec     word_1351
 	bne     LA1C4   			; A1B7 D0 0B                    ..
-	ldx     $1352   			; A1B9 AE 52 13                 .R.
-	beq     LA1C3   			; A1BC F0 05                    ..
-	dec     $1352   			; A1BE CE 52 13                 .R.
+	ldx     word_1351+1
+	beq     :+
+	dec     word_1351+1
 	bvs     LA1C4   			; A1C1 70 01                    p.
-LA1C3:  clv             			; A1C3 B8                       .
+:	clv             			; A1C3 B8                       .
 LA1C4:  lda     #$02    			; A1C4 A9 02                    ..
 	bne     LA1C9   			; A1C6 D0 01                    ..
 LA1C8:  clv             			; A1C8 B8                       .
@@ -452,7 +452,7 @@ LA1C9:  php             			; A1C9 08                       .
 	inc     off_CE+1
 :	plp             			; A1D3 28                       (
 	bvs     LA1DC   			; A1D4 70 06                    p.
-	jsr     LA1FE   			; A1D6 20 FE A1                  ..
+	jsr     sub_a1fe
 	inc     byte_1350
 LA1DC:  rts             			; A1DC 60                       `
 
@@ -474,7 +474,9 @@ LA1DD:  lda     #$1B    			; A1DD A9 1B                    ..
 	lda     $E7     			; A1F7 A5 E7                    ..
 	ora     #$68    			; A1F9 09 68                    .h
 	jsr     sub_ab54
-LA1FE:  jsr     LA120   			; A1FE 20 20 A1                   .
+
+sub_a1fe:
+	jsr     LA120   			; A1FE 20 20 A1                   .
 	lda     #$FF    			; A201 A9 FF                    ..
 	sta     byte_FF 			; A203 85 FF                    ..
 	lda     #$1B    			; A205 A9 1B                    ..
@@ -589,11 +591,11 @@ sub_a214:					; A214
 
 ;** (n) Screen RAM for display list #2 will begin at $4000 *********************
 	lda     #<L4000				; 
-	sta     byte_DF				; Let byte_DF = $00 TODO
+	sta     off_DF				; Let off_DF = $4000
 	sta     byte_E1				; Let byte_E1 = $00 TODO
 
 	lda     #>L4000				; 
-	sta     byte_E0 			; Let byte_E0 = $40 TODO
+	sta     off_DF+1 			;
 	sta     byte_E2 			; Let byte_E2 = $40 TODO
 
 ;** (n) Call sub to derive body of display list #2 *****************************
@@ -2827,9 +2829,9 @@ LB17D:  lda     off_DD
 	cmp     #$19    			; B186 C9 19                    ..
 	bcs     LB18E   			; B188 B0 04                    ..
 	sta     byte_E1 			; B18A 85 E1                    ..
-	sta     byte_DF 			; B18C 85 DF                    ..
+	sta     off_DF	 			; B18C 85 DF                    ..
 LB18E:  lda     byte_E2 			; B18E A5 E2                    ..
-	sta     byte_E0 			; B190 85 E0                    ..
+	sta     off_DF+1 			; B190 85 E0                    ..
 	lda     off_DD+1
 	beq     LB1AB   			; B194 F0 15                    ..
 	clc             			; B196 18                       .
@@ -2842,7 +2844,7 @@ LB18E:  lda     byte_E2 			; B18E A5 E2                    ..
 LB1A3:  cmp     #$71    			; B1A3 C9 71                    .q
 	bcs     LB1AB   			; B1A5 B0 04                    ..
 	sta     byte_E2 			; B1A7 85 E2                    ..
-	sta     byte_E0 			; B1A9 85 E0                    ..
+	sta     off_DF+1
 
 ; 
 LB1AB:  lda     #<$10CD    			; B1AB A9 CD                    ..
@@ -2855,17 +2857,17 @@ LB1B5:  ldy     #$00    			; B1B5 A0 00                    ..
 	lda     #$4F    			; B1B7 A9 4F                    .O
 	sta     (off_DD),y
 	iny             			; B1BB C8                       .
-	lda     byte_DF 			; B1BC A5 DF                    ..
+	lda     off_DF 				; B1BC A5 DF                    ..
 	sta     (off_DD),y
 	iny             			; B1C0 C8                       .
-	lda     byte_E0 			; B1C1 A5 E0                    ..
+	lda     off_DF+1 			; B1C1 A5 E0                    ..
 	sta     (off_DD),y
 	clc             			; B1C5 18                       .
-	lda     byte_DF 			; B1C6 A5 DF                    ..
+	lda     off_DF 				; B1C6 A5 DF                    ..
 	adc     #$40    			; B1C8 69 40                    i@
-	sta     byte_DF 			; B1CA 85 DF                    ..
+	sta     off_DF	 			; B1CA 85 DF                    ..
 	bcc     :+
-	inc     byte_E0 			; B1CE E6 E0                    ..
+	inc     off_DF+1 			; B1CE E6 E0                    ..
 :	clc             			; B1D0 18                       .
 	lda     off_DD
 	adc     #$03    			; B1D3 69 03                    i.
@@ -3976,7 +3978,7 @@ LB93A:
 	.byte   $7F,$BF,$DF,$EF,$F7,$FB,$FD,$FE
 LB942:  .byte   $80,$40,$20,$10,$08,$04,$02,$01
 	.byte	$E3
-	sbc     (byte_E0,x) 			; B94B E1 E0                    ..
+	.byte	$E1,$E0
 	.byte   $E2     			; B94D E2                       .
 LB94E:  brk             			; B94E 00                       .
 LB94F:  .byte   $7F,$3F,$1F,$0F,$07,$03,$01
@@ -3988,8 +3990,8 @@ LB95C:  .byte   $FE     			; B95C FE                       .
 	brk             			; B95D 00                       .
 LB95E:  .byte   $07     			; B95E 07                       .
 	.byte   $83     			; B95F 83                       .
-	cmp     (byte_E0,x) 			; B960 C1 E0                    ..
-	beq     LB95C   			; B962 F0 F8                    ..
+	.byte	$C1,$E0
+	.byte	$F0,$F8
 	.byte   $FC     			; B964 FC                       .
 	.byte   $FE     			; B965 FE                       .
 LB966:  brk             			; B966 00                       .
