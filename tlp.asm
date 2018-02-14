@@ -154,6 +154,7 @@ byte_FF		:= $00FF
 byte_1330	:= $1330
 byte_133a	:= $133A
 byte_133c	:= $133C
+byte_133d	:= $133D
 byte_133e	:= $133E
 byte_1340	:= $1340
 byte_1343	:= $1343
@@ -3095,12 +3096,12 @@ LB325:  cpx     #$46    			; B325 E0 46                    .F
 LB339:  lda     byte_133c   			; B339 AD 3C 13                 .<.
 	and     #$F1    			; B33C 29 F1                    ).
 	sta     DVSTAT+1
-	lda     $133D   			; B341 AD 3D 13                 .=.
+	lda     byte_133d
 	and     #$F1    			; B344 29 F1                    ).
 	sta     DVSTAT  			; B346 8D EA 02                 ...
 	ldy     #$00    			; B349 A0 00                    ..
 	sty     DVSTAT+3
-	sty     $133D   			; B34E 8C 3D 13                 .=.
+	sty     byte_133d
 	iny             			; B351 C8                       .
 	rts             			; B352 60                       `
 
@@ -3167,8 +3168,8 @@ sub_b39c:
 	sta     $D20A   			; B3A8 8D 0A D2                 ...
 	eor     #$FF    			; B3AB 49 FF                    I.
 	and     #$C0    			; B3AD 29 C0                    ).
-	ora     $133D   			; B3AF 0D 3D 13                 .=.
-	sta     $133D   			; B3B2 8D 3D 13                 .=.
+	ora     byte_133d
+	sta     byte_133d
 LB3B5:  pla             			; B3B5 68                       h
 	tay             			; B3B6 A8                       .
 	pla             			; B3B7 68                       h
@@ -3629,7 +3630,7 @@ sub_b6b8:
 	sta     byte_133a
 	ldy     #$00    			; B6BD A0 00                    ..
 	sty     $1342   			; B6BF 8C 42 13                 .B.
-	sty     $133D   			; B6C2 8C 3D 13                 .=.
+	sty     byte_133d
 	iny             			; B6C5 C8                       .
 	sty     $CB     			; B6C6 84 CB                    ..
 	rts             			; B6C8 60                       `
