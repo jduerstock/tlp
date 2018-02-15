@@ -156,6 +156,7 @@ byte_133a	:= $133A
 byte_133c	:= $133C
 byte_133d	:= $133D
 byte_133e	:= $133E
+byte_133f	:= $133F
 byte_1340	:= $1340
 byte_1343	:= $1343
 byte_1344	:= $1344
@@ -3142,7 +3143,7 @@ sub_b37c:
 	stx     byte_1344
 LB380:  cli             			; B380 58                       X
 	sei             			; B381 78                       x
-	ldy     $133F   			; B382 AC 3F 13                 .?.
+	ldy     byte_133f
 	cpy     byte_133e
 	beq     LB380   			; B388 F0 F6                    ..
 
@@ -3151,7 +3152,7 @@ sub_b38a:
 	and     #$7F    			; B38D 29 7F                    ).
 	sta     byte_1347
 	iny             			; B392 C8                       .
-	sty     $133F   			; B393 8C 3F 13                 .?.
+	sty     byte_133f
 	dec     byte_CC
 	cli             			; B398 58                       X
 	ldy     #$01    			; B399 A0 01                    ..
@@ -3705,7 +3706,7 @@ sub_b6e9:
 sub_b709:
 	cli             			; B709 58                       X
 	sei             			; B70A 78                       x
-	ldy     $133F   			; B70B AC 3F 13                 .?.
+	ldy     byte_133f
 	cpy     byte_133e
 	beq     sub_b709
 	jsr     sub_b38a
@@ -3724,7 +3725,7 @@ LB71C:  ldy     #$00    			; B71C A0 00                    ..
 :	lda     #$00    			; B724 A9 00                    ..
 	sta     byte_B2
 	sta     byte_133e
-	sta     $133F   			; B72B 8D 3F 13                 .?.
+	sta     byte_133f
 	sta     $1342   			; B72E 8D 42 13                 .B.
 	sta     $1341   			; B731 8D 41 13                 .A.
 	sta     $0309   			; B734 8D 09 03                 ...
