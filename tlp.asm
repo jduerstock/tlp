@@ -229,15 +229,15 @@ cart_start:
 	jsr     sub_a33d
 LA035:  jsr     sub_b238
 	jsr     sub_b719
-	bmi     LA049   			; A03B 30 0C                    0.
-	lda     #$1C    			; A03D A9 1C                    ..
-	ldx     #$B9    			; A03F A2 B9                    ..
+	bmi     :+
+	lda     #<LB91C
+	ldx     #>LB91C
 	ldy     #$08    			; A041 A0 08                    ..
 	jsr     sub_a89f
 	jmp     LA05E   			; A046 4C 5E A0                 L^.
 
 ; ----------------------------------------------------------------------------
-LA049:  jsr     sub_b272
+:	jsr     sub_b272
 	jmp     LA05E   			; A04C 4C 5E A0                 L^.
 
 ; ----------------------------------------------------------------------------
@@ -295,7 +295,7 @@ LA0A3:  ldy     #$00    			; A0A3 A0 00                    ..
 	ldy     $B4     			; A0A9 A4 B4                    ..
 	cpy     #$05    			; A0AB C0 05                    ..
 	beq     LA0B6   			; A0AD F0 07                    ..
-	jsr     LA120   			; A0AF 20 20 A1                   .
+	jsr     sub_a120   			; A0AF 20 20 A1                   .
 	tya             			; A0B2 98                       .
 	bne     LA0B6   			; A0B3 D0 01                    ..
 	rts             			; A0B5 60                       `
@@ -367,7 +367,10 @@ LA118:  sta     $B4     			; A118 85 B4                    ..
 	lda     byte_B3 			; A11A A5 B3                    ..
 	ora     #$40    			; A11C 09 40                    .@
 	bne     LA129   			; A11E D0 09                    ..
-LA120:  lda     $1354   			; A120 AD 54 13                 .T.
+
+; ----------------------------------------------------------------------------
+sub_a120:  
+	lda     $1354   			; A120 AD 54 13                 .T.
 	sta     byte_B5 			; A123 85 B5                    ..
 	lda     byte_B3 			; A125 A5 B3                    ..
 	and     #$BF    			; A127 29 BF                    ).
@@ -506,7 +509,7 @@ LA1DD:  lda     #$1B    			; A1DD A9 1B                    ..
 	jsr     sub_ab54
 
 sub_a1fe:
-	jsr     LA120   			; A1FE 20 20 A1                   .
+	jsr     sub_a120   			; A1FE 20 20 A1                   .
 	lda     #$FF    			; A201 A9 FF                    ..
 	sta     byte_FF 			; A203 85 FF                    ..
 	lda     #$1B    			; A205 A9 1B                    ..
