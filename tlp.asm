@@ -2114,9 +2114,9 @@ LAC7C:  ldy     $CA     			; AC7C A4 CA                    ..
 	sta     $CA     			; AC98 85 CA                    ..
 LAC9A:  ldy     #$00    			; AC9A A0 00                    ..
 	lda     off_FA+1
-	jsr     LAD3A   			; AC9E 20 3A AD                  :.
+	jsr     sub_ad3a   			; AC9E 20 3A AD                  :.
 	lda     $FA     			; ACA1 A5 FA                    ..
-	jsr     LAD3A   			; ACA3 20 3A AD                  :.
+	jsr     sub_ad3a
 	bit     $CA     			; ACA6 24 CA                    $.
 	bvs     LACB8   			; ACA8 70 0E                    p.
 	jsr     LACCD   			; ACAA 20 CD AC                  ..
@@ -2124,7 +2124,7 @@ LAC9A:  ldy     #$00    			; AC9A A0 00                    ..
 	sta     $CA     			; ACAF 85 CA                    ..
 	bne     LAC9A   			; ACB1 D0 E7                    ..
 LACB3:  ldy     #$00    			; ACB3 A0 00                    ..
-	jsr     LAD3A   			; ACB5 20 3A AD                  :.
+	jsr     sub_ad3a
 LACB8:  dex             			; ACB8 CA                       .
 	bmi     LACE2   			; ACB9 30 27                    0'
 	lda     $CA     			; ACBB A5 CA                    ..
@@ -2206,7 +2206,9 @@ sub_ad34:
 	tay             			; AD35 A8                       .
 	lda     (off_E5),y
 	ldy     #$00    			; AD38 A0 00                    ..
-LAD3A:  bit     $B0     			; AD3A 24 B0                    $.
+
+sub_ad3a:
+	bit     $B0     			; AD3A 24 B0                    $.
 	bvc     :+
 	eor     #$FF    			; AD3E 49 FF                    I.
 	bit     $C9     			; AD40 24 C9                    $.
@@ -2217,10 +2219,10 @@ LAD3A:  bit     $B0     			; AD3A 24 B0                    $.
 	sty     $D8     			; AD4A 84 D8                    ..
 	ldy     off_F4
 	beq     LAD56   			; AD4E F0 06                    ..
-LAD50:  lsr     a       			; AD50 4A                       J
+:	lsr     a       			; AD50 4A                       J
 	ror     $D8     			; AD51 66 D8                    f.
 	dey             			; AD53 88                       .
-	bne     LAD50   			; AD54 D0 FA                    ..
+	bne     :-
 LAD56:  sta     byte_D9 			; AD56 85 D9                    ..
 	ldy     $FC     			; AD58 A4 FC                    ..
 	lda     (off_E3),y
@@ -3706,11 +3708,11 @@ sub_b719:
 	jsr     sub_b7e7
 LB71C:  ldy     #$00    			; B71C A0 00                    ..
 	jsr     sub_b206
-	bpl     LB724   			; B721 10 01                    ..
+	bpl     :+
 	rts             			; B723 60                       `
 
 ; ----------------------------------------------------------------------------
-LB724:  lda     #$00    			; B724 A9 00                    ..
+:	lda     #$00    			; B724 A9 00                    ..
 	sta     byte_B2
 	sta     byte_133e
 	sta     $133F   			; B72B 8D 3F 13                 .?.
@@ -3885,7 +3887,7 @@ LB820:	.addr	sub_b6e9-1      		; PUT BYTE vector???
 sub_b828:
 	ldx     #$00    			; B828 A2 00                    ..
 	ldy     #$04    			; B82A A0 04                    ..
-LB82C:  txa             			; B82C 8A                       .
+:	txa             			; B82C 8A                       .
 	and     #$0F    			; B82D 29 0F                    ).
 	ora     #$10    			; B82F 09 10                    ..
 	sta     WSYNC
@@ -3893,9 +3895,9 @@ LB82C:  txa             			; B82C 8A                       .
 	inx             			; B837 E8                       .
 	inx             			; B838 E8                       .
 	sta     WSYNC
-	bne     LB82C   			; B83C D0 EE                    ..
+	bne     :-
 	dey             			; B83E 88                       .
-	bne     LB82C   			; B83F D0 EB                    ..
+	bne     :-
 	lda     #<(LB863-1)
 	ldy     #>(LB863-1)
 	ldx     #$0C    			; B845 A2 0C                    ..
