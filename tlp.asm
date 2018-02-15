@@ -556,10 +556,10 @@ sub_a214:					; A214
 	bne     :-      			; End Loop
 
 ;** (n) Point to screen RAM at $2010 in display list #1 ************************
-	lda     #$10    			; 
+	lda     #<$2010    			; 
 	sta     $1004   			; 
 	sta     off_F4				; Store Screen location
-	lda     #$20    			; in zero page varibles, too
+	lda     #>$2010    			; in zero page varibles, too
 	sta     $1005   			; 
 	sta     off_F4+1			; 
 
@@ -585,19 +585,19 @@ sub_a214:					; A214
 	lda     #$41    			; Write Wait for sync
 	sta     $1006,x 			; to bottom of list
 	sta     $130D   			; 
-	lda     #$00    			; Tell ANTIC to jump
+	lda     #<$1000    			; Tell ANTIC to jump
 	sta     $1007,x 			; back to the top of the display
 	sta     DLIST				; list at $1000.
-	lda     #$10    			; 
+	lda     #>$1000    			;
 	sta     $1008,x 			; Also register the new display
 	sta     DLIST+1 			; list loc with the hardware
 
 ;** (n) Screen RAM for display list #2 will begin at $4000 *********************
-	lda     #<L4000				; 
+	lda     #<L4000				;
 	sta     off_DF				; Let off_DF = $4000
 	sta     byte_E1				; Let byte_E1 = $00 TODO
 
-	lda     #>L4000				; 
+	lda     #>L4000				;
 	sta     off_DF+1 			;
 	sta     byte_E2 			; Let byte_E2 = $40 TODO
 
@@ -608,7 +608,7 @@ sub_a214:					; A214
 	lda     #$CA    			; Tell ANTIC to jump
 	sta     $130E   			; back to the top of the display
 	lda     #$10    			; list at $10CA.
-	sta     $130F   			; 
+	sta     $130F   			;
 
 ;** (n) Create a table of pointers to 192 scan lines ****************************
 	ldx     #$00    			; Create a table of pointers...
@@ -616,7 +616,7 @@ sub_a214:					; A214
 	sta     $04C0,x 			; lines. LSB in $0400-$04BF...
 	lda     off_F4  			; MSB in $04C0-$057F...
 	sta     $0400,x 			; starting with $2010, $0238, ..., $3DE8
-	inx             			; 
+	inx             			;
 	cpx     #$C0    			; Quit at 192 iterations
 	beq	:+                              ;
 	lda     off_F4                          ;
@@ -627,19 +627,19 @@ sub_a214:					; A214
 	bne	:-				; End Loop
 
 ;** (n) Configure Player Missile Graphics ***************************************
-:	lda     #$03    			; 
+:	lda     #$03    			;
 	sta     GRACTL				; Enable display of PMG
 
 	lda     #$04    			; TODO Confused - page 4 contains pointers to scan line addresses
-	sta     PMBASE  			; PMG will be stored in page 4 
+	sta     PMBASE  			; PMG will be stored in page 4
 
 	lda     #$55    			; SIZEM = 01 01 01 01
 	sta     SIZEM   			; Set missiles 0-3 to double wide
 
 	lda     #$00    			; Loop through each missile
 	ldx     #$03    			; Set horiz pos to 0 (offscreen)
-:       sta     HPOSM0,x			; 
-	dex             			; 
+:       sta     HPOSM0,x			;
+	dex             			;
 	bpl     :-      			; End Loop
 
 ;** (n) *************************************************************************
@@ -647,20 +647,20 @@ sub_a214:					; A214
 	stx     byte_C4                         ;
 
 	ldx     #$0F    			; TODO
-	stx     byte_C0 			; 
+	stx     byte_C0 			;
 
 	ldx     #$07    			; Copy 7 bytes from ROM to RAM locations
 	stx     byte_B3 			; $058C-$0592
-:       lda     LBA67,x 			; Initial values 
+:       lda     LBA67,x 			; Initial values
 	sta     $058C,x 			; 70 40 70 40 40 06 0F
-	dex             			; 
+	dex             			;
 	bpl     :-      			; End loop
 
 	stx     byte_C7 			; Save FF to RAM
 
 ;** (n) Set default background and border color for Display List #1 *************
-	lda     #$01    			; 
-	sta     byte_C3 			; 
+	lda     #$01    			;
+	sta     byte_C3 			;
 	sta     byte_B5 			; Set priority for screen objects...
 	sta     GPRIOR  			; 0000 0001 = Player 0-3, Playfied 0-3, BAK
 	lda     #$16				; Set initial background color
@@ -710,21 +710,21 @@ sub_a214:					; A214
 ;*******************************************************************************
 sub_a324:
 	tay             			; Let Y = current background color
-	clc             			; 
+	clc             			;
 	adc     #$04    			; Increment luminance by 4
 	and     #$0F    			; Clear hue bits
 	sta     byte_D9 			; Save new luminance to D9
 	tya             			; Retrieve original background color
 	and     #$F0    			; Clear luminance bits
-	clc             			; 
+	clc             			;
 	adc     #$30    			; Increment hue by 3
 	ora     byte_D9 			; Merge new hue with new luminance
 
-	ldx     #$03    			; 
+	ldx     #$03    			;
 :	sta     PCOLR0,x			; Store new hue and luminance
 	dex             			; to PCOLR0-PCOLR3
 	bpl     :-      			; End Loop
-	rts             			; 
+	rts             			;
 
 ; ----------------------------------------------------------------------------
 sub_a33d:
@@ -1077,7 +1077,7 @@ LA58C:  lda     #$62    			; A58C A9 62                    .b
 	rts             			; A595 60                       `
 
 ; ----------------------------------------------------------------------------
-sub_a596:  
+sub_a596:
 	bvc     :+
 	and     (off_E3),y
 	bvs     :++
