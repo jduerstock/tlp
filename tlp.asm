@@ -41,10 +41,13 @@
 
 TSTDAT		:= $0007
 POKMSK		:= $0010			; POKEY Interrupts: used by IRQ service
+VPRCED		:= $0202                        ; Serial peripheral proceed line vector
+VSERIN		:= $020A                        ; Serial I/O bus receive data ready interrupt vector
 VTIMR1		:= $0210
 CDTMA1		:= $0226			; System timer one jump address
 SRTIMR		:= $022B
 DLIST		:= $0230			; Starting address of the diplay list
+SSKCTL		:= $0232			; Serial port control register
 GPRIOR		:= $026F			; Priority selection register for screen objects
 STICK0		:= $0278			; Joystick 0
 SHFLOK		:= $02BE			; Flag for shift and control keys
@@ -72,6 +75,23 @@ ICBL		:= $0348
 ICAX1		:= $034A
 ICAX2		:= $034B
 
+; MPP Microbit 300 Driver Symbols
+
+BAUD		:= $45				; Noted in MPP Smart Term 4.1 Source Page 32
+INPBIT          := $00FD			; Input bit
+OUTBIT          := $00FE			; Output bit
+INPBUF		:= $0F00
+INPBFPT		:= $133E			; Used for offset to INPBUF
+BUFLEN		:= $133F
+OUTBFPT		:= $1340
+character	:= $1347                        ; placeholder for now TODO
+INP		:= $1348
+OUTBUF		:= $1349
+OUTINT		:= $134A
+INPINT		:= $134B
+ISTOP		:= $134C
+
+
 ; GTIA
 
 HPOSM0		:= $D004
@@ -86,18 +106,23 @@ CONSOL		:= $D01F
 
 AUDF1		:= $D200
 AUDC1		:= $D201
+AUDF2		:= $D202
+AUDF4		:= $D206
 AUDCTL		:= $D208
 STIMER		:= $D209
+SKREST		:= $D20A                        ; When written, resets SKCTL bits 5-7
+RANDOM		:= SKREST                       ; When read, random-ish bits
 SEROUT		:= $D20D
 SERIN		:= SEROUT
 IRQEN		:= $D20E
 IRQST		:= IRQEN
-SKCTL		:= $D20F
-SKSTAT		:= $D20F
+SKCTL		:= $D20F                        ; When written, serial port control
+SKSTAT		:= $D20F                        ; When read, returns serial port status
 
 ; PIA
 
-PORTA		:= $D300
+PIA		:= $D300
+PORTA		:= PIA
 PACTL		:= $D302
 PBCTL		:= $D303
 
@@ -133,6 +158,7 @@ byte_C3		:= $00C3
 byte_C4		:= $00C4
 byte_C7		:= $00C7
 byte_CC		:= $00CC
+byte_CD		:= $00CD
 off_CE		:= $00CE
 FG_COLOR_DL2	:= $00D0			; Text luminance used in Display List #2 (zoomed)
 BG_COLOR_DL2	:= $00D1			; Background / border hue/luminance used in Display List #2
@@ -3127,36 +3153,38 @@ LB353:  lda     byte_1340
 	rts             			; B368 60                       `
 
 ; ----------------------------------------------------------------------------
+; store character into some sort of buffer
 sub_b369:
-	ldy     $1342   			; B369 AC 42 13                 .B.
-	lda     byte_1347
-	sta     $1310,y 			; B36F 99 10 13                 ...
-	jsr     sub_b55c
-	sta     $1342   			; B375 8D 42 13                 .B.
-	inc     byte_1340
-	rts             			; B37B 60                       `
+	ldy     $1342   			; some sort of buffer offset
+	lda     character                       ; load character  byte_1347
+	sta     $1310,y 			; store character into some sort of buffer
+	jsr     sub_b55c                        ; let buffer offset = (buffer offset + 1) && $1F
+	sta     $1342   			; 
+	inc     OUTBFPT				; increment output buffer pointer
+	rts             			; 
 
 ; ----------------------------------------------------------------------------
 
 sub_b37c:
 	tsx             			; B37C BA                       .
 	stx     byte_1344
-LB380:  cli             			; B380 58                       X
+:	cli             			; B380 58                       X
 	sei             			; B381 78                       x
-	ldy     byte_133f
-	cpy     byte_133e
-	beq     LB380   			; B388 F0 F6                    ..
+	ldy     BUFLEN  			; B382 AC 3F 13                 .?.
+	cpy     INPBFPT  
+	beq     :-
 
+; Get character from input buffer
 sub_b38a:  
-	lda     $0F00,y 			; B38A B9 00 0F                 ...
-	and     #$7F    			; B38D 29 7F                    ).
-	sta     byte_1347
-	iny             			; B392 C8                       .
-	sty     byte_133f
-	dec     byte_CC
-	cli             			; B398 58                       X
-	ldy     #$01    			; B399 A0 01                    ..
-	rts             			; B39B 60                       `
+	lda     INPBUF,y 			; Get byte from buffer
+	and     #$7F    			; Strip off the PLATO parity bit?
+	sta     character                       ; Store character byte_1347
+	iny             			; 
+	sty     BUFLEN  			; Increment BUFLEN
+	dec     byte_CC                         ;
+	cli             			; Enable interrupts
+	ldy     #$01    			; 
+	rts             			;
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -3173,7 +3201,7 @@ sub_b39c:
 	lda     SERIN
 	jsr     sub_b3b9
 	lda     SKSTAT
-	sta     $D20A   			; B3A8 8D 0A D2                 ...
+	sta     SKREST  			; B3A8 8D 0A D2                 ...
 	eor     #$FF    			; B3AB 49 FF                    I.
 	and     #$C0    			; B3AD 29 C0                    ).
 	ora     byte_133d
@@ -3183,21 +3211,21 @@ LB3B5:  pla             			; B3B5 68                       h
 	pla             			; B3B7 68                       h
 	rti             			; B3B8 40                       @
 
-; ----------------------------------------------------------------------------
+; MPP Microbit 300 routine to write to Input Buffer?
 sub_b3b9:
-	ldy     byte_133e
-	sta     $0F00,y 			; B3BC 99 00 0F                 ...
-	iny             			; B3BF C8                       .
-	sty     byte_133e
-	inc     byte_CC
-	rts             			; B3C5 60                       `
+	ldy     INPBFPT				; 
+	sta     INPBUF,y 			; 
+	iny             			; 
+	sty     INPBFPT				; Move pointer
+	inc     byte_CC				;
+	rts             			; 
 
 ; ----------------------------------------------------------------------------
 sub_b3c6:
 	cld             			; B3C6 D8                       .
 	tya             			; B3C7 98                       .
 	pha             			; B3C8 48                       H
-	lda     byte_1340
+	lda     OUTBFPT
 	bne     :+
 	lda     #$E7    			; B3CE A9 E7                    ..
 	and     POKMSK
@@ -3300,81 +3328,118 @@ LB471:  lda     byte_133a
 	rts             			; B479 60                       `
 
 ; ----------------------------------------------------------------------------
-LB47A:  php             			; B47A 08                       .
+
+LB47A:  .byte   $08     			; B47A 08                       .
 	.byte   $3C     			; B47B 3C                       <
 	.byte   $B4     			; B47C B4                       .
 
+;*******************************************************************************
+;*                                                                             *
+;*                                  sub_b47d                                   *
+;*                                                                             *
+;*                        Called during cart_init #1 ????                      *
+;*                                                                             *
+;*******************************************************************************
+
 sub_b47d:
-	sei             			; B47D 78                       x
-	jsr     sub_b4a5
+	sei             			; disable interrupts
+	jsr     sub_b4a5                        ; Initialize POKEY
 
-	ldy     #$07    			; B481 A0 07                    ..
-	lda     #$00    			; B483 A9 00                    ..
-:	sta     byte_133c,y
-	dey             			; B488 88                       .
-	bpl     :-
+; (n) Clear 8 bytes ************************************************************
+	ldy     #$07    			; 
+	lda     #$00    			;
+:	sta     byte_133c,y                     ; 
+	dey             			;
+	bpl     :-                              ; End loop after 8 iterations
 
-	sta     TSTDAT
-	sta     byte_1346
-	lda     #$C7    			; B490 A9 C7                    ..
-	and     POKMSK
-	ora     #$20    			; B494 09 20                    . 
-	jsr     sub_b549
-	cli             			; B499 58                       X
-	rts             			; B49A 60                       `
+; (n) Clear ********************************************************************
+	sta     TSTDAT                          ; Let TSTDAT    = 0
+	sta     byte_1346                       ; Let byte_1346 = 0
 
-; ----------------------------------------------------------------------------
+; (n) Set serial interrupt flags ***********************************************
+	lda     #$C7    			; Disable serial input-data-ready,... 
+	and     POKMSK                          ; ...out-transmission-finished interrupts. 
+	ora     #$20    			; Enable serial output-data-required interrupt.
+	jsr     sub_b549                        ; Register new interrupt flags.
+
+	cli             			; Enable interrupts
+	rts             			; 
+
+; -----------------------------------------------------------------------------
+
+; VSERIN vectors
 LB49B:
 	.addr	sub_b39c
 	.addr	sub_b3c6
 	.addr	sub_b3c6
 
+; VPRCED vectors
 LB4A1:
 	.addr	sub_b3f9
 	.addr	sub_b406
 
+;*******************************************************************************
+;*                                                                             *
+;*                                 sub_b4a5                                    *
+;*                                                                             *
+;*                              Initialize POKEY                               *
+;*                                                                             *
+;*******************************************************************************
+
 sub_b4a5:
-	lda     #$07    			; B4A5 A9 07                    ..
-	and     $0232   			; B4A7 2D 32 02                 -2.
-	ora     #$70    			; B4AA 09 70                    .p
-	sta     $0232   			; B4AC 8D 32 02                 .2.
-	sta     SKCTL
-	sta     $D20A   			; B4B2 8D 0A D2                 ...
-	lda     #$78    			; B4B5 A9 78                    .x
-	sta     AUDCTL
-	ldx     #$07    			; B4BA A2 07                    ..
-	lda     #$A0    			; B4BC A9 A0                    ..
-LB4BE:  sta     $D200,x 			; B4BE 9D 00 D2                 ...
-	dex             			; B4C1 CA                       .
-	bpl     LB4BE   			; B4C2 10 FA                    ..
-	lda     #$0B    			; B4C4 A9 0B                    ..
-	sta     $D202   			; B4C6 8D 02 D2                 ...
-	sta     $D206   			; B4C9 8D 06 D2                 ...
-	ldx     #$05    			; B4CC A2 05                    ..
-LB4CE:  lda     $020A,x 			; B4CE BD 0A 02                 ...
-	sta     $1330,x 			; B4D1 9D 30 13                 .0.
-	lda     LB49B,x 			; B4D4 BD 9B B4                 ...
-	sta     $020A,x 			; B4D7 9D 0A 02                 ...
-	dex             			; B4DA CA                       .
-	bpl     LB4CE   			; B4DB 10 F1                    ..
-	ldx     #$03    			; B4DD A2 03                    ..
-LB4DF:  lda     $0202,x 			; B4DF BD 02 02                 ...
-	sta     $1336,x 			; B4E2 9D 36 13                 .6.
-	lda     LB4A1,x 			; B4E5 BD A1 B4                 ...
-	sta     $0202,x 			; B4E8 9D 02 02                 ...
-	dex             			; B4EB CA                       .
-	bpl     LB4DF   			; B4EC 10 F1                    ..
-	lda     PACTL
-	ora     #$01    			; B4F1 09 01                    ..
-	sta     PACTL
-	rts             			; B4F6 60                       `
+
+;**(n) Turn off bits 3-7 in SKCTL (and its shadow SSKCTL) **********************
+	lda     #$07    			; Disable bits 3-7 on serial port control
+	and     SSKCTL  			; 
+	ora     #$70    			; 
+	sta     SSKCTL  			; 
+	sta     SKCTL                           ;
+	sta     SKREST  			; 
+
+	lda     #$78    			; 
+	sta     AUDCTL	                        ; Configure POKEY audio channels
+
+;**(n) Initialize audio tones **************************************************
+	ldx     #$07    			; 
+	lda     #$A0    			; Set AUDF[1-4] and AUDC[1-4]
+:	sta     AUDF1,x 			; for every 160 input pulses 
+	dex             			; emit 1 output pulse
+	bpl     :-      			; End loop after 8 iterations
+
+	lda     #$0B    			; Set AUDF2 and AUDF4
+	sta     AUDF2   			; For every 11 input pulses
+	sta     AUDF4   			; emit 1 output pulse
+
+;** (n) Install 3 new Serial Data-Ready Input vector addresses *****************
+	ldx     #$05    			; 
+:	lda     VSERIN,x 			; Save current vector address
+	sta     $1330,x 			; to RAM
+	lda     LB49B,x 			; Load new vector address
+	sta     VSERIN,x 			; from cartridge ROM
+	dex             			; 
+	bpl     :-      			; End loop after 6 iterations
+
+;** (n) Install 2 new Serial Proceed-Line vector addresses *********************
+	ldx     #$03    			; 
+:	lda     VPRCED,x 			; Save current vector address
+	sta     $1336,x 			; to RAM
+	lda     LB4A1,x 			; Load new vector address
+	sta     VPRCED,x 			; from cartridge ROM
+	dex             			; 
+	bpl     :-      			; End loop after 4 iterations
+
+;** (n) Enable Peripheral A interrupt ******************************************
+	lda     PACTL                           ; Load current settings for Port A
+	ora     #$01    			; Set bit 0 (IRQ enable)
+	sta     PACTL                           ; Save it back
+	rts             			; 
 
 ; ----------------------------------------------------------------------------
 sub_b4f7:
 	sei             			; B4F7 78                       x
 	ldy     #$05    			; B4F8 A0 05                    ..
 LB4FA:  lda     $1330,y 			; B4FA B9 30 13                 .0.
-	sta     $020A,y 			; B4FD 99 0A 02                 ...
+	sta     VSERIN,y 			; B4FD 99 0A 02                 ...
 	dey             			; B500 88                       .
 	bpl     LB4FA   			; B501 10 F7                    ..
 	ldy     #$03    			; B503 A0 03                    ..
@@ -3387,7 +3452,7 @@ LB505:  lda     $1336,y 			; B505 B9 36 13                 .6.
 	sta     PACTL
 	lda     #$C7    			; B516 A9 C7                    ..
 	and     POKMSK
-	jsr     sub_b549
+	jsr     sub_irqen
 	cli             			; B51D 58                       X
 	rts             			; B51E 60                       `
 
@@ -3428,12 +3493,13 @@ sub_b545:
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                  sub_b549                                   *
+;*                                  sub_irqen                                  *
 ;*                                                                             *
 ;*                              Enable Interrupts                              *
 ;*                                                                             *
 ;*******************************************************************************
 sub_b549:  
+sub_irqen:
 	sta     POKMSK 			; Update registers with new ...
 	sta     IRQEN  			; ...set of interrupt flags
 	rts            			; done
@@ -3449,10 +3515,10 @@ sub_b54f:
 
 ; ----------------------------------------------------------------------------
 sub_b55c:
-	iny             			; B55C C8                       .
-	tya             			; B55D 98                       .
-	and     #$1F    			; B55E 29 1F                    ).
-	rts             			; B560 60                       `
+	iny             			; increment buffer offset
+	tya             			; let a = new buffer offset
+	and     #$1F    			; and with 0001 1111?
+	rts             			; 
 
 ; ----------------------------------------------------------------------------
 
@@ -3465,8 +3531,8 @@ sub_b561:
 	sta     TSTDAT
 	jsr     sub_b47d
 	jsr     sub_b54f
-	lda     #$59    			; B574 A9 59                    .Y
-	sta     byte_1347
+	lda     #$59    			; 'Y'
+	sta     character                       ; byte_1347
 	ldx     #$01    			; B579 A2 01                    ..
 	jsr     sub_b422
 	jmp     LB5A5   			; B57E 4C A5 B5                 L..
@@ -3483,8 +3549,8 @@ sub_b581:
 	bne     LB595   			; B58F D0 04                    ..
 	lda     #$51    			; B591 A9 51                    .Q
 	bne     LB597   			; B593 D0 02                    ..
-LB595:  lda     #$5A    			; B595 A9 5A                    .Z
-LB597:  sta     byte_1347
+LB595:  lda     #$5A    			; 'Z'
+LB597:  sta     character                       ; byte_1347
 	jsr     sub_b420
 	jsr     sub_b4f7
 	lda     #$00    			; B5A0 A9 00                    ..
@@ -3519,199 +3585,224 @@ sub_b5b0:
 LB5D5:  rts             			; B5D5 60                       `
 
 ; ----------------------------------------------------------------------------
+; MPP Microbit 300 Jump Table
+; ----------------------------------------------------------------------------
 LB5D6:
-	.addr	sub_b668-1
-	.addr	sub_b6a5-1
-	.addr	sub_b709-1
-	.addr	sub_b6e9-1
+	.addr	JOPEN-1                         ; MPP JOPEN $B667 
+	.addr   JCLOSE-1                        ; MPP JCLOSE $B6A4
+	.addr	JREAD-1                         ; MPP GET BYTE $B708
+	.addr	sub_b6e9-1                      ; MPP PUT BYTE $B6E8
 
+;*******************************************************************************
+;*                                                                             *
+;*                                    DRIVER                                   *
+;*                                                                             *
+;*                 MPP Driver Code similar to MPP Smart Term 4.1               *
+;*                                                                             *
+;*******************************************************************************
+; Description
+; This section closely matches the DRIVER subroutine in MPP's Smart Terminal cart
+; available at https://archive.org/details/MPPSmartTerminalv4.1 
+; 
 sub_b5de:
-	cld
-	tya             			; B5DF 98                       .
-	pha             			; B5E0 48                       H
-	lda     $FD     			; B5E1 A5 FD                    ..
-	bne     LB5F6   			; B5E3 D0 11                    ..
-	lda     #$20    			; B5E5 A9 20                    . 
-	and     PORTA
-	beq     LB62B   			; B5EA F0 3F                    .?
-	lda     #$08    			; B5EC A9 08                    ..
-	sta     $FD     			; B5EE 85 FD                    ..
-	lsr     a       			; B5F0 4A                       J
-	sta     $134B   			; B5F1 8D 4B 13                 .K.
-	bne     LB62B   			; B5F4 D0 35                    .5
-LB5F6:  dec     $134B   			; B5F6 CE 4B 13                 .K.
-	bne     LB62B   			; B5F9 D0 30                    .0
-	lda     $134C   			; B5FB AD 4C 13                 .L.
-	beq     LB607   			; B5FE F0 07                    ..
-	dec     $FD     			; B600 C6 FD                    ..
-	dec     $134C   			; B602 CE 4C 13                 .L.
-	beq     LB62B   			; B605 F0 24                    .$
-LB607:  lda     #$20    			; B607 A9 20                    . 
-	and     PORTA
-	beq     LB611   			; B60C F0 03                    ..
-	sec             			; B60E 38                       8
-	bcs     LB612   			; B60F B0 01                    ..
-LB611:  clc             			; B611 18                       .
-LB612:  ror     byte_1348   			; B612 6E 48 13                 nH.
-	dec     $FD     			; B615 C6 FD                    ..
-	bne     LB626   			; B617 D0 0D                    ..
-	lda     byte_1348   			; B619 AD 48 13                 .H.
-	eor     #$FF    			; B61C 49 FF                    I.
-	jsr     sub_b3b9
-	inc     $FD     			; B621 E6 FD                    ..
-	inc     $134C   			; B623 EE 4C 13                 .L.
-LB626:  lda     #$03    			; B626 A9 03                    ..
-	sta     $134B   			; B628 8D 4B 13                 .K.
-LB62B:  lda     $FE     			; B62B A5 FE                    ..
-	beq     LB655   			; B62D F0 26                    .&
-	dec     $134A   			; B62F CE 4A 13                 .J.
-	bne     LB652   			; B632 D0 1E                    ..
-	dec     $FE     			; B634 C6 FE                    ..
-	beq     LB655   			; B636 F0 1D                    ..
-	clc             			; B638 18                       .
-	ror     $1349   			; B639 6E 49 13                 nI.
-	bcs     LB645   			; B63C B0 07                    ..
-	lda     #$EF    			; B63E A9 EF                    ..
-	and     PORTA
-	bcc     LB64A   			; B643 90 05                    ..
-LB645:  lda     #$10    			; B645 A9 10                    ..
-	ora     PORTA
-LB64A:  sta     PORTA
-	lda     #$03    			; B64D A9 03                    ..
-	sta     $134A   			; B64F 8D 4A 13                 .J.
-LB652:  jmp     LB3B5   			; B652 4C B5 B3                 L..
-
-; ----------------------------------------------------------------------------
-LB655:  lda     byte_1340
-	beq     LB652   			; B658 F0 F8                    ..
-	jsr     sub_b3e7
-	eor     #$FF    			; B65D 49 FF                    I.
-	sta     $1349   			; B65F 8D 49 13                 .I.
-	lda     #$0A    			; B662 A9 0A                    ..
-	sta     $FE     			; B664 85 FE                    ..
-	bne     LB645   			; B666 D0 DD                    ..
-
-sub_b668:
-	lda     #$13    			; B668 A9 13                    ..
-	sta     SKCTL
-	sta     $0232   			; B66D 8D 32 02                 .2.
-	lda     PORTA
-	and     #$BF    			; B673 29 BF                    ).
-	sta     PORTA
-	lda     #$00    			; B678 A9 00                    ..
-	sta     $FE     			; B67A 85 FE                    ..
-	sta     $FD     			; B67C 85 FD                    ..
-	sta     $134C   			; B67E 8D 4C 13                 .L.
-	sta     AUDCTL
-	lda     #$45    			; B684 A9 45                    .E
-	sta     AUDF1
-	lda     #$A0    			; B689 A9 A0                    ..
-	sta     AUDC1
-	lda     #<sub_b5de
-	sta     VTIMR1
-	lda     #>sub_b5de
-	sta     VTIMR1+1
-	lda     POKMSK
-	ora     #$01    			; B69A 09 01                    ..
-	jsr     sub_b549
-	sta     STIMER
-	ldy     #$01    			; B6A2 A0 01                    ..
-	rts             			; B6A4 60                       `
-
-; ----------------------------------------------------------------------------
-sub_b6a5:
-:	lda     byte_1340
-	bne     :-
-	lda     $FE     			; B6AA A5 FE                    ..
-	bne     :-
-	lda     #$FE    			; B6AE A9 FE                    ..
-	and     POKMSK
-	jsr     sub_b549
-	ldy     #$01    			; B6B5 A0 01                    ..
-	rts             			; B6B7 60                       `
+DRIVER: cld                                     ; Similar to DRIVER in MPP source at A0AC
+	tya             			; 
+	pha             			; Save Y on stack
+	lda     INPBIT  			; 
+	bne     GETBIT  			; Middle byte
+	lda     #$20    			; 
+	and     PIA                             ;
+	beq     SENDBIT 			; No start
+	lda     #$08    			; Length (8 bits in a byte)
+	sta     INPBIT  			; 
+	lsr     a       			; # IRQs (A = $04)
+	sta     INPINT  			; 
+	bne     SENDBIT 			; 
+;
+; READ A BIT FROM PIA IF IT'S TIME
+;
+GETBIT: dec     INPINT  			; 
+	bne     SENDBIT 			; Not time yet
+	lda     ISTOP   			; Any stops
+	beq     NOSTOP  			; 
+	dec     INPBIT  			; 
+	dec     ISTOP   			; 
+	beq     SENDBIT 			; 
+NOSTOP: lda     #$20    			; 
+	and     PIA				;
+	beq     ZIPO				; 
+	sec             			; 
+	bcs     ROTATE   			; 
+ZIPO:	clc             			; 
+ROTATE: ror     INP				; 
+	dec     INPBIT  			; 
+	bne     NOBYTE   			; 
+	lda     INP         			; 
+	eor     #$FF    			; 
+	jsr     sub_b3b9			; Store INP to INPBUF
+	inc     INPBIT  			;
+	inc     ISTOP   			;
+NOBYTE: lda     #$03    			;
+	sta     INPINT  			;
+SENDBIT:					; Similar to SENDBIT found in MPP source A11B
+	lda     OUTBIT  			; 
+	beq     CHKBUF                          ;
+	dec     OUTINT  			;
+	bne     LB652                           ;
+	dec     OUTBIT  			; 
+	beq     CHKBUF                          ;
+	clc             			;
+	ror     OUTBUF  			;
+	bcs     ONEOUT  			;
+	lda     #$EF    			;
+	and     PIA                             ;
+	bcc     ZIPSKIP 			;
+LB645:
+ONEOUT: lda     #$10    			;
+	ora     PIA                             ;
+ZIPSKIP:  
+	sta     PIA                             ; Start bit
+	lda     #$03    			;
+	sta     OUTINT  			; 
+LB652:	
+RETURN: jmp     LB3B5   			; Return RTI
+CHKBUF:	lda     OUTBFPT				; Similar to CHKBUF routine found MPP source A146
+	beq     RETURN   			; 
+	jsr     sub_b3e7			; TODO
+	eor     #$FF    			; 
+	sta     OUTBUF  			; 
+	lda     #$0A    			; 
+	sta     OUTBIT  			;
+	bne     ONEOUT  			;
+; OPEN
+;
+JOPEN:	lda     #$13    			; Similar to JOPEN found MPP source A913
+	sta     SKCTL				;
+	sta     SSKCTL  			;
+	lda     PIA				;
+	and     #$BF    			;
+	sta     PIA				;
+	lda     #$00    			; 
+	sta     OUTBIT  			; Let OUTBIT = 0
+	sta     INPBIT  			; Let INPBIT = 0
+	sta     ISTOP   			; Let ISTOP  = 0
+	sta     AUDCTL				; 
+	lda     #BAUD   			; Set BAUD = 300
+	sta     AUDF1				; 
+	lda     #$A0    			; 
+	sta     AUDC1				;
+	lda     #<DRIVER			; Register MPP driver with POKEY ...
+	sta     VTIMR1				; timer interrupt.
+	lda     #>DRIVER			;
+	sta     VTIMR1+1			;
+	lda     POKMSK				;
+	ora     #$01    			; 
+	jsr     sub_irqen			; Set interrupt flags
+	sta     STIMER	                        ;
+	ldy     #$01    			; 
+	rts             			;
+LB6A6:
+JCLOSE: lda     OUTBFPT				; Similar to JCLOSE found in MPP source A1D0
+	bne     JCLOSE				; Wait for something to arrive
+	lda     OUTBIT  			; 
+	bne     JCLOSE  			; 
+	lda     #$FE    			; 
+	and     POKMSK				;
+	jsr     sub_irqen			; Set interrupt flags
+	ldy     #$01    			; return code?
+	rts             			; 
 
 ;*******************************************************************************
 ;*                                                                             *
 ;*                                 sub_b6b8                                    *
 ;*                                                                             *
-;*                                RS232 OPEN???                                *
+;*                                   OPEN                                      *
 ;*                                                                             *
 ;*******************************************************************************
 sub_b6b8:
-	lda     #$8D    			; B6B8 A9 8D                    ..
-	sta     byte_133a
-	ldy     #$00    			; B6BD A0 00                    ..
-	sty     $1342   			; B6BF 8C 42 13                 .B.
-	sty     byte_133d
-	iny             			; B6C5 C8                       .
-	sty     $CB     			; B6C6 84 CB                    ..
-	rts             			; B6C8 60                       `
+;** (1) Initialize variables and return ****************************************
+	lda     #$8D    			; 
+	sta     byte_133a                       ; Let byte_133a = $8D
+
+	ldy     #$00    			; 
+	sty     $1342   			; Let $1342	= $00
+	sty     byte_133d                       ; Let byte_133d = $00
+	iny             			; return code? = 1
+	sty     $CB     			; Let $CB       = $01
+	rts             			; 
 
 ;*******************************************************************************
 ;*                                                                             *
 ;*                                 sub_b6c9                                    *
 ;*                                                                             *
-;*                                RS232 CLOSE??                                *
+;*                                  CLOSE                                      *
 ;*                                                                             *
 ;*******************************************************************************
 sub_b6c9:  
-	lda     $CB     			; B6C9 A5 CB                    ..
-	beq     sub_b6c9
-	ldy     #$05    			; B6CD A0 05                    ..
-	sei             			; B6CF 78                       x
-:	lda     $1330,y 			; B6D0 B9 30 13                 .0.
-	sta     $020A,y 			; B6D3 99 0A 02                 ...
-	dey             			; B6D6 88                       .
-	bpl     :-
-	cli             			; B6D9 58                       X
+	lda     $CB     			; 
+	beq     sub_b6c9                        ; Waiting
+
+;** (n) Restore vector addresses for VSERIN, VSEROR, VSEROC ********************
+	ldy     #$05    			; 
+	sei             			; Prevent IRQs
+:	lda     $1330,y 			; Values saved earlier in sub_b719
+	sta     VSERIN,y 			; are restored to the serial vectors
+	dey             			; 
+	bpl     :-                              ; End loop after 6 iterations
+
+	cli             			; Enable IRQs
 	sty     byte_1346
 	iny             			; B6DD C8                       .
 	sty     DAUX1   			; B6DE 8C 0A 03                 ...
 	sty     byte_133a
 	lda     #$57    			; Let A = Write (verify) command
-	jmp     sub_b802
+	jmp     sub_sendsio                     ; Send SIO command frame
 
 ;*******************************************************************************
 ;*                                                                             *
 ;*                                 sub_b6e9                                    *
 ;*                                                                             *
-;*                              RS232 PUT BYTE???                              *
+;*                                MPP JWRITE                                   *
 ;*                                                                             *
 ;*******************************************************************************
 sub_b6e9:
-	sta     byte_1347
-	ldx     #$01    			; B6EC A2 01                    ..
-	stx     $21     			; B6EE 86 21                    .!
-:	lda     byte_1340
-	cmp     #$1F    			; B6F3 C9 1F                    ..
-	bcs     :-
-	sei             			; B6F7 78                       x
-	jsr     sub_b369
-	lda     POKMSK
-	ora     #$18    			; B6FD 09 18                    ..
-	jsr     sub_b549
-	ldy     #$00    			; B702 A0 00                    ..
-	sty     $CB     			; B704 84 CB                    ..
-	cli             			; B706 58                       X
-	iny             			; B707 C8                       .
-	rts             			; B708 60                       `
+JWRITE: sta     character                       ; 
+	ldx     #$01    			; 
+	stx     $21     			;
+
+:	lda     OUTBFPT                         ; 
+	cmp     #$1F    			; 31?
+	bcs     :-                              ; Waiting for something to appear?
+
+	sei             			; Disable interrupts
+	jsr     sub_b369                        ; store character into some sort of buffer
+
+	lda     POKMSK                          ; Enable serial output data-required...
+	ora     #$18    			; ... and output transmission-finished interrupts
+	jsr     sub_irqen			; Enable new interrupt flags
+
+	ldy     #$00    			; 
+	sty     $CB     			; Let $CB = 0
+	cli             			; Enable interrupts
+	iny             			; Let Y = $01
+	rts             			; 
 
 ;*******************************************************************************
 ;*                                                                             *
 ;*                                 sub_b709                                    *
 ;*                                                                             *
-;*                              RS232 GET BYTE???                              *
+;*                  READ (this address is in 2 jump tables)                    *
 ;*                                                                             *
 ;*******************************************************************************
 sub_b709:
-	cli             			; B709 58                       X
-	sei             			; B70A 78                       x
-	ldy     byte_133f
-	cpy     byte_133e
-	beq     sub_b709
-	jsr     sub_b38a
-	ldy     #$01    			; B716 A0 01                    ..
-	rts             			; B718 60                       `
+JREAD:	cli             			; Enable IRQs
+	sei             			; Disable IRQs
+	ldy     BUFLEN  			; 
+	cpy     INPBFPT                         ;
+	beq     sub_b709                        ; Continue waiting?
+	jsr     sub_b38a			; Get char from buffer
+	ldy     #$01    			; 
+	rts             			; 
 
 ; ----------------------------------------------------------------------------
 sub_b719:
@@ -3720,57 +3811,65 @@ LB71C:  ldy     #$00    			; B71C A0 00                    ..
 	jsr     sub_b206
 	bpl     :+
 	rts             			; B723 60                       `
-
 ; ----------------------------------------------------------------------------
 :	lda     #$00    			; B724 A9 00                    ..
 	sta     byte_B2
-	sta     byte_133e
-	sta     byte_133f
+	sta     INPBFPT                         ; Let INPBFPT = 0
+	sta     BUFLEN  			; Let BUFLEN  = 0
 	sta     $1342   			; B72E 8D 42 13                 .B.
 	sta     $1341   			; B731 8D 41 13                 .A.
-	sta     $0309   			; B734 8D 09 03                 ...
+	sta     DBYT+1 			        ;
 	lda     #<byte_1330
 	sta     DBUF
 	lda     #>byte_1330
 	sta     DBUF+1
-	lda     byte_133a
-	sta     DAUX1   			; B744 8D 0A 03                 ...
-	lda     #$09    			; B747 A9 09                    ..
-	sta     $0308   			; B749 8D 08 03                 ...
-	ldy     #$40    			; B74C A0 40                    .@
-	lda     #$58    			; B74E A9 58                    .X
-	jsr     sub_b802
+
+	lda     byte_133a                       ; Construct SIO command frame
+	sta     DAUX1   			; 
+	lda     #$09    			; 
+	sta     DBYT    			; Tell SIO to receive 9 bytes
+	ldy     #$40    			; DSTATS direction = receive data
+	lda     #$58    			; DCOMND
+	jsr     sub_sendsio                     ; Send SIO command frame
 	bpl     LB756   			; B753 10 01                    ..
 	rts             			; B755 60                       `
 
 ; ----------------------------------------------------------------------------
-LB756:  sei             			; B756 78                       x
+LB756:  sei             			; Prevent IRQs
 	lda     #$73    			; B757 A9 73                    .s
 	sta     SKCTL
 	lda     $1338   			; B75C AD 38 13                 .8.
 	sta     AUDCTL
+
+;** (n) Copy 8 bytes from $1330-$1337 to AUDF1/C1-AUDF4/C4 *******************
 	ldy     #$07    			; B762 A0 07                    ..
-LB764:  lda     $1330,y 			; B764 B9 30 13                 .0.
-	sta     $D200,y 			; B767 99 00 D2                 ...
+:	lda     $1330,y 			; B764 B9 30 13                 .0.
+	sta     AUDF1,y 			; B767 99 00 D2                 ...
 	dey             			; B76A 88                       .
-	bpl     LB764   			; B76B 10 F7                    ..
-	ldx     #$06    			; B76D A2 06                    ..
-LB76F:  lda     $0209,x 			; B76F BD 09 02                 ...
-	sta     $132F,x 			; B772 9D 2F 13                 ./.
-	lda     LB820+1,x
-	sta     $0209,x 			; B778 9D 09 02                 ...
-	dex             			; B77B CA                       .
-	bne     LB76F   			; B77C D0 F1                    ..
-	stx     byte_CC
-	stx     $CD     			; B780 86 CD                    ..
-	lda     POKMSK
-	ora     #$20    			; B784 09 20                    . 
-	jsr     sub_b549
-	ldx     #$01    			; B789 A2 01                    ..
-	stx     byte_1346
-	cli             			; B78E 58                       X
-	ldy     #$01    			; B78F A0 01                    ..
-	lda     byte_133a
+	bpl     :-      			; B76B 10 F7                    ..
+
+;** (n) Save/replace VSERIN VSEROR VSEROC interrupt vectors ******************
+	ldx     #$06    			; 
+:	lda     VSERIN-1,x 			; Save currect vector addresses
+	sta     $1330-1,x 			; to RAM
+	lda     LB820+1,x                       ; Load new serial vectors
+	sta     VSERIN-1,x 			; to POKEY
+	dex             			; 
+	bne     :-      			; End loop
+
+	stx     byte_CC			        ; Let byte_CC = 0
+	stx     byte_CD 			; Let byte_CD = 0
+
+	lda     POKMSK                          ; 
+	ora     #$20    			; Enable serial data-ready interrupt
+	jsr     sub_irqen			; Register new interrupt flags
+
+	ldx     #$01    			;
+	stx     byte_1346			; Let byte_1346 = $01
+
+	cli             			; Enable IRQs
+	ldy     #$01    			; 
+	lda     byte_133a                       ; 
 	sta     $2A     			; B794 85 2A                    .*
 	cpy     #$00    			; B796 C0 00                    ..
 	rts             			; B798 60                       `
@@ -3818,9 +3917,9 @@ LB7A8:
 ;** (n) ************************************************************************
 	ldy     #$40    			; Let Y = $40
 	lda     #$53    			; Let A = STATUS operation
-	jsr     sub_b802			; Call ???
+	jsr     sub_sendsio			; Call ???
 
-	lda     byte_1347
+	lda     character                       ; byte_1347
 	ora     DVSTAT  			; B7D1 0D EA 02                 ...
 	sta     DVSTAT  			; B7D4 8D EA 02                 ...
 	cpy     #$00    			; B7D7 C0 00                    ..
@@ -3845,21 +3944,20 @@ sub_b7e7:
 :	ldx	#$00    			; B7F1 A2 00                    ..
 LB7F3:  jsr     LB7FA   			; B7F3 20 FA B7                  ..
 	lda     #$41    			; B7F6 A9 41                    .A
-
 	ldx     #$F3    			; B7F8 A2 F3                    ..
 LB7FA:  stx     DAUX1   			; B7FA 8E 0A 03                 ...
-
 	ldy     #$00    			; B7FD A0 00                    ..
 	sty     DAUX2   			; B7FF 8C 0B 03                 ...
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                  sub_b802                                   *
+;*                               sub_sendsio                                   *
 ;*                                                                             *
 ;*                    Send SIO Command to RS232 Device 1                       *
 ;*                                                                             *
 ;*******************************************************************************
 sub_b802:
+sub_sendsio:
 	sta     DCOMND  			; Command code is set in caller
 
 ;**(n) Set Device Unit number **************************************************
@@ -3882,7 +3980,7 @@ sub_b802:
 ;*                                                                             *
 ;*                                   LB81A                                     *
 ;*                                                                             *
-;*                         RS232 Handler Vector Table?????                     *
+;*                             Handler Vector Table?????                       *
 ;*                                                                             *
 ;*******************************************************************************
 LB81A:
@@ -5653,10 +5751,14 @@ sub_bf86:
 ;*******************************************************************************
 
 cart_init:
-	jsr	sub_b47d
+	jsr	sub_b47d                        ; Init POKEY and serial interrupts
+
+;*******************************************************************************
 	lda	#$51
-	sta	byte_1347
-	sta	byte_133a
+	sta	byte_1347                       ; Let byte_1347 = $51
+	sta	byte_133a                       ; Let byte_133a = $51
+
+;*******************************************************************************
 	lda	$CB
 	pha             			; BFA0 48                       H
 	lda     #$00    			; BFA1 A9 00                    ..
@@ -5664,19 +5766,29 @@ cart_init:
 	jsr     sub_b420
 	pla             			; BFA8 68                       h
 	sta     $CB     			; BFA9 85 CB                    ..
+
+;*******************************************************************************
 	lda     #$51    			; BFAB A9 51                    .Q
 	sta     byte_133a
-	lda     $08     			; BFB0 A5 08                    ..
-	beq     LBFC2   			; BFB2 F0 0E                    ..
+
+;*******************************************************************************
+	lda     $08     			; 
+	beq     LBFC2   			; Skip next part if warmstart
+
+;*******************************************************************************
 	ldx     byte_B2
 	cpx     #$02    			; BFB6 E0 02                    ..
 	bcs     :+
 	sec             			; BFBA 38                       8
 	bne     LBFD8   			; BFBB D0 1B                    ..
+
 :	ldx     #$02    			; BFBD A2 02                    ..
 	jsr     sub_b43f
+
+;*******************************************************************************
 LBFC2:  lda     #$FF    			; BFC2 A9 FF                    ..
 	sta     byte_133a
+
 	lda     #$00    			; BFC7 A9 00                    ..
 	sta     $CB     			; BFC9 85 CB                    ..
 	ldx     #$02    			; BFCB A2 02                    ..
