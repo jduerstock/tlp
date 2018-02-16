@@ -75,7 +75,7 @@ DAUX2		:= $030B			; Device Command Arg 1
 HATABS		:= $031A			; Handler Address Table
 
 ; I/O Control Block
-ICCOM		:= $0342			 
+ICCOM		:= $0342			;
 ICBA		:= $0344
 ICBL		:= $0348
 ICAX1		:= $034A
@@ -160,7 +160,7 @@ ISTOP		:= $134C
 L0070           := $0070
 L0080           := $0080
 
-baud_rate	:= $00B1			; baud rate: $FF->300 $00->1200 
+baud_rate	:= $00B1			; baud rate: $FF->300 $00->1200
 byte_B2		:= $00B2
 byte_B3		:= $00B3
 byte_B5		:= $00B5
@@ -225,7 +225,7 @@ cart_start:
 	jsr     sub_b1f1
 	ldy     #$28    			; A00E A0 28                    .(
 	jsr     sub_b206
-	bmi     LA035   			; A013 30 20                    0 
+	bmi     :++
 	lda     #$1A    			; A015 A9 1A                    ..
 	sta     $9C     			; A017 85 9C                    ..
 	ldy     #$33    			; A019 A0 33                    .3
@@ -240,7 +240,7 @@ cart_start:
 	cmp     #$1F    			; A02E C9 1F                    ..
 	bne     LA04F   			; A030 D0 1D                    ..
 	jsr     sub_a33d
-LA035:  jsr     sub_b238
+:	jsr     sub_b238
 	jsr     sub_b719			; Set baud or something else
 	bmi     :+
 	lda     #<LB91C
