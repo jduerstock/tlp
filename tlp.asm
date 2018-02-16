@@ -40,13 +40,13 @@
 ;*******************************************************************************
 
 TSTDAT		:= $0007
-POKMSK		:= $0010			; POKEY Interrupts: used by IRQ service
-VPRCED		:= $0202                        ; Serial peripheral proceed line vector
-VSERIN		:= $020A                        ; Serial I/O bus receive data ready interrupt vector
-VTIMR1		:= $0210
+POKMSK		:= $0010			; POKEY interrupt mask.
+VPRCED		:= $0202			; Vector to serial peripheral proceed line interrupt
+VSERIN		:= $020A			; Vector to serial receive-data-ready interrupt
+VTIMR1		:= $0210			; Vector to POKEY timer 1 interrupt
 CDTMA1		:= $0226			; System timer one jump address
 SRTIMR		:= $022B
-DLIST		:= $0230			; Starting address of the diplay list
+DLIST		:= $0230			; Starting address of the display list.
 SSKCTL		:= $0232			; Serial port control register
 GPRIOR		:= $026F			; Priority selection register for screen objects
 STICK0		:= $0278			; Joystick 0
@@ -57,26 +57,90 @@ COLOR2		:= $02C6			; Playfield 2 color register
 COLOR3		:= $02C7			; Playfield 3 color register
 COLOR4		:= $02C8			; Playfield 4 color register
 HELPFG		:= $02DC
-DVSTAT		:= $02EA			; Device Status Register
-CH		:= $02FC
-DDEVIC		:= $0300			; Device Serial Bus ID (RS232 is $50)
-DUNIT		:= $0301			; Device Unit number
-DCOMND		:= $0302			; The number of the disk or device operation (command)
+DVSTAT		:= $02EA			; Device status register.
+CH		:= $02FC                        ; Keyboard character code.
+
+; Device Control Block
+DDEVIC		:= $0300			; Device bus ID (RS232 is $50).
+DUNIT		:= $0301			; Device unit number.
+DCOMND		:= $0302			; Device command.
 DSTATS		:= $0303
 DBUF		:= $0304
 DTIMLO		:= $0306			; Time-out value for a handler in seconds
 DBYT		:= $0308			; Number of bytes transferred to/from data buffer
+DBYTLO		:= DBYT 			; Number of bytes transferred to/from data buffer
+DBYTHI		:= $0308		        ; Number of bytes transferred to/from data buffer
 DAUX1		:= $030A			; Device Command Arg 1
 DAUX2		:= $030B			; Device Command Arg 1
 HATABS		:= $031A			; Handler Address Table
+
+; I/O Control Block
 ICCOM		:= $0342			 
 ICBA		:= $0344
 ICBL		:= $0348
 ICAX1		:= $034A
 ICAX2		:= $034B
 
-; MPP Microbit 300 Driver Symbols
 
+; GTIA (D000-D01F)
+
+HPOSM0		:= $D004                        ;
+HPOSM1		:= $D005                        ;
+HPOSM2		:= $D006                        ;
+HPOSM3		:= $D007                        ;
+SIZEM		:= $D00C			; Size for all missiles
+GRACTL		:= $D01D			; Turn on/off player missiles or latch triggers
+CONSOL		:= $D01F                        ;
+
+; POKEY (D200-D21F)
+
+AUDCTL		:= $D208                        ; Audio control.
+AUDF1		:= $D200                        ; Audio channel 1 frequency.
+AUDF2		:= $D202                        ; Audio channel 2 frequency.
+AUDF3		:= $D204                        ; Audio channel 3 frequency.
+AUDF4		:= $D206                        ; Audio channel 4 frequency.
+AUDC1		:= $D201                        ; Audio channel 1 control.
+AUDC2		:= $D203                        ; Audio channel 2 control.
+AUDC3		:= $D205                        ; Audio channel 3 control.
+AUDC4		:= $D207                        ; Audio channel 4 control.
+STIMER		:= $D209                        ; Start timer.
+SKREST		:= $D20A                        ; Reset serial port status.
+RANDOM		:= SKREST                       ; Random number generator.
+SEROUT		:= $D20D                        ; Serial port input.
+SERIN		:= SEROUT                       ; Serial port output.
+IRQEN		:= $D20E                        ; Interrupt request (IRQ) enable.
+IRQST		:= IRQEN                        ; IRQ status.
+SKCTL		:= $D20F                        ; Serial port control.
+SKSTAT		:= $D20F                        ; Serial port status.
+
+; PIA (D300-D31F)
+
+PIA		:= $D300                        ; Port A.
+PORTA		:= PIA                          ; Port A.
+PACTL		:= $D302                        ; Port A control.
+PBCTL		:= $D303                        ; Port B control.
+
+; ANTIC (D400-D41F)
+
+DMACTL		:= $D400			; Direct Memory Access (DMA) control
+PMBASE		:= $D407			; MSB of the player/missile base address
+WSYNC		:= $D40A			; Wait for horizontal sync.
+
+; OS ROM (D800-FFFF)
+
+CIOV		:= $E456
+SIOV		:= $E459			; Serial Input/Output utility entry point
+SETVBV		:= $E45C
+XITVBV		:= $E462
+
+
+;*******************************************************************************
+;*                                                                             *
+;*                          C A R T   S Y M B O L S                            *
+;*                                                                             *
+;*******************************************************************************
+
+; MPP Microbit 300 Driver Symbols
 BAUD		:= $45				; Noted in MPP Smart Term 4.1 Source Page 32
 INPBIT          := $00FD			; Input bit
 OUTBIT          := $00FE			; Output bit
@@ -91,63 +155,12 @@ OUTINT		:= $134A
 INPINT		:= $134B
 ISTOP		:= $134C
 
-
-; GTIA
-
-HPOSM0		:= $D004
-HPOSM1		:= $D005
-HPOSM2		:= $D006
-HPOSM3		:= $D007
-SIZEM		:= $D00C			; Size for all missiles
-GRACTL		:= $D01D			; Turn on/off player missiles or latch triggers
-CONSOL		:= $D01F
-
-; POKEY
-
-AUDF1		:= $D200
-AUDC1		:= $D201
-AUDF2		:= $D202
-AUDF4		:= $D206
-AUDCTL		:= $D208
-STIMER		:= $D209
-SKREST		:= $D20A                        ; When written, resets SKCTL bits 5-7
-RANDOM		:= SKREST                       ; When read, random-ish bits
-SEROUT		:= $D20D
-SERIN		:= SEROUT
-IRQEN		:= $D20E
-IRQST		:= IRQEN
-SKCTL		:= $D20F                        ; When written, serial port control
-SKSTAT		:= $D20F                        ; When read, returns serial port status
-
-; PIA
-
-PIA		:= $D300
-PORTA		:= PIA
-PACTL		:= $D302
-PBCTL		:= $D303
-
-; ANTIC
-
-DMACTL		:= $D400			; Direct Memory Access (DMA) control
-PMBASE		:= $D407			; MSB of the player/missile base address
-WSYNC		:= $D40A
-
-; OS ROM
-
-CIOV		:= $E456
-SIOV		:= $E459			; Serial Input/Output utility entry point
-SETVBV		:= $E45C
-XITVBV		:= $E462
-
-;*******************************************************************************
-;*                                                                             *
-;*                         C A R T   S Y M B O L S                             *
-;*                                                                             *
-;*******************************************************************************
+; Other
 
 L0070           := $0070
 L0080           := $0080
 
+baud_rate	:= $00B1			; baud rate: $FF->300 $00->1200 
 byte_B2		:= $00B2
 byte_B3		:= $00B3
 byte_B5		:= $00B5
@@ -228,7 +241,7 @@ cart_start:
 	bne     LA04F   			; A030 D0 1D                    ..
 	jsr     sub_a33d
 LA035:  jsr     sub_b238
-	jsr     sub_b719
+	jsr     sub_b719			; Set baud or something else
 	bmi     :+
 	lda     #<LB91C
 	ldx     #>LB91C
@@ -695,7 +708,7 @@ sub_a214:					; A214
 	sta     GPRIOR  			; 0000 0001 = Player 0-3, Playfied 0-3, BAK
 	lda     #$16				; Set initial background color
 	sta     COLOR4  			; for the border and background
-	sta     COLOR2  			; to hue: 1 (Rust), luminance: 6
+	sta     COLOR2  			; to hue: 1 (orange), luminance: 6
 	sta     BG_COLOR_DL1    		; Save color value to RAM
 
 ;** (n) Change Player/Missile colors to something different than background *****
@@ -723,7 +736,7 @@ sub_a214:					; A214
 ;** (n) Disable break key interrupt *********************************************
 	lda     POKMSK				; 1100 000 is the default on power up
 	and     #$7F    			; Clear flag for break key interrupt
-	jsr     sub_b549			; Enable new set of interrupts
+	jsr     sub_irqen			; Enable new set of interrupts
 
 ;** (n) Set system timer for vector #7  ******************************************
 	ldy     #<sub_b013      		; MSB of new vector routine
@@ -1766,20 +1779,18 @@ LA9DD:  ldy     #$10    			; A9DD A0 10                    ..
 	rts             			; AA02 60                       `
 
 ; ----------------------------------------------------------------------------
-LAA03:  cmp     #$1F    			; AA03 C9 1F                    ..
-	bne     LAA12   			; AA05 D0 0B                    ..
-	lda     #$00    			; AA07 A9 00                    ..
-LAA09:  ldy     byte_B2
-	bne     LAA23   			; AA0B D0 16                    ..
-	sta     $B1     			; AA0D 85 B1                    ..
-	jmp     LB253   			; AA0F 4C 53 B2                 LS.
-
-; ----------------------------------------------------------------------------
-LAA12:  cmp     #$1A    			; AA12 C9 1A                    ..
-	bne     LAA1A   			; AA14 D0 04                    ..
-	lda     #$FF    			; AA16 A9 FF                    ..
-	bne     LAA09   			; AA18 D0 EF                    ..
-LAA1A:  cmp     #$12    			; AA1A C9 12                    ..
+LAA03:  cmp     #$1F    			; if keyboard press = '1'
+	bne     LAA12   			; then 
+	lda     #$00    			;   $00 -> baud = 1200
+LAA09:  ldy     byte_B2				; 
+	bne     LAA23   			;
+	sta     baud_rate			;   Set baud (FF=300 00=1200)
+	jmp     LB253   			;   
+LAA12:  cmp     #$1A    			; else if keyboard press = '3'
+	bne     LAA1A   			; then
+	lda     #$FF    			;   $FF -> baud = 300
+	bne     LAA09   			;   Jump back to store baud in $B1
+LAA1A:  cmp     #$12    			; else if keyboard press = 'c'
 	bne     LAA24   			; AA1C D0 06                    ..
 	lda     #$00    			; AA1E A9 00                    ..
 LAA20:  sta     $1355   			; AA20 8D 55 13                 .U.
@@ -3008,7 +3019,7 @@ LB253:  jsr     sub_b238
 	ldy     #$18    			; B258 A0 18                    ..
 	sty     $9C     			; B25A 84 9C                    ..
 	ldy     #$08    			; B25C A0 08                    ..
-	lda     $B1     			; B25E A5 B1                    ..
+	lda     baud_rate			; Get baud ($FF=300, $00=1200)
 	bne     LB268   			; B260 D0 06                    ..
 	lda     #<LB91C
 	ldx     #>LB91C
@@ -3150,7 +3161,7 @@ LB353:  lda     byte_1340
 	jsr     sub_b369
 	lda     $CB     			; B35E A5 CB                    ..
 	bne     :+
-	jsr     sub_b545
+	jsr     sub_b545			; Enable serial out and timer IRQs
 :	cli             			; B365 58                       X
 	ldy     #$01    			; B366 A0 01                    ..
 	rts             			; B368 60                       `
@@ -3232,7 +3243,7 @@ sub_b3c6:
 	bne     :+
 	lda     #$E7    			; B3CE A9 E7                    ..
 	and     POKMSK
-	jsr     sub_b549
+	jsr     sub_irqen
 	jmp     LB3B5   			; B3D5 4C B5 B3                 L..
 
 ; ----------------------------------------------------------------------------
@@ -3285,8 +3296,8 @@ sub_b420:
 	ldx     #$00    			; B420 A2 00                    ..
 
 sub_b422:
-	lda     $CB     			; B422 A5 CB                    ..
-	bne     sub_b422
+	lda     $CB     			; 
+	bne     sub_b422			; Wait for $CB to be $00
 	jsr     sub_b53a
 :	lda     IRQST
 	and     #$08    			; B42C 29 08                    ).
@@ -3363,7 +3374,7 @@ sub_b47d:
 	lda     #$C7    			; Disable serial input-data-ready,... 
 	and     POKMSK                          ; ...out-transmission-finished interrupts. 
 	ora     #$20    			; Enable serial output-data-required interrupt.
-	jsr     sub_b549                        ; Register new interrupt flags.
+	jsr     sub_irqen                       ; Register new interrupt flags.
 
 	cli             			; Enable interrupts
 	rts             			; 
@@ -3416,7 +3427,7 @@ sub_b4a5:
 ;** (n) Install 3 new Serial Data-Ready Input vector addresses *****************
 	ldx     #$05    			; 
 :	lda     VSERIN,x 			; Save current vector address
-	sta     $1330,x 			; to RAM
+	sta     byte_1330,x 			; to RAM
 	lda     LB49B,x 			; Load new vector address
 	sta     VSERIN,x 			; from cartridge ROM
 	dex             			; 
@@ -3439,25 +3450,28 @@ sub_b4a5:
 
 ; ----------------------------------------------------------------------------
 sub_b4f7:
-	sei             			; B4F7 78                       x
-	ldy     #$05    			; B4F8 A0 05                    ..
-LB4FA:  lda     $1330,y 			; B4FA B9 30 13                 .0.
-	sta     VSERIN,y 			; B4FD 99 0A 02                 ...
-	dey             			; B500 88                       .
-	bpl     LB4FA   			; B501 10 F7                    ..
+	sei             			; Inhibit IRQs
+
+	ldy     #$05    			; 
+:	lda     byte_1330,y 			; Install new vectors for ..
+	sta     VSERIN,y 			; VSERIN, VSEROR, VSEROC IRQs
+	dey             			; 
+	bpl     :-      			; End loop
+
 	ldy     #$03    			; B503 A0 03                    ..
-LB505:  lda     $1336,y 			; B505 B9 36 13                 .6.
+:	lda     $1336,y 			; B505 B9 36 13                 .6.
 	sta     $0202,y 			; B508 99 02 02                 ...
 	dey             			; B50B 88                       .
-	bpl     LB505   			; B50C 10 F7                    ..
+	bpl     :-				; B50C 10 F7                    ..
+
 	lda     PACTL
 	and     #$FE    			; B511 29 FE                    ).
 	sta     PACTL
-	lda     #$C7    			; B516 A9 C7                    ..
-	and     POKMSK
-	jsr     sub_irqen
-	cli             			; B51D 58                       X
-	rts             			; B51E 60                       `
+	lda     #$C7    			; Disable VSERIN, VSEROR...
+	and     POKMSK				; ...VSEROC IRQs
+	jsr     sub_irqen			; Update the IRQ system
+	cli             			; Enable IRQs
+	rts             			; 
 
 ; ----------------------------------------------------------------------------
 sub_b51f:
@@ -3481,18 +3495,24 @@ sub_b534:
 
 ; ----------------------------------------------------------------------------
 sub_b53a:  
-	sei             			; B53A 78                       x
-	jsr     sub_b545
-	cli             			; B53E 58                       X
+	sei             			; Inhibit IRQs
+	jsr     sub_b545			; Enable Serial out and timer IRQs
+	cli             			; Enable IRQs
 :	lda     byte_1340
-	bne     :-
-	rts             			; B544 60                       `
+	bne     :-				; Wait for byte_1340 to be $00
+	rts             			; 
 
-; ----------------------------------------------------------------------------
+;*******************************************************************************
+;*                                                                             *
+;*                                  sub_b545                                   *
+;*                                                                             *
+;*                    Enable Serial Out and Timer Interrupts                   * 
+;*                                                                             *
+;*******************************************************************************
 sub_b545:
-	lda     POKMSK
-	ora     #$18    			; B547 09 18                    ..
-
+	lda     POKMSK				; Enable IRQs for VSEROR VSEROC...
+	ora     #$18    			; ...VTIMR{1,2,4}.
+						; Fall through to sub_irqen.
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -3501,11 +3521,16 @@ sub_b545:
 ;*                              Enable Interrupts                              *
 ;*                                                                             *
 ;*******************************************************************************
-sub_b549:  
+; DESCRIPTION
+;
+; IRQEN is a write-only register. Thus, we must maintain a current value of that
+; register in RAM at address POKMSK. To avoid conflict, IRQs should be inhibited 
+; (SEI) before calling sub_irqen and enabled after returning from sub_irqen.
+;
 sub_irqen:
-	sta     POKMSK 			; Update registers with new ...
-	sta     IRQEN  			; ...set of interrupt flags
-	rts            			; done
+	sta     POKMSK 			; Save the requested IRQ flags to RAM
+	sta     IRQEN  			; and to the hardware register, too.
+	rts
 
 ; ----------------------------------------------------------------------------
 sub_b54f:
@@ -3603,7 +3628,7 @@ LB5D6:
 ;*                 MPP Driver Code similar to MPP Smart Term 4.1               *
 ;*                                                                             *
 ;*******************************************************************************
-; Description
+; DESCRIPTION
 ; This section closely matches the DRIVER subroutine in MPP's Smart Terminal cart
 ; available at https://archive.org/details/MPPSmartTerminalv4.1 
 ; 
@@ -3748,7 +3773,7 @@ sub_b6c9:
 ;** (n) Restore vector addresses for VSERIN, VSEROR, VSEROC ********************
 	ldy     #$05    			; 
 	sei             			; Prevent IRQs
-:	lda     $1330,y 			; Values saved earlier in sub_b719
+:	lda     byte_1330,y 			; Values saved earlier in sub_b719
 	sta     VSERIN,y 			; are restored to the serial vectors
 	dey             			; 
 	bpl     :-                              ; End loop after 6 iterations
@@ -3809,7 +3834,7 @@ JREAD:	cli             			; Enable IRQs
 
 ; ----------------------------------------------------------------------------
 sub_b719:
-	jsr     sub_b7e7
+	jsr     sub_setbaud			; TODO Set baud or something else
 LB71C:  ldy     #$00    			; B71C A0 00                    ..
 	jsr     sub_b206
 	bpl     :+
@@ -3846,17 +3871,17 @@ LB756:  sei             			; Prevent IRQs
 
 ;** (n) Copy 8 bytes from $1330-$1337 to AUDF1/C1-AUDF4/C4 *******************
 	ldy     #$07    			; B762 A0 07                    ..
-:	lda     $1330,y 			; B764 B9 30 13                 .0.
+:	lda     byte_1330,y 			; B764 B9 30 13                 .0.
 	sta     AUDF1,y 			; B767 99 00 D2                 ...
 	dey             			; B76A 88                       .
 	bpl     :-      			; B76B 10 F7                    ..
 
 ;** (n) Save/replace VSERIN VSEROR VSEROC interrupt vectors ******************
 	ldx     #$06    			; 
-:	lda     VSERIN-1,x 			; Save currect vector addresses
-	sta     $1330-1,x 			; to RAM
-	lda     LB820+1,x                       ; Load new serial vectors
-	sta     VSERIN-1,x 			; to POKEY
+:	lda     VSERIN-1,x 			; Save currect serial vector...
+	sta     byte_1330-1,x 			; ...addresses to RAM
+	lda     LB820+1,x                       ; Load new vector...
+	sta     VSERIN-1,x 			; ...addresses to IRQ registers
 	dex             			; 
 	bne     :-      			; End loop
 
@@ -3937,19 +3962,32 @@ sub_b7da:
 	sta     $CB     			; B7E2 85 CB                    ..
 :	jmp	sub_b3c6
 
-; ----------------------------------------------------------------------------
+;*******************************************************************************
+;*                                                                             *
+;*                               sub_sendsio                                   *
+;*                                                                             *
+;*                    Assign SIO command and aux1, aux2                        *
+;*                                                                             *
+;*******************************************************************************
+; DESCRIPTION
+; Send two command frames to 850
 sub_b7e7:
-	lda     #$42    			; B7E7 A9 42                    .B
-	bit     $B1     			; B7E9 24 B1                    $.
-	bmi     :+
-	ldx     #$0A    			; B7ED A2 0A                    ..
-	bne     LB7F3   			; B7EF D0 02                    ..
-:	ldx	#$00    			; B7F1 A2 00                    ..
-LB7F3:  jsr     LB7FA   			; B7F3 20 FA B7                  ..
-	lda     #$41    			; B7F6 A9 41                    .A
-	ldx     #$F3    			; B7F8 A2 F3                    ..
-LB7FA:  stx     DAUX1   			; B7FA 8E 0A 03                 ...
-	ldy     #$00    			; B7FD A0 00                    ..
+sub_setbaud:
+
+; **(1) Send command frame #1 for setting baud and word size
+	lda     #$42    			; DCOMND for setting baud, parity, stopbits
+	bit     baud_rate			; 
+	bmi     :+				; if baud_rate == $FF
+	ldx     #$0A    			; then AUX1 = $00 ( 300 baud, 8 bit word)
+	bne     LB7F3   			; else AUX1 = $0A (1200 baud, 8 bit word)
+:	ldx	#$00    			; 
+LB7F3:  jsr     LB7FA   			; 
+
+; **(2) Send command frame #2 for ???? TODO
+	lda     #$41    			; DCOMND for ???
+	ldx     #$F3    			; AUX1 for ????
+LB7FA:  stx     DAUX1   			; 
+	ldy     #$00    			; AUX2: 1 stop bit, no monitoring of DSR, CTS, CRX
 	sty     DAUX2   			; B7FF 8C 0B 03                 ...
 
 ;*******************************************************************************
@@ -4159,21 +4197,11 @@ LB9A6:	.byte	$06,$09,$00,>byte_BAEC
 LB9AA:	.byte	$00,$00,$00,<byte_BAEC
 LB9AE:	.byte	$00,$80,$44,<LBE84
 LB9B2:  .byte   $0C,$0D,$BC,>LBE84
-LB9B6:	.byte	$08,$10,$10
-	.byte	$20,$20,$40
-	.byte   $80     			; B9BC 80                       .
-	.byte   $80     			; B9BD 80                       .
+LB9B6:	.byte	$08,$10,$10,$20,$20,$40,$80,$80
 LB9BE:	.byte	$00,$00,$00,$01,$01,$01,$02,$02
 	.byte	$03,$03,$04
-LB9C9:  .byte   $04     			; B9C9 04                       .
-	.byte   $04     			; B9CA 04                       .
-	ora     $05     			; B9CB 05 05                    ..
-	.byte   $05     			; B9CD 05                       .
-LB9CE:	.byte	$00,$00,$01,$02
-	.byte   $02     			; B9D2 02                       .
-	.byte   $03     			; B9D3 03                       .
-	.byte   $03     			; B9D4 03                       .
-	.byte   $04     			; B9D5 04                       .
+LB9C9:  .byte   $04,$04,$05,$05,$05
+LB9CE:	.byte	$00,$00,$01,$02,$02,$03,$03,$04
 LB9D6:  .byte   $03     			; B9D6 03                       .
 	.byte   $02     			; B9D7 02                       .
 	.byte   $03     			; B9D8 03                       .
@@ -4185,12 +4213,16 @@ LB9D6:  .byte   $03     			; B9D6 03                       .
 	.byte   $03     			; B9DE 03                       .
 	.byte   $02     			; B9DF 02                       .
 	.byte   $02     			; B9E0 02                       .
-	ora     ($02,x) 			; B9E1 01 02                    ..
+	.byte	$01				; B9E1 01 02                    ..
+	.byte	$02  			
 	.byte   $02     			; B9E3 02                       .
-	ora     ($02,x) 			; B9E4 01 02                    ..
-	ora     ($02,x) 			; B9E6 01 02                    ..
+	.byte	$01				; B9E4 01 02                    ..
+	.byte	$02 			
+	.byte	$01				; B9E6 01 02                    ..
+	.byte	$02 			
 	.byte   $02     			; B9E8 02                       .
-	ora     ($03,x) 			; B9E9 01 03                    ..
+	.byte	$01				; B9E9 01 03                    ..
+	.byte	$03
 	.byte   $02     			; B9EB 02                       .
 	.byte   $03     			; B9EC 03                       .
 	.byte   $03     			; B9ED 03                       .
@@ -4200,16 +4232,17 @@ LB9D6:  .byte   $03     			; B9D6 03                       .
 	.byte   $03     			; B9F1 03                       .
 	.byte   $03     			; B9F2 03                       .
 	.byte   $02     			; B9F3 02                       .
-LB9F4:  brk             			; B9F4 00                       .
-	ora     $0A     			; B9F5 05 0A                    ..
+LB9F4:  .byte   $00     			; B9F4 00                       .
+	.byte	$05				; B9F5 05 0A                    ..
+	.byte	$0A
 	.byte   $0F     			; B9F7 0F                       .
 	.byte   $14     			; B9F8 14                       .
 	.byte   $19     			; B9F9 19                       .
-LB9FA:  brk             			; B9FA 00                       .
-	brk             			; B9FB 00                       .
-	ora     ($01,x) 			; B9FC 01 01                    ..
-	ora     ($01,x) 			; B9FE 01 01                    ..
-	ora     ($02,x) 			; BA00 01 02                    ..
+LB9FA:  .byte   $00     			; B9FA 00                       .
+	.byte   $00     			; B9FB 00                       .
+	.byte	$01,$01 			; B9FC 01 01                    ..
+	.byte	$01,$01 			; B9FE 01 01                    ..
+	.byte	$01,$02 			; BA00 01 02                    ..
 LBA02:	.byte	$00,$03,$0C,$0F,$30,$33,$3C,$3F
 	.byte	$C0,$C3,$CC,$CF,$F0,$F3,$FC,$FF
 
@@ -5762,13 +5795,13 @@ cart_init:
 	sta	byte_133a                       ; Let byte_133a = $51
 
 ;*******************************************************************************
-	lda	$CB
-	pha             			; BFA0 48                       H
-	lda     #$00    			; BFA1 A9 00                    ..
-	sta     $CB     			; BFA3 85 CB                    ..
-	jsr     sub_b420
-	pla             			; BFA8 68                       h
-	sta     $CB     			; BFA9 85 CB                    ..
+	lda	$CB				;
+	pha             			; Save current value in $CB 
+	lda     #$00    			; 
+	sta     $CB     			; Let $CB = $00
+	jsr     sub_b420			;
+	pla             			; 
+	sta     $CB     			; Restore original value of $CB
 
 ;*******************************************************************************
 	lda     #$51    			; BFAB A9 51                    .Q
