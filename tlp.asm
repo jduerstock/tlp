@@ -46,6 +46,7 @@ VSERIN		:= $020A			; Vector to serial receive-data-ready interrupt
 VTIMR1		:= $0210			; Vector to POKEY timer 1 interrupt
 CDTMA1		:= $0226			; System timer one jump address
 SRTIMR		:= $022B
+SDMCTL		:= $022F			; Direct memory access control
 DLIST		:= $0230			; Starting address of the display list.
 SSKCTL		:= $0232			; Serial port control register
 GPRIOR		:= $026F			; Priority selection register for screen objects
@@ -56,7 +57,7 @@ COLOR1		:= $02C5			; Playfield 1 color register
 COLOR2		:= $02C6			; Playfield 2 color register
 COLOR3		:= $02C7			; Playfield 3 color register
 COLOR4		:= $02C8			; Playfield 4 color register
-HELPFG		:= $02DC
+HELPFG		:= $02DC			; Help key status
 DVSTAT		:= $02EA			; Device status register.
 CH		:= $02FC                        ; Keyboard character code.
 
@@ -141,7 +142,7 @@ XITVBV		:= $E462
 ;*******************************************************************************
 
 ; MPP Microbit 300 Driver Symbols
-BAUD		:= $45				; Noted in MPP Smart Term 4.1 Source Page 32
+BAUD		:= $45				; Divide by n frequency for 300 baud. Noted in MPP Smart Term 4.1 Source Page 32
 INPBIT          := $00FD			; Input bit
 OUTBIT          := $00FE			; Output bit
 INPBUF		:= $0F00
@@ -160,7 +161,7 @@ ISTOP		:= $134C
 L0070           := $0070
 L0080           := $0080
 
-baud_rate	:= $00B1			; baud rate: $FF->300 $00->1200 
+CURRENT_BAUD	:= $00B1			; Current 850 baud rate: $FF->300 $00->1200 
 byte_B2		:= $00B2
 byte_B3		:= $00B3
 byte_B5		:= $00B5
@@ -215,38 +216,57 @@ L4000           := $4000
 L6000           := $6000
 L8000           := $8000
 charset_sm	:= $BC44			; 6x6 character set
-; ----------------------------------------------------------------------------
 
+;*******************************************************************************
+;*                                                                             *
+;*                                 cart_start                                  *
+;*                                                                             *
+;*                    Second entry point after system restart                  *
+;*                                                                             *
+;*******************************************************************************
+
+; DESCRIPTION
+; After a cold or warm start, the OS runs the cart_init routine found towards 
+; the end of the cart's address space, then jumps to here. 
+ 
 cart_start:
 	jsr     sub_b799			; Attempt to load R: Handler?
-	jsr     sub_a214			; Initialize Graphics
-	jsr     sub_a33d
+	jsr     init_graphics			; Initialize display lists, colors
+	jsr     display_title			; Display program title and copyright
+
 	ldy     #$08    			; A009 A0 08                    ..
 	jsr     sub_b1f1
-	ldy     #$28    			; A00E A0 28                    .(
+
+	ldy     #$28    			; Offset into LB96E table
 	jsr     sub_b206
 	bmi     LA035   			; A013 30 20                    0 
-	lda     #$1A    			; A015 A9 1A                    ..
-	sta     $9C     			; A017 85 9C                    ..
-	ldy     #$33    			; A019 A0 33                    .3
-	lda     #<LB8DF
-	ldx     #>LB8DF
-	jsr     sub_a89f
-:	lda     CH
-	cmp     #$FF    			; A025 C9 FF                    ..
-	beq     :-
-	ldx     #$FF    			; A029 A2 FF                    ..
-	stx     CH
-	cmp     #$1F    			; A02E C9 1F                    ..
-	bne     LA04F   			; A030 D0 1D                    ..
-	jsr     sub_a33d
-LA035:  jsr     sub_b238
+
+;**(n) Modem 1030 detected - Wait for user to establish connection *************
+	lda     #$1A    			; 
+	sta     $9C     			; Set cursor X 
+	ldy     #$33    			; String length - 1
+	lda     #<LB8DF				; "After the phone has a high..."
+	ldx     #>LB8DF				; 
+	jsr     print_string			;
+
+:	lda     CH				; Wait for key press
+	cmp     #$FF    			; 
+	beq     :-				; Loop until something
+
+	ldx     #$FF    			; 
+	stx     CH				; Clear keyboard register
+
+;**(n) Change baud rate to 1200 if user presses '1' ****************************
+	cmp     #$1F    			; if last key press <> '1'
+	bne     LA04F   			; then skip
+	jsr     display_title			; otherwise display title
+LA035:  jsr     sub_b238			;
 	jsr     sub_b719			; Set baud or something else
 	bmi     :+
-	lda     #<LB91C
+	lda     #<LB91C				; String "1200 baud"
 	ldx     #>LB91C
-	ldy     #$08    			; A041 A0 08                    ..
-	jsr     sub_a89f
+	ldy     #$08    			; 
+	jsr     print_string
 	jmp     LA05E   			; A046 4C 5E A0                 L^.
 
 ; ----------------------------------------------------------------------------
@@ -534,9 +554,9 @@ sub_a1fe:
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                  sub_a214                                   *
+;*                                init_graphics                                *
 ;*                                                                             *
-;*                             Initialize Graphics                             *
+;*                 Initialize display lists, colors, player-missiles           *
 ;*                                                                             *
 ;*******************************************************************************
 
@@ -569,6 +589,7 @@ sub_a1fe:
 ; $10C9: $10 DLSTHI      $130E: $10 DLSTHI
 
 sub_a214:					; A214
+init_graphics:
 	lda     #$00    			; 
 	sta     DMACTL  			; Turn off ANTIC
 	sta     GRACTL				; Turn off PMG, unlatch triggers
@@ -769,30 +790,42 @@ sub_a324:
 	bpl     :-      			; End Loop
 	rts             			;
 
-; ----------------------------------------------------------------------------
+;*******************************************************************************
+;*                                                                             *
+;*                               display_title                                 *
+;*                                                                             *
+;*                   Print program title and copyright notice                  *
+;*                                                                             *
+;*******************************************************************************
 sub_a33d:
-	jsr     sub_a367
-	jsr     LA3C8   			; A340 20 C8 A3                  ..
-	lda     #$50    			; A343 A9 50                    .P
-	sta     $A4     			; A345 85 A4                    ..
-	sta     $9C     			; A347 85 9C                    ..
-	ldy     #$1C    			; A349 A0 1C                    ..
-	lda     #<LB8C2
+display_title:
+;** (1) Clear screen ***********************************************************
+	jsr     sub_a367			; Clear screen
+	jsr     LA3C8   			; TODO Initialize Screen Variables?
+
+;** (2) Print "WELCOME TO THE LEARNING PHONE" **********************************
+	lda     #$50    			; Set X coordinate for text
+	sta     $A4     			; Save X coordinate for scaled display
+	sta     $9C     			; TODO Save X coordinate for zoomed display?
+	ldy     #$1C    			; String length - 1
+	lda     #<LB8C2				; "WELCOME..."
 	ldx     #>LB8C2
-	jsr     sub_a89f
+	jsr     print_string
 	jsr     LA3C2   			; A352 20 C2 A3                  ..
-	lda     #$67    			; A355 A9 67                    .g
-	sta     $A4     			; A357 85 A4                    ..
-	sta     $9C     			; A359 85 9C                    ..
-	ldy     #$13    			; A35B A0 13                    ..
-	lda     #<LB8AE
+
+;** (3) Print "COPYRIGHT 1984 ATARI" *******************************************
+	lda     #$67    			; Set X coordinate for text
+	sta     $A4     			; Save X coordinate for scaled display?
+	sta     $9C     			; TODO Save X coordinate for zoomed display?
+	ldy     #$13    			; String length - 1
+	lda     #<LB8AE				; "COPYRIGHT..."
 	ldx     #>LB8AE
-	jsr     sub_a89f
+	jsr     print_string
 	jmp     LA3C2   			; A364 4C C2 A3                 L..
 
 ; ----------------------------------------------------------------------------
 sub_a367:
-	jmp     LA6A2   			; A367 4C A2 A6                 L..
+	jmp     clear_screen
 
 ; ----------------------------------------------------------------------------
 	txa             			; A36A 8A                       .
@@ -863,18 +896,23 @@ LA3C2:  jsr     LA882   			; A3C2 20 82 A8                  ..
 	jmp     LA857   			; A3C5 4C 57 A8                 LW.
 
 ; ----------------------------------------------------------------------------
+; TODO Initialize screen cursor variables?
+; ----------------------------------------------------------------------------
 LA3C8:  lda     #$BA    			; A3C8 A9 BA                    ..
 	sta     $A6     			; A3CA 85 A6                    ..
+
 	lda     #$74    			; A3CC A9 74                    .t
 	sta     $9E     			; A3CE 85 9E                    ..
+
 	ldx     #$01    			; A3D0 A2 01                    ..
 	stx     $9F     			; A3D2 86 9F                    ..
-	dex             			; A3D4 CA                       .
-	stx     $9C     			; A3D5 86 9C                    ..
-	stx     $9D     			; A3D7 86 9D                    ..
-	stx     $A4     			; A3D9 86 A4                    ..
-	stx     $A5     			; A3DB 86 A5                    ..
-LA3DD:  rts             			; A3DD 60                       `
+
+	dex             			; Reset cursor coodinates to 0
+	stx     $9C     			; Cursor x coordinate in scaled mode
+	stx     $9D     			; TODO Cursor y coordinate in scaled mode?
+	stx     $A4     			; TODO Cursor x coordinate in zoomed mode?
+	stx     $A5     			; TODO Cursor y coordinate in zoomed mode?
+LA3DD:  rts             			; 
 
 ; ----------------------------------------------------------------------------
 	jsr     sub_a890
@@ -1288,29 +1326,48 @@ LA69A:  and     #$07    			; A69A 29 07                    ).
 	ldy     #$00    			; A69D A0 00                    ..
 	jmp     sub_b004
 
-; ----------------------------------------------------------------------------
-LA6A2:  ldy     #$00    			; A6A2 A0 00                    ..
-	sty     $022F   			; A6A4 8C 2F 02                 ./.
-	ldx     #$1B    			; A6A7 A2 1B                    ..
-:	lda     LA6D0,x 			; A6A9 BD D0 A6                 ...
-	sta     a:L0080,x       		; A6AC 9D 80 00                 ...
-	dex             			; A6AF CA                       .
-	bpl     :-
-	tya             			; A6B2 98                       .
+;*******************************************************************************
+;*                                                                             *
+;*                                 clear_screen                                *
+;*                                                                             *
+;*******************************************************************************
+LA6A2:  
+clear_screen:
+;** (n) Turn off ANTIC to hide the work and speed things up ********************
+	ldy     #$00    			; 
+	sty     SDMCTL  			; Turn off ANTIC
+
+;** (n) Load self modifying code #1 into zero page RAM *************************
+	ldx     #$1B    			; Copy instructions from ROM to RAM
+:	lda     LA6D0,x 			; Must be self-modifying code
+	sta     a:L0080,x       		;
+	dex             			;
+	bpl     :-				; End loop after 27 iterations
+
+;** (n) Run self modifying code #1 *******************************************
+	tya             			; Let Y = $00. Used for background
 	bit     $BA     			; A6B3 24 BA                    $.
-	jsr     L0080   			; A6B5 20 80 00                  ..
-	ldx     #$09    			; A6B8 A2 09                    ..
-:	lda     LA6EC,x 			; A6BA BD EC A6                 ...
-	sta     a:$82,x 			; A6BD 9D 82 00                 ...
-	dex             			; A6C0 CA                       .
-	bpl     :-
+	jsr     L0080   			; Run self-modifying code #1
+
+;** (n) Load self modifying code #2 into zero page RAM *************************
+	ldx     #$09    			; Copy instructions from ROM to RAM
+:	lda     LA6EC,x 			; Must be self-modifying code
+	sta     a:$82,x 			; Leave 'sta' instruction from code #1
+	dex             			; 
+	bpl     :-				; End loop after 9 iterations
+
+;** (n) Run self modifying code #2 *******************************************
 	ldx     #$08    			; A6C3 A2 08                    ..
 	lda     #$20    			; A6C5 A9 20                    . 
-	jsr     L0080   			; A6C7 20 80 00                  ..
-	lda     #$26    			; A6CA A9 26                    .&
-	sta     $022F   			; A6CC 8D 2F 02                 ./.
-	rts             			; A6CF 60                       `
+	jsr     L0080   			; self-modifying code #2
 
+;** (n) Turn ANTIC back on and restore previous playfield/dma settings *******
+	lda     #$26    			;
+	sta     SDMCTL   			; Turn on ANTIC, DMA, etc 
+	rts             			; 
+
+; ----------------------------------------------------------------------------
+; Self-modifying code #1 to be copied from ROM to RAM
 ; ----------------------------------------------------------------------------
 LA6D0:  sta     L2000,y 			; A6D0 99 00 20                 .. 
 	bvs     :+
@@ -1319,16 +1376,20 @@ LA6D0:  sta     L2000,y 			; A6D0 99 00 20                 ..
 	sta     L8000,y 			; A6DB 99 00 80                 ...
 :	iny             			; A6DE C8                       .
 	bne     LA6D0   			; A6DF D0 EF                    ..
-	inc     $82     			; A6E1 E6 82                    ..
-	inc     $87     			; A6E3 E6 87                    ..
-	inc     $8D     			; A6E5 E6 8D                    ..
-	inc     $8A     			; A6E7 E6 8A                    ..
-	.byte   $10     			; A6E9 10                       .
-LA6EA:  sbc     $60     			; A6EA E5 60                    .`
+	inc     $82     			; Self modifying code
+	inc     $87     			; Self modifying code
+	inc     $8D     			; Self modifying code
+	inc     $8A     			; Self modifying code
+	.byte   $10     			; A6E9 10	At runtime, turns into "bpl L0080" 
+LA6EA:  sbc     $60     			; A6EA E5 60	At runtime, turns into "rts"
+
+; ----------------------------------------------------------------------------
+; Self-modifying code #2 to be copied from ROM to RAM
+; ----------------------------------------------------------------------------
 LA6EC:  clc             			; A6EC 18                       .
 	iny             			; A6ED C8                       .
 	bne     LA6EA   			; A6EE D0 FA                    ..
-	inc     $82     			; A6F0 E6 82                    ..
+	inc     $82     			; Self modifying code
 	dex             			; A6F2 CA                       .
 	bne     LA6EA   			; A6F3 D0 F5                    ..
 	rts             			; A6F5 60                       `
@@ -1580,12 +1641,27 @@ sub_a890:
 LA89C:  asl     $D8     			; A89C 06 D8                    ..
 LA89E:  rts             			; A89E 60                       `
 
-; ----------------------------------------------------------------------------
+;*******************************************************************************
+;*                                                                             *
+;*                               print_string                                  *
+;*                                                                             *
+;*                        Display text on the screen                           *
+;*                                                                             *
+;*******************************************************************************
+
+; DESCRIPTION
+;
+; Display text on the screen
+; Parameters: 
+; A = MSB of address to text string
+; X = LSB of address to text string
+; Y = String length - 1
 sub_a89f:					; print string
-	sty     $EE     			; A89F 84 EE                    ..
-	sta     off_EC
-	stx     off_EC+1
-:	ldy     $EE     			; A8A5 A4 EE                    ..
+print_string:
+	sty     $EE     			; String length - 1
+	sta     off_EC				; Store MSB string address in ZP
+	stx     off_EC+1			; Store LSB string address in ZP
+:	ldy     $EE     			; Iterate through the characters
 	lda     (off_EC),y
 	jsr     sub_ab5d
 	dec     $EE     			; A8AC C6 EE                    ..
@@ -1692,19 +1768,19 @@ LA962:  rts             			; A962 60                       `
 
 ; ----------------------------------------------------------------------------
 sub_a963:  
-	ldx     CH
-	inx             			; A966 E8                       .
-	bne     LA976   			; A967 D0 0D                    ..
-	lda     HELPFG
-	beq     LA962   			; A96C F0 F4                    ..
-	stx     HELPFG
-	lda     #$0B    			; A971 A9 0B                    ..
-	jmp     sub_b1df
+	ldx     CH				; Get keyboard code ($FF if none)
+	inx             			; if key was pressed 
+	bne     LA976   			; then goto LA976
+	lda     HELPFG				; else examine HELP key
+	beq     LA962   			; if no HELP key then RTS
+	stx     HELPFG				; else save (but it's clobbered later)
+	lda     #$0B    			; 
+	jmp     sub_b1df			;
 
 ; ----------------------------------------------------------------------------
-LA976:  dex             			; A976 CA                       .
-	bmi     LA9CE   			; A977 30 55                    0U
-	stx     $D8     			; A979 86 D8                    ..
+LA976:  dex             			; Restore original keyboard code
+	bmi     LA9CE   			; Branch if key press + control key
+	stx     $D8     			; Save keyboard code to RAM
 	lda     CONSOL
 	lsr     a       			; A97E 4A                       J
 	bcs     LA9AB   			; A97F B0 2A                    .*
@@ -1784,7 +1860,7 @@ LAA03:  cmp     #$1F    			; if keyboard press = '1'
 	lda     #$00    			;   $00 -> baud = 1200
 LAA09:  ldy     byte_B2				; 
 	bne     LAA23   			;
-	sta     baud_rate			;   Set baud (FF=300 00=1200)
+	sta     CURRENT_BAUD			;   Set baud (FF=300 00=1200)
 	jmp     LB253   			;   
 LAA12:  cmp     #$1A    			; else if keyboard press = '3'
 	bne     LAA1A   			; then
@@ -1972,15 +2048,24 @@ sub_ab54:
 sub_ab5a:
 	lda     $3E2E   			; AB5A AD 2E 3E                 ..>
 
-sub_ab5d:					; print character
-	sta     $E7     			; AB5D 85 E7                    ..
-	sec             			; AB5F 38                       8
-	sbc     #$20    			; AB60 E9 20                    . 
-	bcs     :+
-	rts             			; AB64 60                       `
-
-; ----------------------------------------------------------------------------
-:	pha             			; AB65 48                       H
+;*******************************************************************************
+;*                                                                             *
+;*                                print_char                                   *
+;*                                                                             *
+;*                        Draw character on the screen                         *
+;*                                                                             *
+;*******************************************************************************
+; DESCRIPTION
+; Parameters:
+; A = character to be displayed
+sub_ab5d:
+print_char:
+	sta     $E7     			; Character to be displayed
+	sec             			; Test to see if non-printing character 
+	sbc     #$20    			;
+	bcs     :+				;
+	rts             			; RTS now if non-printing character
+:	pha             			; Save character-to-be-displayed
 	ldx     $BA     			; AB66 A6 BA                    ..
 	stx     $C9     			; AB68 86 C9                    ..
 	bne     :+
@@ -2931,31 +3016,39 @@ LB1B5:  ldy     #$00    			; B1B5 A0 00                    ..
 
 ; ----------------------------------------------------------------------------
 sub_b1df:
-	tay             			; B1DF A8                       .
-	ldx     #$00    			; B1E0 A2 00                    ..
-:	lsr     a       			; B1E2 4A                       J
+	tay             			; A=$0B if arrived from HELPFG else $E7 
+	ldx     #$00    			; Let X = $00
+:	lsr     a       			; If not here from HELPFG
 	bcc     :+
-	inx             			; B1E5 E8                       .
+	inx             			; 
 :	bne     :--
-	txa             			; B1E8 8A                       .
-	lsr     a       			; B1E9 4A                       J
-	tya             			; B1EA 98                       .
+	txa             			; 
+	lsr     a       			; 
+	tya             			; 
 	bcc     :+
 	ora     #$80    			; B1ED 09 80                    ..
 
 sub_b1ef:
 :	ldy     #$18    			; B1EF A0 18                    ..
 
+;*******************************************************************************
+;*                                                                             *
+;*                                  sub_b1f1                                   *
+;*                                                                             *
+;*                             ???????????????????                             *
+;*                                                                             *
+;*******************************************************************************
 sub_b1f1:
 	jsr     sub_b206
-	bpl     LB252   			; B1F4 10 5C                    .\
-LB1F6:  ldy     #$18    			; B1F6 A0 18                    ..
-	sty     $9C     			; B1F8 84 9C                    ..
-	ldy     #$12    			; B1FA A0 12                    ..
-	lda     #<LB89B
-	ldx     #>LB89B
-	jsr     sub_a89f
-LB203:  jmp     LB203   			; B203 4C 03 B2                 L..
+	bpl     LB252   			; Success. Jump to RTS
+display_comm_error:
+	ldy     #$18    			; Set cursor X coord in scaled mode
+	sty     $9C     			; 
+	ldy     #$12    			; Set string length - 1
+	lda     #<LB89B				; Point to string "COMMUNIC..."
+	ldx     #>LB89B				;
+	jsr     print_string			;
+LB203:  jmp     LB203   			; Halt and catch fire
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -3015,13 +3108,13 @@ LB252:  rts             			; B252 60                       `
 
 ; ----------------------------------------------------------------------------
 LB253:  jsr     sub_b238
-	bmi     LB1F6   			; B256 30 9E                    0.
+	bmi     display_comm_error
 	ldy     #$18    			; B258 A0 18                    ..
 	sty     $9C     			; B25A 84 9C                    ..
 	ldy     #$08    			; B25C A0 08                    ..
-	lda     baud_rate			; Get baud ($FF=300, $00=1200)
+	lda     CURRENT_BAUD			; Get baud ($FF=300, $00=1200)
 	bne     LB268   			; B260 D0 06                    ..
-	lda     #<LB91C
+	lda     #<LB91C				; String "1200 baud"
 	ldx     #>LB91C
 	bne     LB26C   			; will always branch
 
@@ -3976,8 +4069,8 @@ sub_setbaud:
 
 ; **(1) Send command frame #1 for setting baud and word size
 	lda     #$42    			; DCOMND for setting baud, parity, stopbits
-	bit     baud_rate			; 
-	bmi     :+				; if baud_rate == $FF
+	bit     CURRENT_BAUD			; 
+	bmi     :+				; if CURRENT_BAUD == $FF
 	ldx     #$0A    			; then AUX1 = $00 ( 300 baud, 8 bit word)
 	bne     LB7F3   			; else AUX1 = $0A (1200 baud, 8 bit word)
 :	ldx	#$00    			; 
@@ -4161,37 +4254,58 @@ LB966:  brk             			; B966 00                       .
 ;*                                                                             *
 ;*                                   LB81A                                     *
 ;*                                                                             *
-;*                                IOCB Tables                                  *
+;*                             IOCB Lookup Table	                       *
 ;*                                                                             *
 ;*******************************************************************************
 
-LB96E:  .byte   $10,$03,$0D,$00
-	.addr	LB892
-	.byte	$00,$00
+LB96E:  .byte   $10				; Offset into IOCB
+	.byte	$03				; ICCOM	- Device command
+	.byte	$0D				; ICAX1	- Aux 1
+	.byte	$00				; ICAX2	- Aux 2
+	.addr	LB892				; ICBA	- Buffer address
+	.word	$0000				; ICBL	- Buffer length
 
-	.byte	$20,$03,$04,$00
-	.addr	LB88F
-	.byte	$00,$00
+	.byte	$20				; Offset into IOCB
+	.byte	$03				; ICCOM - Device command
+	.byte	$04				; ICAX1	- Aux 1
+	.byte	$00				; ICAX2	- Aux 2
+	.addr	LB88F				; ICBA	- Buffer address
+	.word	$0000				; ICBL	- Buffer length
 
-	.byte	$20,$07,$04,$00
-	.byte	$00,$00
-	.byte	$00,$00
+	.byte	$20				; Offset into IOCB
+	.byte	$07				; ICCOM - Device command
+	.byte	$04				; ICAX1 - Aux 1
+	.byte	$00				; ICAX2 - Aux 2
+	.addr	$0000				; ICBA	- Buffer address
+	.word	$0000				; ICBL	- Buffer length
 
-	.byte	$10,$0B,$0D,$00
-	.byte	$00,$00
-	.byte	$00,$00
+	.byte	$10
+	.byte	$0B
+	.byte	$0D
+	.byte	$00
+	.addr	$0000
+	.word	$0000
 
-	.byte	$10,$07,$0D,$00
-	.byte	$00,$00
-	.byte	$00,$00
+	.byte	$10
+	.byte	$07
+	.byte	$0D
+	.byte	$00
+	.addr	$0000
+	.word	$0000
 
-	.byte	$10,$03,$0D,$00
+	.byte	$10
+	.byte	$03
+	.byte	$0D
+	.byte	$00
 	.addr	LB895
-	.byte	$00,$00
+	.word	$0000
 
-	.byte	$30,$03,$08,$00
+	.byte	$30
+	.byte	$03
+	.byte	$08
+	.byte	$00
 	.addr	LB898
-	.byte	$40,$00
+	.word	$0040
 
 LB9A6:	.byte	$06,$09,$00,>byte_BAEC
 LB9AA:	.byte	$00,$00,$00,<byte_BAEC
