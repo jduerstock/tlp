@@ -161,7 +161,7 @@ ISTOP		:= $134C
 L0070           := $0070
 L0080           := $0080
 
-CURRENT_BAUD	:= $00B1			; Current 850 baud rate: $FF->300 $00->1200 
+CURRENT_BAUD	:= $00B1			; Current 850 baud rate: $FF->300 $00->1200
 byte_B2		:= $00B2
 byte_B3		:= $00B3
 byte_B5		:= $00B5
@@ -226,8 +226,8 @@ charset_sm	:= $BC44			; 6x6 character set
 ;*******************************************************************************
 
 ; DESCRIPTION
-; After a cold or warm start, the OS runs the cart_init routine found towards 
-; the end of the cart's address space, then jumps to here. 
+; After a cold or warm start, the OS runs the cart_init routine found towards
+; the end of the cart's address space, then jumps to here.
  
 cart_start:
 	jsr     sub_b799			; Attempt to load R: Handler?
@@ -237,23 +237,23 @@ cart_start:
 	ldy     #LB976-LB96E
 	jsr     sub_b1f1
 
-	ldy     #$28    			; Offset into LB96E table
+	ldy     #LB996-LB96E  			; Offset into LB96E table
 	jsr     sub_b206
-	bmi     LA035   			; A013 30 20                    0 
+	bmi     LA035   			;
 
 ;**(n) Modem 1030 detected - Wait for user to establish connection *************
-	lda     #$1A    			; 
-	sta     $9C     			; Set cursor X 
+	lda     #$1A    			;
+	sta     $9C     			; Set cursor X
 	ldy     #$33    			; String length - 1
 	lda     #<LB8DF				; "After the phone has a high..."
-	ldx     #>LB8DF				; 
+	ldx     #>LB8DF				;
 	jsr     print_string			;
 
 :	lda     CH				; Wait for key press
-	cmp     #$FF    			; 
+	cmp     #$FF    			;
 	beq     :-				; Loop until something
 
-	ldx     #$FF    			; 
+	ldx     #$FF    			;
 	stx     CH				; Clear keyboard register
 
 ;**(n) Change baud rate to 1200 if user presses '1' ****************************
@@ -265,7 +265,7 @@ LA035:  jsr     sub_b238			;
 	bmi     :+
 	lda     #<LB91C				; String "1200 baud"
 	ldx     #>LB91C
-	ldy     #$08    			; 
+	ldy     #$08    			;
 	jsr     print_string
 	jmp     LA05E   			; A046 4C 5E A0                 L^.
 
@@ -4309,8 +4309,7 @@ LB9AE:	.byte	$00,$80,$44,<LBE84
 LB9B2:  .byte   $0C,$0D,$BC,>LBE84
 LB9B6:	.byte	$08,$10,$10,$20,$20,$40,$80,$80
 LB9BE:	.byte	$00,$00,$00,$01,$01,$01,$02,$02
-	.byte	$03,$03,$04
-LB9C9:  .byte   $04,$04,$05,$05,$05
+	.byte	$03,$03,$04,$04,$04,$05,$05,$05
 LB9CE:	.byte	$00,$00,$01,$02,$02,$03,$03,$04
 LB9D6:  .byte   $03     			; B9D6 03                       .
 	.byte   $02     			; B9D7 02                       .
@@ -5906,11 +5905,11 @@ cart_init:
 
 ;*******************************************************************************
 	lda	$CB				;
-	pha             			; Save current value in $CB 
-	lda     #$00    			; 
+	pha             			; Save current value in $CB
+	lda     #$00    			;
 	sta     $CB     			; Let $CB = $00
 	jsr     sub_b420			;
-	pla             			; 
+	pla             			;
 	sta     $CB     			; Restore original value of $CB
 
 ;*******************************************************************************
@@ -5918,7 +5917,7 @@ cart_init:
 	sta     byte_133a
 
 ;*******************************************************************************
-	lda     $08     			; 
+	lda     $08     			;
 	beq     LBFC2   			; Skip next part if warmstart
 
 ;*******************************************************************************
@@ -5957,7 +5956,7 @@ LBFD8:  jsr     sub_b4f7
 	sta     HATABS+2,x
 :	rts
 
-	.byte	$00,$00                         
+	.byte	$00,$00				;
 ;*******************************************************************************
 ;*                                                                             *
 ;*                                   LBFFA                                     *
