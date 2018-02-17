@@ -31,6 +31,11 @@
 	.endrep
 .endmacro
 
+.MACRO	ldi	arg1, arg2
+	lda	#arg2
+	sta	arg1
+.ENDMACRO
+
 	.segment "SEG1"
 
 ;*******************************************************************************
@@ -3502,8 +3507,7 @@ sub_b4a5:
 	sta     SKCTL                           ;
 	sta     SKREST  			; 
 
-	lda     #$78    			; 
-	sta     AUDCTL	                        ; Configure POKEY audio channels
+	ldi	AUDCTL, $78			; Configure POKEY audio channels
 
 ;**(n) Initialize audio tones **************************************************
 	ldx     #$07    			; 
