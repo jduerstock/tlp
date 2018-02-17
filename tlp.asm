@@ -234,7 +234,7 @@ cart_start:
 	jsr     init_graphics			; Initialize display lists, colors
 	jsr     display_title			; Display program title and copyright
 
-	ldy     #$08    			; A009 A0 08                    ..
+	ldy     #LB976-LB96E
 	jsr     sub_b1f1
 
 	ldy     #$28    			; Offset into LB96E table
@@ -294,7 +294,7 @@ LA05E:  jsr     sub_a963
 
 ; ----------------------------------------------------------------------------
 sub_a079:
-	ldy     #$20    			; A079 A0 20                    . 
+	ldy     #LB98E-LB96E
 	jsr     sub_b1f1
 	and     #$7F    			; A07E 29 7F                    ).
 	bit     byte_B3 			; A080 24 B3                    $.
@@ -1836,7 +1836,7 @@ LA9D0:  stx     CONSOL
 	rts             			; A9DC 60                       `
 
 ; ----------------------------------------------------------------------------
-LA9DD:  ldy     #$10    			; A9DD A0 10                    ..
+LA9DD:  ldy     #LB97E-LB96E
 	jsr     sub_b1f1
 	sta     $E7     			; A9E2 85 E7                    ..
 	lda     CONSOL				; check console keys
@@ -3128,7 +3128,7 @@ LB26C:  jsr     sub_a89f
 sub_b272:
 	jsr     sub_b238
 	jsr     sub_b5b0   			; B275 20 B0 B5                  ..
-	ldy     #$00    			; B278 A0 00                    ..
+	ldy     #LB96E-LB96E
 	jsr     sub_b1f1
 	ldy     #$01    			; B27D A0 01                    ..
 	sty     byte_B2
@@ -3163,7 +3163,7 @@ LB2AC:  ldx     #$30    			; B2AC A2 30                    .0
 	jmp     LB71C   			; B2B8 4C 1C B7                 L..
 
 ; ----------------------------------------------------------------------------
-:	ldy     #$28    			; B2BB A0 28                    .(
+:	ldy     #LB996-LB96E
 	jmp     sub_b1f1
 
 ; ----------------------------------------------------------------------------
@@ -4265,34 +4265,35 @@ LB96E:  .byte   $10				; Offset into IOCB
 	.addr	LB892				; ICBA	- Buffer address
 	.word	$0000				; ICBL	- Buffer length
 
-	.byte	$20				; Offset into IOCB
+LB976:	.byte	$20				; Offset into IOCB
 	.byte	$03				; ICCOM - Device command
 	.byte	$04				; ICAX1	- Aux 1
 	.byte	$00				; ICAX2	- Aux 2
 	.addr	LB88F				; ICBA	- Buffer address
 	.word	$0000				; ICBL	- Buffer length
 
-	.byte	$20				; Offset into IOCB
+LB97E:	.byte	$20				; Offset into IOCB
 	.byte	$07				; ICCOM - Device command
 	.byte	$04				; ICAX1 - Aux 1
 	.byte	$00				; ICAX2 - Aux 2
 	.addr	$0000				; ICBA	- Buffer address
 	.word	$0000				; ICBL	- Buffer length
 
-	.byte	$10
+LB986:	.byte	$10
 	.byte	$0B
 	.byte	$0D
 	.byte	$00
 	.addr	$0000
 	.word	$0000
 
-	.byte	$10
+LB98E:	.byte	$10
 	.byte	$07
 	.byte	$0D
 	.byte	$00
 	.addr	$0000
 	.word	$0000
 
+LB996:
 	.byte	$10
 	.byte	$03
 	.byte	$0D
