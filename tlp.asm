@@ -4010,11 +4010,11 @@ sub_b799:
 	tax             			; Let X = 0, too
 
 ;** (n) Find first available Handler Table slot ********************************
-	jsr     sub_bf86			; 
-	beq     LB7A8   			; If slot was found, create new handler entry
+	jsr     sub_bf86			;
+	beq     :+	   			; If slot was found, create new handler entry
 	rts             			; otherwise return
 
-LB7A8:  
+:
 ;** (n) Create new handler table record (3 bytes) ******************************
 	lda     #'R'    			; RS232 Device
 	sta     byte_1346       		; Save "R" in RAM
