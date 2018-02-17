@@ -3972,7 +3972,7 @@ LB756:  sei             			; Prevent IRQs
 	ldx     #$06    			; 
 :	lda     VSERIN-1,x 			; Save currect serial vector...
 	sta     byte_1330-1,x 			; ...addresses to RAM
-	lda     LB820+1,x                       ; Load new vector...
+	lda     LB822-2+1,x                       ; Load new vector...
 	sta     VSERIN-1,x 			; ...addresses to IRQ registers
 	dex             			; 
 	bne     :-      			; End loop
@@ -4120,8 +4120,11 @@ LB81A:
 	.addr	sub_b6b8-1      		; OPEN vector???
 	.addr	sub_b6c9-1      		; CLOSE vector???
 	.addr	sub_b709-1      		; GET BYTE vector???
-LB820:	.addr	sub_b6e9-1      		; PUT BYTE vector???
-	.addr	sub_b39c			; GET STATUS vector???
+	.addr	sub_b6e9-1      		; PUT BYTE vector???
+
+; the last two vectors and the jump are not included or used
+
+LB822:	.addr	sub_b39c			; GET STATUS vector???
 	.addr	sub_b7da			; SPECIAL vector???
 	.addr	sub_b7da			; 
 
