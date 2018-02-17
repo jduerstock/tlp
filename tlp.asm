@@ -1151,9 +1151,9 @@ LA582:  lda     $9F     			; A582 A5 9F                    ..
 	ror     a       			; A587 6A                       j
 	adc     #$00    			; A588 69 00                    i.
 	sta     $A6     			; A58A 85 A6                    ..
-LA58C:  lda     #$62    			; A58C A9 62                    .b
-	ldy     #$B8
-	ldx     #$0C    			; A590 A2 0C                    ..
+LA58C:  lda     #<(LB863-1)
+	ldy     #>(LB863-1)
+	ldx     #$0C
 	jsr     sub_b84b
 	rts             			; A595 60                       `
 
@@ -4167,13 +4167,8 @@ sub_b84b:
 
 ; ----------------------------------------------------------------------------
 LB863:
-	adc     $AA     			; B863 65 AA                    e.
-	.byte   $12     			; B865 12                       .
-	.byte   $F7     			; B866 F7                       .
-	eor     #$D5    			; B867 49 D5                    I.
-	and     $A9     			; B869 25 A9                    %.
-	ora     LB2DC,y 			; B86B 19 DC B2                 ...
-	.byte   $CD     			; B86E CD                       .
+	.byte	$65,$AA,$12,$F7,$49,$D5,$25,$A9
+	.byte	$19,$DC,$B2,$CD
 
 LB86F:	.byte	$00,$00,$00,$00
 	.byte	$00,$01,$FF,$00
