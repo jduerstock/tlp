@@ -215,7 +215,6 @@ L3E33           := $3E33
 L4000           := $4000
 L6000           := $6000
 L8000           := $8000
-charset_sm	:= $BC44			; 6x6 character set
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -3142,7 +3141,7 @@ LB28A:  ldx     byte_B2
 	dex             			; B28C CA                       .
 	beq     :+
 	jsr     sub_b238
-:	ldy     #$30    			; B292 A0 30                    .0
+:	ldy     #LB99E-LB96E
 	jsr     sub_b206
 	bmi     LB2C0   			; B297 30 27                    0'
 	lda     #$20    			; B299 A9 20                    . 
@@ -4296,6 +4295,7 @@ LB996:
 	.addr	LB895
 	.word	$0000
 
+LB99E:
 	.byte	$30
 	.byte	$03
 	.byte	$08
@@ -4303,10 +4303,10 @@ LB996:
 	.addr	LB898
 	.word	$0040
 
-LB9A6:	.byte	$06,$09,$00,>byte_BAEC
-LB9AA:	.byte	$00,$00,$00,<byte_BAEC
-LB9AE:	.byte	$00,$80,$44,<LBE84
-LB9B2:  .byte   $0C,$0D,$BC,>LBE84
+LB9A6:	.byte	>$0600,>$0900,>$0000,>byte_BAEC
+LB9AA:	.byte	<$0600,<$0900,<$0000,<byte_BAEC
+LB9AE:	.byte	<$0C00,<$0D80,<charset_sm,<LBE84
+LB9B2:  .byte   >$0C00,>$0D80,>charset_sm,>LBE84
 LB9B6:	.byte	$08,$10,$10,$20,$20,$40,$80,$80
 LB9BE:	.byte	$00,$00,$00,$01,$01,$01,$02,$02
 	.byte	$03,$03,$04,$04,$04,$05,$05,$05
@@ -4893,7 +4893,7 @@ byte_BAEC:
 	.byte   %00010000       		; ...#....
 	.byte   %00010000       		; ...#....
 
-chrset_6x6:
+charset_sm:
 	.byte   %00000000       		; ........
 	.byte   %00000000       		; ........
 	.byte   %00000000       		; ........
