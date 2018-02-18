@@ -209,6 +209,7 @@ byte_133d	:= $133D
 byte_133e	:= $133E
 byte_133f	:= $133F
 byte_1340	:= $1340
+byte_1341	:= $1341
 byte_1343	:= $1343
 byte_1344	:= $1344
 byte_1345	:= $1345
@@ -3265,9 +3266,7 @@ LB325:  cpx     #$46    			; B325 E0 46                    .F
 	beq     LB339   			; B327 F0 10                    ..
 	ldx     #$02    			; B329 A2 02                    ..
 	jsr     sub_b422
-	lda     byte_133c   			; B32E AD 3C 13                 .<.
-	ora     #$01    			; B331 09 01                    ..
-	sta     byte_133c   			; B333 8D 3C 13                 .<.
+	ori	byte_133c, $01
 	ldy     #$01    			; B336 A0 01                    ..
 	rts             			; B338 60                       `
 
@@ -3387,11 +3386,11 @@ sub_b3c6:
 
 ; ----------------------------------------------------------------------------
 sub_b3e7:  
-	ldy     $1341   			; B3E7 AC 41 13                 .A.
+	ldy     byte_1341   			; B3E7 AC 41 13                 .A.
 	lda     $1310,y 			; B3EA B9 10 13                 ...
 	pha             			; B3ED 48                       H
 	jsr     sub_b55c
-	sta     $1341   			; B3F1 8D 41 13                 .A.
+	sta     byte_1341   			; B3F1 8D 41 13                 .A.
 	dec     byte_1340
 	pla             			; B3F7 68                       h
 	rts             			; B3F8 60                       `
@@ -3738,9 +3737,7 @@ t_handler:
 sub_b5b0:
 	lda     #$00    			; B5B0 A9 00                    ..
 	sta     PACTL
-	lda     PORTA
-	ora     #$50    			; B5B8 09 50                    .P
-	sta     PORTA
+	ori	PORTA, $50
 	lda     #$3C    			; B5BD A9 3C                    .<
 	sta     PACTL
 	ldx     #$00    			; B5C2 A2 00                    ..
@@ -3985,7 +3982,7 @@ LB71C:  ldy     #$00    			; Prepare CIO open R: on channel #1
 	sta     INPBFPT                         ; Let INPBFPT = 0
 	sta     BUFLEN  			; Let BUFLEN  = 0
 	sta     $1342   			; 
-	sta     $1341   			; 
+	sta     byte_1341   			; 
 	sta     DBYT+1 			        ; MSB of buffer size (0 in this case)
 
 	lda     #<byte_1330			; 
