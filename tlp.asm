@@ -31,10 +31,16 @@
 	.endrep
 .endmacro
 
-.MACRO	ldi	arg1, arg2
+.macro	ldi	arg1, arg2
 	lda	#arg2
 	sta	arg1
-.ENDMACRO
+.endmacro
+
+.macro	ori	arg1, arg2
+	lda	arg1
+	ora	#arg2
+	sta	arg1
+.endmacro
 
 	.segment "SEG1"
 
@@ -3539,9 +3545,7 @@ sub_b4a5:
 	bpl     :-      			; End loop after 4 iterations
 
 ;** (n) Enable Peripheral A interrupt ******************************************
-	lda     PACTL                           ; Load current settings for Port A
-	ora     #$01    			; Set bit 0 (IRQ enable)
-	sta     PACTL                           ; Save it back
+	ori	PACTL, $01
 	rts             			; 
 
 ; ----------------------------------------------------------------------------
