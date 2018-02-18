@@ -4007,8 +4007,7 @@ LB71C:  ldy     #$00    			; Prepare CIO open R: on channel #1
 
 ; ----------------------------------------------------------------------------
 LB756:  sei             			; Prevent IRQs
-	lda     #$73    			; B757 A9 73                    .s
-	sta     SKCTL
+	ldi	SKCTL, $73
 	lda     $1338   			; B75C AD 38 13                 .8.
 	sta     AUDCTL
 
