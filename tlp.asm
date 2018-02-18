@@ -202,6 +202,8 @@ off_EC		:= $00EC
 off_F4		:= $00F4
 off_FA		:= $00FA
 byte_FF		:= $00FF
+
+byte_1310	:= $1310
 byte_1330	:= $1330
 byte_133a	:= $133A
 byte_133c	:= $133C
@@ -210,6 +212,7 @@ byte_133e	:= $133E
 byte_133f	:= $133F
 byte_1340	:= $1340
 byte_1341	:= $1341
+byte_1342	:= $1342
 byte_1343	:= $1343
 byte_1344	:= $1344
 byte_1345	:= $1345
@@ -3260,7 +3263,9 @@ sub_b2fa:
 	tax             			; B31A AA                       .
 	lda     #$00    			; B31B A9 00                    ..
 	sta     byte_1346
-	beq     LB325   			; B320 F0 03                    ..
+	beq     LB325   			; branch always
+
+; ----------------------------------------------------------------------------
 :	ldx     byte_1343
 LB325:  cpx     #$46    			; B325 E0 46                    .F
 	beq     LB339   			; B327 F0 10                    ..
@@ -3299,11 +3304,11 @@ LB353:  lda     byte_1340
 ; ----------------------------------------------------------------------------
 ; store character into some sort of buffer
 sub_b369:
-	ldy     $1342   			; some sort of buffer offset
+	ldy     byte_1342   			; some sort of buffer offset
 	lda     character                       ; load character  byte_1347
-	sta     $1310,y 			; store character into some sort of buffer
+	sta     byte_1310,y 			; store character into some sort of buffer
 	jsr     sub_b55c                        ; let buffer offset = (buffer offset + 1) && $1F
-	sta     $1342   			; 
+	sta     byte_1342   			; 
 	inc     OUTBFPT				; increment output buffer pointer
 	rts             			; 
 
@@ -3387,7 +3392,7 @@ sub_b3c6:
 ; ----------------------------------------------------------------------------
 sub_b3e7:  
 	ldy     byte_1341   			; B3E7 AC 41 13                 .A.
-	lda     $1310,y 			; B3EA B9 10 13                 ...
+	lda     byte_1310,y 			; B3EA B9 10 13                 ...
 	pha             			; B3ED 48                       H
 	jsr     sub_b55c
 	sta     byte_1341   			; B3F1 8D 41 13                 .A.
@@ -3672,7 +3677,7 @@ sub_b54f:
 sub_b55c:
 	iny             			; increment buffer offset
 	tya             			; let a = new buffer offset
-	and     #$1F    			; and with 0001 1111?
+	and     #$1F    			; wrap offset if > 31
 	rts             			; 
 
 ; ----------------------------------------------------------------------------
@@ -3891,7 +3896,7 @@ sub_b6b8:
 	sta     byte_133a                       ; Let byte_133a = $8D
 
 	ldy     #$00    			; 
-	sty     $1342   			; Let $1342	= $00
+	sty     byte_1342   			; Let $1342	= $00
 	sty     byte_133d                       ; Let byte_133d = $00
 	iny             			; return code? = 1
 	sty     $CB     			; Let $CB       = $01
@@ -3981,7 +3986,7 @@ LB71C:  ldy     #$00    			; Prepare CIO open R: on channel #1
 	sta     byte_B2
 	sta     INPBFPT                         ; Let INPBFPT = 0
 	sta     BUFLEN  			; Let BUFLEN  = 0
-	sta     $1342   			; 
+	sta     byte_1342   			; 
 	sta     byte_1341   			; 
 	sta     DBYT+1 			        ; MSB of buffer size (0 in this case)
 
