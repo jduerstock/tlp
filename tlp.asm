@@ -87,8 +87,8 @@ DAUX2		:= $030B			; Device Command Arg 1
 HATABS		:= $031A			; Handler Address Table
 
 ; I/O Control Block
-ICCOM		:= $0342			;
-ICBA		:= $0344
+ICCOM		:= $0342
+ICBA		:= $0344			; Address to buffer for read/write operations
 ICBL		:= $0348
 ICAX1		:= $034A
 ICAX2		:= $034B
@@ -244,16 +244,17 @@ cart_start:
 	jsr     init_graphics			; Initialize display lists, colors
 	jsr     display_title			; Display program title and copyright
 
-	ldy     #LB976-LB96E
-	jsr     sub_b1f1
+	ldy     #LB976-LB96E			; 
+	jsr     call_cio_or_err			; Open K: on channel #2
 
-	ldy     #LB996-LB96E  			; Offset into LB96E table
-	jsr     sub_b206
-	bmi     LA035   			;
+;**(n) Attempt to open a modem using T: handler *********************************
+	ldy     #LB996-LB96E  			; 
+	jsr     call_cio			; Try to open T: on channel #1
+	bmi     LA035   			; If cio returned error then skip ahead
 
-;**(n) Modem 1030 detected - Wait for user to establish connection *************
+;**(n) Modem detected - Wait for user to establish connection *******************
 	lda     #$1A    			;
-	sta     $9C     			; Set cursor X
+	sta     $9C     			; Set cursor X coordinate
 	ldy     #$33    			; String length - 1
 	lda     #<LB8DF				; "After the phone has a high..."
 	ldx     #>LB8DF				;
@@ -263,34 +264,38 @@ cart_start:
 	cmp     #$FF    			;
 	beq     :-				; Loop until something
 
-	ldx     #$FF    			;
+	ldx     #$FF    			; Some key press occurred
 	stx     CH				; Clear keyboard register
 
-;**(n) Change baud rate to 1200 if user presses '1' ****************************
+;** (n) If user presses '1' instead of RETURN try to set baud to 1200 **********
 	cmp     #$1F    			; if last key press <> '1'
-	bne     LA04F   			; then skip
-	jsr     display_title			; otherwise display title
-LA035:  jsr     sub_b238			;
-	jsr     sub_b719			; Set baud or something else
-	bmi     :+
-	lda     #<LB91C				; String "1200 baud"
-	ldx     #>LB91C
-	ldy     #$08    			;
-	jsr     print_string
-	jmp     LA05E   			; A046 4C 5E A0                 L^.
+	bne     LA04F   			; then skip ahead
+	jsr     display_title			; otherwise clear screen and..
 
-; ----------------------------------------------------------------------------
+;** (n) Try changing baud rate and re-opening channel #1 ***********************
+LA035:  jsr     close_ch1			; Close CIO channel #1
+	jsr     sub_b719			; Set baud and send CIO command
+	bmi     :+				; if CIO returned error then goto next
+	lda     #<LB91C				; otherwise print "1200 baud"
+	ldx     #>LB91C				; 
+	ldy     #$08    			; String length - 1
+	jsr     print_string			; 
+	jmp     LA05E   			; Skip ahead
+
+;** (n) If all else fails assume Microbits 300 ********************************
 :	jsr     sub_b272
 	jmp     LA05E   			; A04C 4C 5E A0                 L^.
 
 ; ----------------------------------------------------------------------------
 LA04F:	lda	#$4C
-	jsr	sub_b242
-LA054:  lda     #$46    			; A054 A9 46                    .F
-	jsr     sub_b242
+	jsr	sub_b242			; Send test??
+LA054:  lda     #$46    			; 
+	jsr     sub_b242			; Send test??
 	lda     DVSTAT+1
-	bpl     LA054   			; A05C 10 F6                    ..
-LA05E:  jsr     sub_a963
+	bpl     LA054   			; Keep trying test??
+
+;** (n) Main loop?? ************************************************************
+LA05E:  jsr     sub_a963			; 
 	jsr     sub_ab35
 	jsr     sub_a12c
 	lda     byte_CC
@@ -304,8 +309,8 @@ LA05E:  jsr     sub_a963
 
 ; ----------------------------------------------------------------------------
 sub_a079:
-	ldy     #LB98E-LB96E
-	jsr     sub_b1f1
+	ldy     #LB98E-LB96E			; Prepare CIO get char
+	jsr     call_cio_or_err			; Call CIO, halt if error
 	and     #$7F    			; A07E 29 7F                    ).
 	bit     byte_B3 			; A080 24 B3                    $.
 	bmi     LA0D2   			; A082 30 4E                    0N
@@ -1846,8 +1851,8 @@ LA9D0:  stx     CONSOL
 	rts             			; A9DC 60                       `
 
 ; ----------------------------------------------------------------------------
-LA9DD:  ldy     #LB97E-LB96E
-	jsr     sub_b1f1
+LA9DD:  ldy     #LB97E-LB96E			
+	jsr     call_cio_or_err			; Make CIO call to read keyboard
 	sta     $E7     			; A9E2 85 E7                    ..
 	lda     CONSOL				; check console keys
 	and     #$07				; mask irrelevant bits
@@ -3038,19 +3043,28 @@ sub_b1df:
 	bcc     :+
 	ora     #$80    			; B1ED 09 80                    ..
 
+;*******************************************************************************
+;*                                                                             *
+;*                               call_cio_putch                                *
+;*                                                                             *
+;*                      Call CIO put character command                         *
+;*                                                                             *
+;*******************************************************************************
 sub_b1ef:
-:	ldy     #$18    			; B1EF A0 18                    ..
+:	ldy     #LB986-LB96E			; Prepare CIO put char call
+						; Fall through to CIO call
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                  sub_b1f1                                   *
+;*                               call_cio_or_err                               *
 ;*                                                                             *
-;*                             ???????????????????                             *
+;*                  Call CIOV. Halt if Communications Error.                   *
 ;*                                                                             *
 ;*******************************************************************************
 sub_b1f1:
-	jsr     sub_b206
-	bpl     LB252   			; Success. Jump to RTS
+call_cio_or_err:
+	jsr     call_cio			; Call CIOV using Y as arg
+	bpl     LB252   			; Success. Jump to nearby RTS
 display_comm_error:
 	ldy     #$18    			; Set cursor X coord in scaled mode
 	sty     $9C     			; 
@@ -3062,62 +3076,76 @@ LB203:  jmp     LB203   			; Halt and catch fire
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                  sub_b206                                   *
+;*                                  call_cio                                   *
 ;*                                                                             *
-;*                  Open IOCB Specified by X. Preserve A.                      *
+;*                  Execute CIO call using IOCB variables                      *
 ;*                                                                             *
 ;*******************************************************************************
 
+; DESCRIPTION
+; Populates the IOCB table with device and operation details and calls CIO.
+; Similar to a BASIC statement like [XIO cmd, #Channel, Aux1, Aux2, "Rn:"]
+;
 sub_b206:
+call_cio:
 	pha
-	ldx     LB96E,y
+	ldx     LB96E,y				; CIO channel number * 16
 	lda     LB96E+1,y
-	sta     ICCOM,x
+	sta     ICCOM,x				; CIO command
 	lda     LB96E+2,y
-	sta     ICAX1,x
+	sta     ICAX1,x				; CIO aux 1
 	lda     LB96E+3,y
-	sta     ICAX2,x
+	sta     ICAX2,x				; CIO aux 2
 	lda     LB96E+4,y
-	sta     ICBA,x
+	sta     ICBA,x				; CIO buffer base address (lo)
 	lda     LB96E+5,y
-	sta     ICBA+1,x
+	sta     ICBA+1,x			; CIO buffer base address (hi)
 	lda     LB96E+6,y
-	sta     ICBL,x
+	sta     ICBL,x				; CIO buffer size (lo)
 	lda     LB96E+7,y
-	sta     ICBL+1,x
+	sta     ICBL+1,x			; CIO buffer size (hi)
 	pla
-	jmp     CIOV
+	jmp     CIOV				; CIOV executes an RTS
+
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                  sub_b238                                   *
+;*                                  close_ch1                                  *
 ;*                                                                             *
-;*                          Open R: in Read/Write mode                         *
+;*                        Close CIO device on channel #1                       *
 ;*                                                                             *
 ;*******************************************************************************
-
 sub_b238:
-	ldx     #$10    			; B238 A2 10                    ..
+close_ch1:
+	ldx     #$10    			; Set CIO channel #1
+						; Fall through to sub_b23a
 
+;*******************************************************************************
+;*                                                                             *
+;*                                  sub_b23a                                   *
+;*                                                                             *
+;*                        Close CIO device on channel #x                       *
+;*                                                                             *
+;*******************************************************************************
 sub_b23a:
-	lda     #$0C    			; B23A A9 0C                    ..
-	sta     ICCOM,x
-	jmp     CIOV
+	lda     #$0C    			
+	sta     ICCOM,x				; CIO close channel command
+	jmp     CIOV				; CIO will RTS
 
 ; ----------------------------------------------------------------------------
 sub_b242:
-	pha
-	lda     #$1B    			; B243 A9 1B                    ..
-	sta     TSTDAT
-	jsr     sub_b1ef
-	pla             			; B24A 68                       h
-	jsr     sub_b1ef
-	lda     #$00    			; B24E A9 00                    ..
-	sta     TSTDAT
-LB252:  rts             			; B252 60                       `
+	pha					;
+	lda     #$1B    			; 
+	sta     TSTDAT				; 
+	jsr     sub_b1ef			; Call CIO put char
+	pla             			; 
+	jsr     sub_b1ef			;
+	lda     #$00    			; Call CIO put char
+	sta     TSTDAT				;
+LB252:  rts             			;
 
 ; ----------------------------------------------------------------------------
-LB253:  jsr     sub_b238
+LB253:  jsr     close_ch1
 	bmi     display_comm_error
 	ldy     #$18    			; B258 A0 18                    ..
 	sty     $9C     			; B25A 84 9C                    ..
@@ -3136,10 +3164,10 @@ LB26C:  jsr     sub_a89f
 
 ; ----------------------------------------------------------------------------
 sub_b272:
-	jsr     sub_b238
+	jsr     close_ch1
 	jsr     sub_b5b0   			; B275 20 B0 B5                  ..
-	ldy     #LB96E-LB96E
-	jsr     sub_b1f1
+	ldy     #LB96E-LB96E			; RS232
+	jsr     call_cio_or_err			; Open "R:" for read/write
 	ldy     #$01    			; B27D A0 01                    ..
 	sty     byte_B2
 	ldy     #$10    			; B281 A0 10                    ..
@@ -3151,9 +3179,9 @@ sub_b272:
 LB28A:  ldx     byte_B2
 	dex             			; B28C CA                       .
 	beq     :+
-	jsr     sub_b238
-:	ldy     #LB99E-LB96E
-	jsr     sub_b206
+	jsr     close_ch1
+:	ldy     #LB99E-LB96E			; Printer
+	jsr     call_cio			; Open "P:" for write
 	bmi     LB2C0   			; B297 30 27                    0'
 	lda     #$20    			; B299 A9 20                    . 
 	sta     byte_D9 			; B29B 85 D9                    ..
@@ -3164,8 +3192,8 @@ LB28A:  ldx     byte_B2
 :	jsr     sub_b2c6   			; B2A5 20 C6 B2                  ..
 	dec     byte_D9 			; B2A8 C6 D9                    ..
 	bne     :-
-LB2AC:  ldx     #$30    			; B2AC A2 30                    .0
-	jsr     sub_b23a
+LB2AC:  ldx     #$30    			; Set CIO Channel #3 (Printer)
+	jsr     sub_b23a			; Call CIO close channel
 	ldx     byte_B2
 	dex             			; B2B3 CA                       .
 	beq     LB2F9   			; B2B4 F0 43                    .C
@@ -3173,8 +3201,8 @@ LB2AC:  ldx     #$30    			; B2AC A2 30                    .0
 	jmp     LB71C   			; B2B8 4C 1C B7                 L..
 
 ; ----------------------------------------------------------------------------
-:	ldy     #LB996-LB96E
-	jmp     sub_b1f1
+:	ldy     #LB996-LB96E			; Atari Modem
+	jmp     call_cio_or_err			; Open "T:" for read/write
 
 ; ----------------------------------------------------------------------------
 LB2C0:  jsr     sub_b828
@@ -3686,7 +3714,13 @@ LB597:  sta     character                       ; byte_1347
 LB5A5:  ldy     #$01    			; B5A5 A0 01                    ..
 	rts             			; B5A7 60                       `
 
-; ----------------------------------------------------------------------------
+;*******************************************************************************
+;*                                                                             *
+;*                                  t_handler                                  *
+;*                                                                             *
+;*                      ?????????????????????????????????                      *
+;*                                                                             *
+;*******************************************************************************
 
 t_handler:
 	.addr	sub_b561-1
@@ -3694,6 +3728,13 @@ t_handler:
 	.addr	sub_b37c-1
 	.addr	sub_b2fa-1
 
+;*******************************************************************************
+;*                                                                             *
+;*                                  sub_b5b0                                   *
+;*                                                                             *
+;*                 Register MPP Microbit 300 modem in IOCB??                   *
+;*                                                                             *
+;*******************************************************************************
 sub_b5b0:
 	lda     #$00    			; B5B0 A9 00                    ..
 	sta     PACTL
@@ -3934,23 +3975,23 @@ JREAD:	cli             			; Enable IRQs
 
 ; ----------------------------------------------------------------------------
 sub_b719:
-	jsr     sub_setbaud			; TODO Set baud or something else
-LB71C:  ldy     #$00    			; B71C A0 00                    ..
-	jsr     sub_b206
-	bpl     :+
-	rts             			; B723 60                       `
-; ----------------------------------------------------------------------------
+	jsr     sub_setbaud			; Set baud/word/etc and request ACK
+LB71C:  ldy     #$00    			; Prepare CIO open R: on channel #1
+	jsr     call_cio			; Call CIO
+	bpl     :+				; Continue if CIO returned success
+	rts             			; Return if CIO returned error
 :	lda     #$00    			; B724 A9 00                    ..
 	sta     byte_B2
 	sta     INPBFPT                         ; Let INPBFPT = 0
 	sta     BUFLEN  			; Let BUFLEN  = 0
-	sta     $1342   			; B72E 8D 42 13                 .B.
-	sta     $1341   			; B731 8D 41 13                 .A.
-	sta     DBYT+1 			        ;
-	lda     #<byte_1330
-	sta     DBUF
-	lda     #>byte_1330
-	sta     DBUF+1
+	sta     $1342   			; 
+	sta     $1341   			; 
+	sta     DBYT+1 			        ; MSB of buffer size (0 in this case)
+
+	lda     #<byte_1330			; 
+	sta     DBUF				; 
+	lda     #>byte_1330			;
+	sta     DBUF+1				;
 
 	lda     byte_133a                       ; Construct SIO command frame
 	sta     DAUX1   			; 
@@ -4012,13 +4053,13 @@ LB756:  sei             			; Prevent IRQs
 sub_b799:
 
 ;** (n) Initialize some variables to 0 *****************************************
-	lda     #$00    			; Init variables to 0
+	lda     #$00    			; Let Y         = 0
 	sta     byte_133a       		; Let byte_133a = 0
-	sta     DBYT+1  			; Let DBYTHI = 0
-	tax             			; Let X = 0, too
+	sta     DBYT+1  			; Let DBYTHI    = 0
+	tax             			; Let X         = 0
 
-;** (n) Find first available Handler Table slot ********************************
-	jsr     sub_bf86			;
+;** (n) Find first empty Handler Table slot ************************************
+	jsr     sub_bf86			; Let X = offset to new slot
 	beq     :+	   			; If slot was found, create new handler entry
 	rts             			; otherwise return
 
@@ -4028,24 +4069,24 @@ sub_b799:
 	sta     byte_1346       		; Save "R" in RAM
 	sta     HATABS,x			; Save "R" in the new slot
 
-	lda     #<LB81A 			; LSB of start of handler vector table
-	sta     HATABS+1,x      		; Save LSB in the new slot
+	lda     #<LB81A 			; MSB of start of handler vector table
+	sta     HATABS+1,x      		; Save MSB in the new slot
 
-	lda     #>LB81A 			; MSB of start of handler vector table
-	sta     HATABS+2,x      		; Save MSB in the new slot
+	lda     #>LB81A 			; LSB of start of handler vector table
+	sta     HATABS+2,x      		; Save LSB in the new slot
 
-;** (n) ************************************************************************
-	lda     #$EA    			; LSB of data buffer address
+;** (n) Prepare SIO to load STATUS results into DVSTAT *************************
+	lda     #<DVSTAT			; LSB of data buffer address
 	sta     DBUF                            ;
 
-	lda     #$02    			; MSB of data buffer address
-	sta     DBUF+1                          ;
-	sta     DBYT    			; TODO
+	lda     #>DVSTAT    			; MSB of data buffer address
+	sta     DBUF+1                          ; By luck, >DVSTAT is 2
+	sta     DBYT    			; Tell SIO to load 2 bytes
 
 ;** (n) ************************************************************************
-	ldy     #$40    			; Let Y = $40
+	ldy     #$40    			; Let Y for DSTATS = receive data
 	lda     #$53    			; Let A = STATUS operation
-	jsr     sub_sendsio			; Call ???
+	jsr     sub_sendsio			; 
 
 	lda     character                       ; byte_1347
 	ora     DVSTAT  			; B7D1 0D EA 02                 ...
@@ -4064,13 +4105,15 @@ sub_b7da:
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                               sub_sendsio                                   *
+;*                               sub_setbaud                                   *
 ;*                                                                             *
-;*                    Assign SIO command and aux1, aux2                        *
+;*                             Change baud rate                                *
 ;*                                                                             *
 ;*******************************************************************************
+
 ; DESCRIPTION
 ; Send two command frames to 850
+;
 sub_b7e7:
 sub_setbaud:
 
@@ -4083,12 +4126,12 @@ sub_setbaud:
 :	ldx	#$00    			; 
 LB7F3:  jsr     LB7FA   			; 
 
-; **(2) Send command frame #2 for ???? TODO
-	lda     #$41    			; DCOMND for ???
+; **(2) Send command frame #2 for ACKnowledge
+	lda     #'A'    			; DCOMND $41->ACKnowledge (returns 'C'omplete or 'E'rror)
 	ldx     #$F3    			; AUX1 for ????
 LB7FA:  stx     DAUX1   			; 
 	ldy     #$00    			; AUX2: 1 stop bit, no monitoring of DSR, CTS, CRX
-	sty     DAUX2   			; B7FF 8C 0B 03                 ...
+	sty     DAUX2   			; Fall into sub_sendio
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -4104,10 +4147,10 @@ sub_sendsio:
 ;**(n) Set Device Unit number **************************************************
 	ldx     #$01    			; Device 1 (as in R1:)
 	stx     DUNIT   			; 
-	sty     DSTATS  			; Set the data direction? (usually $40 or $80) TODO
+	sty     DSTATS  			; Set the data direction ($40->in, $80->out)
 
 ;**(n) Set Device Serial bus ID ************************************************
-	ldy     #$50    			; $50 = ID for RS232 R1
+	ldy     #$50    			; $50 = ID for RS232 port R1:
 	sty     DDEVIC  			; 
 
 ;**(n) Set Device handler time-out *********************************************
@@ -4223,95 +4266,83 @@ LB91C:
 LB925:
 	RString "Microbit 300 baud"
 
-LB936:
-	.byte	$00,$40,$80,$C0
+LB936:	.byte	$00,$40,$80,$C0
 
-LB93A:
-	.byte   $7F,$BF,$DF,$EF,$F7,$FB,$FD,$FE
-LB942:  .byte   $80,$40,$20,$10,$08,$04,$02,$01
-	.byte	$E3
-	.byte	$E1,$E0
-	.byte   $E2     			; B94D E2                       .
-LB94E:  brk             			; B94E 00                       .
+LB93A:	.byte   $7F,$BF,$DF,$EF,$F7,$FB,$FD,$FE
+
+LB942:  .byte   $80,$40,$20,$10
+	.byte	$08,$04,$02,$01
+	.byte	$E3,$E1,$E0,$E2
+
+LB94E:  .byte	$00
+
 LB94F:  .byte   $7F,$3F,$1F,$0F,$07,$03,$01
-LB956:  .byte   $80     			; B956 80                       .
-	cpy     #$E0    			; B957 C0 E0                    ..
-	.byte	$F0,$F8
-	.byte   $FC     			; B95B FC                       .
-LB95C:  .byte   $FE     			; B95C FE                       .
-	brk             			; B95D 00                       .
-LB95E:  .byte   $07     			; B95E 07                       .
-	.byte   $83     			; B95F 83                       .
-	.byte	$C1,$E0
-	.byte	$F0,$F8
-	.byte   $FC     			; B964 FC                       .
-	.byte   $FE     			; B965 FE                       .
-LB966:  brk             			; B966 00                       .
-	brk             			; B967 00                       .
-	brk             			; B968 00                       .
-	brk             			; B969 00                       .
-	.byte   $7F     			; B96A 7F                       .
-	.byte   $3F     			; B96B 3F                       ?
-	.byte   $1F     			; B96C 1F                       .
-	.byte   $0F     			; B96D 0F                       .
+
+LB956:  .byte   $80,$C0,$E0,$F0,$F8,$FC
+
+LB95C:  .byte   $FE,$00
+
+LB95E:  .byte   $07,$83,$C1,$E0,$F0,$F8,$FC,$FE
+
+LB966:  .byte	$00,$00,$00,$00,$7F,$3F,$1F,$0F
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                   LB81A                                     *
+;*                                   LB96E                                     *
 ;*                                                                             *
-;*                             IOCB Lookup Table	                       *
+;*                     ICOB Device/Operation Lookup Table                      *
 ;*                                                                             *
 ;*******************************************************************************
 
-LB96E:  .byte   $10				; Offset into IOCB
-	.byte	$03				; ICCOM	- Device command
-	.byte	$0D				; ICAX1	- Aux 1
-	.byte	$00				; ICAX2	- Aux 2
-	.addr	LB892				; ICBA	- Buffer address
-	.word	$0000				; ICBL	- Buffer length
+LB96E:  .byte   $10				; IOCB Channel #1
+	.byte	$03				; ICCOM: open
+	.byte	$0D				; ICAX1: (mode) concurrent read/write
+	.byte	$00				; 
+	.addr	LB892				; "R:" (RS232)
+	.word	$0000				; 
 
-LB976:	.byte	$20				; Offset into IOCB
-	.byte	$03				; ICCOM - Device command
-	.byte	$04				; ICAX1	- Aux 1
-	.byte	$00				; ICAX2	- Aux 2
-	.addr	LB88F				; ICBA	- Buffer address
-	.word	$0000				; ICBL	- Buffer length
+LB976:	.byte	$20				; IOCB Channel #2
+	.byte	$03				; ICCOM: open
+	.byte	$04				; ICAX1: (mode) read
+	.byte	$00				; 
+	.addr	LB88F				; "K:"
+	.word	$0000				; 
 
-LB97E:	.byte	$20				; Offset into IOCB
-	.byte	$07				; ICCOM - Device command
-	.byte	$04				; ICAX1 - Aux 1
-	.byte	$00				; ICAX2 - Aux 2
-	.addr	$0000				; ICBA	- Buffer address
-	.word	$0000				; ICBL	- Buffer length
+LB97E:	.byte	$20				; IOCB Channel #2
+	.byte	$07				; ICCOM: get character
+	.byte	$04				; ICAX1: (mode) read
+	.byte	$00				;
+	.addr	$0000				;
+	.word	$0000				;
 
-LB986:	.byte	$10
-	.byte	$0B
-	.byte	$0D
-	.byte	$00
-	.addr	$0000
-	.word	$0000
+LB986:	.byte	$10				; IOCB Channel #1
+	.byte	$0B				; ICCOM: put character
+	.byte	$0D				; ICAX1: (mode) concurrent read/write
+	.byte	$00				;
+	.addr	$0000				;
+	.word	$0000				;
 
-LB98E:	.byte	$10
-	.byte	$07
-	.byte	$0D
-	.byte	$00
-	.addr	$0000
-	.word	$0000
+LB98E:	.byte	$10				; IOCB Channel #1
+	.byte	$07				; ICCOM: get character
+	.byte	$0D				; ICAX1: (mode) concurrent read/write
+	.byte	$00				; 
+	.addr	$0000				; 
+	.word	$0000				; 
 
 LB996:
-	.byte	$10
-	.byte	$03
-	.byte	$0D
-	.byte	$00
-	.addr	LB895
-	.word	$0000
+	.byte	$10				; IOCB Channel #1
+	.byte	$03				; ICCOM: open
+	.byte	$0D				; ICAX1: (mode) concurrent read/write
+	.byte	$00				; 
+	.addr	LB895				; "T:" (Microbit???? or Atari????)
+	.word	$0000				;
 
 LB99E:
-	.byte	$30
-	.byte	$03
-	.byte	$08
-	.byte	$00
-	.addr	LB898
+	.byte	$30				; IOCB Channel #3
+	.byte	$03				; ICCOM: open
+	.byte	$08				; ICAX1: (mode) write
+	.byte	$00				; ICAX2:
+	.addr	LB898				; "P:" (Printer)
 	.word	$0040
 
 LB9A6:	.byte	>$0600,>$0900,>$0000,>byte_BAEC
