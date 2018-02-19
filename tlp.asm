@@ -52,6 +52,7 @@
 
 TSTDAT		:= $0007
 POKMSK		:= $0010			; POKEY interrupt mask.
+ICAX1Z		:= $002A
 VPRCED		:= $0202			; Vector to serial peripheral proceed line interrupt
 VSERIN		:= $020A			; Vector to serial receive-data-ready interrupt
 VTIMR1		:= $0210			; Vector to POKEY timer 1 interrupt
@@ -3694,7 +3695,7 @@ sub_b55c:
 sub_b561:
 	tsx             			; B561 BA                       .
 	stx     byte_1344
-	lda     $2A     			; B565 A5 2A                    .*
+	lda     ICAX1Z
 	sta     byte_133a
 	lda     #$00    			; B56A A9 00                    ..
 	sta     TSTDAT
@@ -4053,7 +4054,7 @@ LB71C:  ldy     #$00    			; Prepare CIO open R: on channel #1
 	cli             			; Enable IRQs
 	ldy     #$01    			; 
 	lda     byte_133a                       ; 
-	sta     $2A     			; B794 85 2A                    .*
+	sta     ICAX1Z
 	cpy     #$00    			; B796 C0 00                    ..
 	rts             			; B798 60                       `
 
