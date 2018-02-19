@@ -251,12 +251,12 @@ cart_start:
 	ldy     #LB976-LB96E			; 
 	jsr     call_cio_or_err			; Open K: on channel #2
 
-;**(n) Attempt to open a modem using T: handler *********************************
+;**(n) Attempt to open an Atari direct connect modem using T: handler **********
 	ldy     #LB996-LB96E  			; 
 	jsr     call_cio			; Try to open T: on channel #1
 	bmi     LA035   			; If cio returned error then skip ahead
 
-;**(n) Modem detected - Wait for user to establish connection *******************
+;**(n) Atari direct-connect modem detected *************************************
 	lda     #$1A    			;
 	sta     $9C     			; Set cursor X coordinate
 	ldy     #$33    			; String length - 1
@@ -266,7 +266,7 @@ cart_start:
 
 :	lda     CH				; Wait for key press
 	cmp     #$FF    			;
-	beq     :-				; Loop until something
+	beq     :-				; 
 
 	ldx     #$FF    			; Some key press occurred
 	stx     CH				; Clear keyboard register
@@ -278,7 +278,7 @@ cart_start:
 
 ;** (n) Try changing baud rate and re-opening channel #1 ***********************
 LA035:  jsr     close_ch1			; Close CIO channel #1
-	jsr     sub_b719			; Set baud and send CIO command
+	jsr     sub_b719			; Attempt to open R: on channel #1
 	bmi     :+				; if CIO returned error then goto next
 	lda     #<LB91C				; otherwise print "1200 baud"
 	ldx     #>LB91C				; 
@@ -824,8 +824,8 @@ display_title:
 
 ;** (2) Print "WELCOME TO THE LEARNING PHONE" **********************************
 	lda     #$50    			; Set X coordinate for text
-	sta     $A4     			; Save X coordinate for scaled display
-	sta     $9C     			; TODO Save X coordinate for zoomed display?
+	sta     $A4     			; TODO Save X coordinate for zoomed display?
+	sta     $9C     			; Save X coordinate for scaled display
 	ldy     #$1C    			; String length - 1
 	lda     #<LB8C2				; "WELCOME..."
 	ldx     #>LB8C2
@@ -903,14 +903,18 @@ LA393:  sta     $CA     			; A393 85 CA                    ..
 	jmp     LABD3   			; A3AF 4C D3 AB                 L..
 
 ; ----------------------------------------------------------------------------
-LA3B2:  lda     $AC     			; A3B2 A5 AC                    ..
-	sta     $9C     			; A3B4 85 9C                    ..
-	lda     $AD     			; A3B6 A5 AD                    ..
-	sta     $9D     			; A3B8 85 9D                    ..
-	lda     $AE     			; A3BA A5 AE                    ..
-	sta     $A4     			; A3BC 85 A4                    ..
-	lda     $AF     			; A3BE A5 AF                    ..
-	sta     $A5     			; A3C0 85 A5                    ..
+LA3B2:  lda     $AC     			; TODO Set cursor X = $AC (172)?
+	sta     $9C     			; TODO Save cursor X for scaled display (or is this an index into a lookup table?)
+
+	lda     $AD     			; TODO Set cursor Y = $AD (173)?
+	sta     $9D     			; TODO Save cursor Y for scaled display?
+
+	lda     $AE     			; TODO Set cursor X = $AE (174)?
+	sta     $A4     			; TODO Save cursor X for zoomed display?
+
+	lda     $AF     			; TODO Set cursor Y = $AE (174)? 
+	sta     $A5     			; TODO Save cursor Y for zoomed display?
+
 LA3C2:  jsr     LA882   			; A3C2 20 82 A8                  ..
 	jmp     LA857   			; A3C5 4C 57 A8                 LW.
 
@@ -1639,14 +1643,13 @@ LA87C:  clc             			; A87C 18                       .
 LA881:  rts             			; A881 60                       `
 
 ; ----------------------------------------------------------------------------
+; Called from print string
 LA882:  lda     #$06    			; A882 A9 06                    ..
 	ldy     #$0C    			; A884 A0 0C                    ..
 LA886:  bit     $CA     			; A886 24 CA                    $.
 	sty     $D8     			; A888 84 D8                    ..
 	bvs     :+
-	rts             			; A88C 60                       `
-
-; ----------------------------------------------------------------------------
+	rts             			; TODO Return immediately if something
 :	asl     a       			; A88D 0A                       .
 	bvs     LA89C   			; A88E 70 0C                    p.
 
@@ -1855,8 +1858,8 @@ LA9D0:  stx     CONSOL
 	rts             			; A9DC 60                       `
 
 ; ----------------------------------------------------------------------------
-LA9DD:  ldy     #LB97E-LB96E			
-	jsr     call_cio_or_err			; Make CIO call to read keyboard
+LA9DD:  ldy     #LB97E-LB96E			; Prepare CIO call to read keyboard
+	jsr     call_cio_or_err			; Make CIO call 
 	sta     $E7     			; A9E2 85 E7                    ..
 	lda     CONSOL				; check console keys
 	and     #$07				; mask irrelevant bits
