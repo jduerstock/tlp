@@ -245,7 +245,7 @@ L8000           := $8000
 ; the end of the cart's address space, then jumps to here.
  
 cart_start:
-	jsr     sub_b799			; Attempt to load R: Handler?
+	jsr     sub_b799			; 
 	jsr     init_graphics			; Initialize display lists, colors
 	jsr     display_title			; Display program title and copyright
 
@@ -1644,7 +1644,7 @@ LA87C:  clc             			; A87C 18                       .
 LA881:  rts             			; A881 60                       `
 
 ; ----------------------------------------------------------------------------
-; Called from print string
+; Called from end of print string
 LA882:  lda     #$06    			; A882 A9 06                    ..
 	ldy     #$0C    			; A884 A0 0C                    ..
 LA886:  bit     $CA     			; A886 24 CA                    $.
@@ -3380,18 +3380,21 @@ sub_b3c6:
 	pha             			; B3C8 48                       H
 	lda     OUTBFPT
 	bne     :+
-	lda     #$E7    			; B3CE A9 E7                    ..
-	and     POKMSK
-	jsr     sub_irqen
-	jmp     LB3B5   			; B3D5 4C B5 B3                 L..
+
+	lda     #$E7    			; Set interrupt flags
+	and     POKMSK				;
+	jsr     sub_irqen			; Enable interrupts
+	jmp     LB3B5   			; Restore Y and return from interrupt
 
 ; ----------------------------------------------------------------------------
 :	jsr     sub_b3e7
 	sta     SEROUT
-:	lda     IRQST
-	and     #$08    			; B3E1 29 08                    ).
+
+:	lda     IRQST				; Wait for VSEROC to be re-enabled
+	and     #$08    			;
 	beq     :-
-	bne     LB3B5   			; B3E5 D0 CE                    ..
+
+	bne     LB3B5   			; Restore Y and return from interrupt
 
 ; ----------------------------------------------------------------------------
 sub_b3e7:  
@@ -3438,17 +3441,19 @@ sub_b422:
 	lda     $CB     			; 
 	bne     sub_b422			; Wait for $CB to be $00
 	jsr     sub_b53a
-:	lda     IRQST
-	and     #$08    			; B42C 29 08                    ).
-	bne     :-
-	lda     #$35    			; B430 A9 35                    .5
-	sta     PBCTL
-	sta     $CB     			; B435 85 CB                    ..
-	sei             			; B437 78                       x
-	jsr     sub_b369
-	cli             			; B43B 58                       X
-	jsr     sub_b53a
 
+:	lda     IRQST
+	and     #$08    			; Wait for VSEROC
+	bne     :-
+
+	lda     #$35    			; 
+	sta     PBCTL				; 
+	sta     $CB     			; Let $CB = $35
+
+	sei             			; Inhibit IRQs
+	jsr     sub_b369			; Store character in output buffer
+	cli             			; Enable IRQs
+	jsr     sub_b53a
 sub_b43f:
 	ldy     LB47A,x 			; B43F BC 7A B4                 .z.
 	ldx     #$00    			; B442 A2 00                    ..
@@ -3634,6 +3639,7 @@ sub_b53a:
 	sei             			; Inhibit IRQs
 	jsr     sub_b545			; Enable Serial out and timer IRQs
 	cli             			; Enable IRQs
+
 :	lda     byte_1340
 	bne     :-				; Wait for byte_1340 to be $00
 	rts             			; 
@@ -3749,15 +3755,21 @@ sub_b5b0:
 	ori	PORTA, $50
 	lda     #$3C    			; B5BD A9 3C                    .<
 	sta     PACTL
-	ldx     #$00    			; B5C2 A2 00                    ..
+
+;** (n) Find empty slot in HATABS **********************************************
+	ldx     #$00    			; Start search at offset 0 of HATABS
 	lda     #'R'
-	jsr     sub_bf86
-	bne     LB5D5   			; B5C9 D0 0A                    ..
-	lda     #<LB5D6
-	sta     HATABS+1,x
-	lda     #>LB5D6
-	sta     HATABS+2,x
-LB5D5:  rts             			; B5D5 60                       `
+	jsr     sub_bf86			; Returns HATABS offset in X
+	bne     LB5D5   			; Quit if no slots
+
+;** (n) Add Microbit 300 jump table to HATABS **********************************
+	lda     #<LB5D6				; 
+	sta     HATABS+1,x			;
+
+	lda     #>LB5D6				;
+	sta     HATABS+2,x			;
+
+LB5D5:  rts             			; 
 
 ; ----------------------------------------------------------------------------
 ; MPP Microbit 300 Jump Table
@@ -3930,7 +3942,7 @@ sub_b6c9:
 	iny             			; B6DD C8                       .
 	sty     DAUX1   			; B6DE 8C 0A 03                 ...
 	sty     byte_133a
-	lda     #$57    			; Let A = Write (verify) command
+	lda     #'W'    			; Let A = Write (verify) command
 	jmp     sub_sendsio                     ; Send SIO command frame
 
 ;*******************************************************************************
@@ -4006,11 +4018,9 @@ LB71C:  ldy     #$00    			; Prepare CIO open R: on channel #1
 	ldy     #$40    			; DSTATS direction = receive data
 	lda     #$58    			; DCOMND
 	jsr     sub_sendsio                     ; Send SIO command frame
-	bpl     LB756   			; B753 10 01                    ..
-	rts             			; B755 60                       `
-
-; ----------------------------------------------------------------------------
-LB756:  sei             			; Prevent IRQs
+	bpl     :+				; Continue if SIO returned success
+	rts             			; Return if SIO returned error
+:	sei             			; Inhibit IRQs
 	ldi	SKCTL, $73
 	lda     $1338   			; B75C AD 38 13                 .8.
 	sta     AUDCTL
@@ -4052,12 +4062,12 @@ LB756:  sei             			; Prevent IRQs
 ;*                                                                             *
 ;*                                  sub_b799                                   *
 ;*                                                                             *
-;*                      Attempt to load R: Handler from 850???                 *
+;*                      ?????????????????????????????????                      *
 ;*                                                                             *
 ;*******************************************************************************
 sub_b799:
 
-;** (n) Initialize some variables to 0 *****************************************
+;** (n) Initialize *************************************************************
 	lda     #$00    			; Let Y         = 0
 	sta     byte_133a       		; Let byte_133a = 0
 	sta     DBYT+1  			; Let DBYTHI    = 0
@@ -4068,9 +4078,8 @@ sub_b799:
 	beq     :+	   			; If slot was found, create new handler entry
 	rts             			; otherwise return
 
-:
 ;** (n) Create new handler table record (3 bytes) ******************************
-	lda     #'R'    			; RS232 Device
+:	lda     #'R'    			; RS232 Device
 	sta     byte_1346       		; Save "R" in RAM
 	sta     HATABS,x			; Save "R" in the new slot
 
@@ -4093,11 +4102,11 @@ sub_b799:
 	lda     #$53    			; Let A = STATUS operation
 	jsr     sub_sendsio			; 
 
-	lda     character                       ; byte_1347
-	ora     DVSTAT  			; B7D1 0D EA 02                 ...
-	sta     DVSTAT  			; B7D4 8D EA 02                 ...
-	cpy     #$00    			; B7D7 C0 00                    ..
-	rts             			; B7D9 60                       `
+	lda     character                       ; SIO returns $51 'Q'?
+	ora     DVSTAT  			; 
+	sta     DVSTAT  			; 
+	cpy     #$00    			; If no 850 then sign flag is set
+	rts             			; 
 
 ; ----------------------------------------------------------------------------
 
@@ -4122,7 +4131,7 @@ sub_b7da:
 sub_b7e7:
 sub_setbaud:
 
-; **(1) Send command frame #1 for setting baud and word size
+; **(1) Send command frame #1 for setting baud and word size *******************
 	lda     #$42    			; DCOMND for setting baud, parity, stopbits
 	bit     CURRENT_BAUD			; 
 	bmi     :+				; if CURRENT_BAUD == $FF
@@ -4131,7 +4140,7 @@ sub_setbaud:
 :	ldx	#$00    			; 
 LB7F3:  jsr     LB7FA   			; 
 
-; **(2) Send command frame #2 for ACKnowledge
+; **(2) Send command frame #2 for ACKnowledge **********************************
 	lda     #'A'    			; DCOMND $41->ACKnowledge (returns 'C'omplete or 'E'rror)
 	ldx     #$F3    			; AUX1 for ????
 LB7FA:  stx     DAUX1   			; 
@@ -4149,20 +4158,20 @@ sub_b802:
 sub_sendsio:
 	sta     DCOMND  			; Command code is set in caller
 
-;**(n) Set Device Unit number **************************************************
+;**(1) Set Device Unit number **************************************************
 	ldx     #$01    			; Device 1 (as in R1:)
 	stx     DUNIT   			; 
 	sty     DSTATS  			; Set the data direction ($40->in, $80->out)
 
-;**(n) Set Device Serial bus ID ************************************************
+;**(2) Set Device Serial bus ID ************************************************
 	ldy     #$50    			; $50 = ID for RS232 port R1:
 	sty     DDEVIC  			; 
 
-;**(n) Set Device handler time-out *********************************************
+;**(3) Set Device handler time-out *********************************************
 	ldy     #$08    			; 8 seconds time-out
 	sty     DTIMLO  			; 
 
-;**(n) Send command frame (DCOMND DAUX1 DAUX2, etc) to SIO bus *****************
+;**(4) Send command frame (DCOMND DAUX1 DAUX2, etc) to SIO bus *****************
 	jmp     SIOV    			; SIOV will execute an RTS
 
 ;*******************************************************************************
@@ -4224,8 +4233,7 @@ sub_b84b:
 	jmp     L3E33   			; B860 4C 33 3E                 L3>
 
 ; ----------------------------------------------------------------------------
-LB863:
-	.byte	$65,$AA,$12,$F7,$49,$D5,$25,$A9
+LB863:	.byte	$65,$AA,$12,$F7,$49,$D5,$25,$A9
 	.byte	$19,$DC,$B2,$CD
 
 LB86F:	.byte	$00,$00,$00,$00
@@ -4238,38 +4246,27 @@ LB87F:	.byte	$00,$00,$00,$00
 	.byte	$00,$FF,$FF,$FF
 	.byte	$00,$00,$00,$00
 
-LB88F:
-	.byte	"K:",$9B			; B88F
+LB88F:	.byte	"K:",$9B			; B88F
 
-LB892:
-	.byte	"R:",$9B			; B892
+LB892:	.byte	"R:",$9B			; B892
 
-LB895:
-	.byte	"T:",$9B			; B895
+LB895:	.byte	"T:",$9B			; B895
 
-LB898:
-	.byte	"P:",$9B			; B898
+LB898:	.byte	"P:",$9B			; B898
 
-LB89B:
-	RString	"COMMUNICATION ERROR"
+LB89B:	RString	"COMMUNICATION ERROR"
 
-LB8AE:
-	RString	"COPYRIGHT 1984 ATARI"
+LB8AE:	RString	"COPYRIGHT 1984 ATARI"
 
-LB8C2:
-	RString "WELCOME TO THE LEARNING PHONE"
+LB8C2:	RString "WELCOME TO THE LEARNING PHONE"
 
-LB8DF:
-	RString "After the phone has a high pitch tone, PRESS RETURN!"
+LB8DF:	RString "After the phone has a high pitch tone, PRESS RETURN!"
 
-LB913:
-	RString "300  baud"
+LB913:	RString "300  baud"
 
-LB91C:
-	RString "1200 baud"
+LB91C:	RString "1200 baud"
 
-LB925:
-	RString "Microbit 300 baud"
+LB925:	RString "Microbit 300 baud"
 
 LB936:	.byte	$00,$40,$80,$C0
 
@@ -4295,7 +4292,7 @@ LB966:  .byte	$00,$00,$00,$00,$7F,$3F,$1F,$0F
 ;*                                                                             *
 ;*                                   LB96E                                     *
 ;*                                                                             *
-;*                     ICOB Device/Operation Lookup Table                      *
+;*                     IOCB Device/Operation Lookup Table                      *
 ;*                                                                             *
 ;*******************************************************************************
 
@@ -4351,194 +4348,90 @@ LB99E:
 	.word	$0040
 
 LB9A6:	.byte	>$0600,>$0900,>$0000,>byte_BAEC
+
 LB9AA:	.byte	<$0600,<$0900,<$0000,<byte_BAEC
+
 LB9AE:	.byte	<$0C00,<$0D80,<charset_sm,<LBE84
+
 LB9B2:  .byte   >$0C00,>$0D80,>charset_sm,>LBE84
+
 LB9B6:	.byte	$08,$10,$10,$20,$20,$40,$80,$80
+
 LB9BE:	.byte	$00,$00,$00,$01,$01,$01,$02,$02
 	.byte	$03,$03,$04,$04,$04,$05,$05,$05
+
 LB9CE:	.byte	$00,$00,$01,$02,$02,$03,$03,$04
-LB9D6:  .byte   $03     			; B9D6 03                       .
-	.byte   $02     			; B9D7 02                       .
-	.byte   $03     			; B9D8 03                       .
-	.byte   $03     			; B9D9 03                       .
-	.byte   $02     			; B9DA 02                       .
-	.byte   $03     			; B9DB 03                       .
-	.byte   $02     			; B9DC 02                       .
-	.byte   $03     			; B9DD 03                       .
-	.byte   $03     			; B9DE 03                       .
-	.byte   $02     			; B9DF 02                       .
-	.byte   $02     			; B9E0 02                       .
-	.byte	$01				; B9E1 01 02                    ..
-	.byte	$02  			
-	.byte   $02     			; B9E3 02                       .
-	.byte	$01				; B9E4 01 02                    ..
-	.byte	$02 			
-	.byte	$01				; B9E6 01 02                    ..
-	.byte	$02 			
-	.byte   $02     			; B9E8 02                       .
-	.byte	$01				; B9E9 01 03                    ..
-	.byte	$03
-	.byte   $02     			; B9EB 02                       .
-	.byte   $03     			; B9EC 03                       .
-	.byte   $03     			; B9ED 03                       .
-	.byte   $02     			; B9EE 02                       .
-	.byte   $03     			; B9EF 03                       .
-	.byte   $02     			; B9F0 02                       .
-	.byte   $03     			; B9F1 03                       .
-	.byte   $03     			; B9F2 03                       .
-	.byte   $02     			; B9F3 02                       .
-LB9F4:  .byte   $00     			; B9F4 00                       .
-	.byte	$05				; B9F5 05 0A                    ..
-	.byte	$0A
-	.byte   $0F     			; B9F7 0F                       .
-	.byte   $14     			; B9F8 14                       .
-	.byte   $19     			; B9F9 19                       .
-LB9FA:  .byte   $00     			; B9FA 00                       .
-	.byte   $00     			; B9FB 00                       .
-	.byte	$01,$01 			; B9FC 01 01                    ..
-	.byte	$01,$01 			; B9FE 01 01                    ..
-	.byte	$01,$02 			; BA00 01 02                    ..
+
+LB9D6:  .byte   $03,$02,$03,$03,$02,$03,$02,$03
+	.byte	$03,$02,$02,$01,$02,$02,$01,$02
+	.byte	$01,$02,$02,$01,$03,$02,$03,$03
+	.byte	$02,$03,$02,$03,$03,$02
+
+LB9F4:  .byte   $00,$05,$0A,$0F,$14,$19
+
+LB9FA:  .byte   $00,$00,$01,$01,$01,$01,$01,$02
+
 LBA02:	.byte	$00,$03,$0C,$0F,$30,$33,$3C,$3F
 	.byte	$C0,$C3,$CC,$CF,$F0,$F3,$FC,$FF
 
-LBA12:  asl     $23     			; BA12 06 23                    .#
-	ror     $6026,x 			; BA14 7E 26 60                 ~&`
-	.byte   $27     			; BA17 27                       '
-	.byte   $07     			; BA18 07                       .
-	rol     $40     			; BA19 26 40                    &@
-	rol     $5E,x   			; BA1B 36 5E                    6^
-	.byte   $5C     			; BA1D 5C                       \
-	rol     $1101,x 			; BA1E 3E 01 11                 >..
-	.byte   $0F     			; BA21 0F                       .
-	.byte   $04     			; BA22 04                       .
-	ora     $0E     			; BA23 05 0E                    ..
-	.byte   $13     			; BA25 13                       .
-	.byte   $17     			; BA26 17                       .
-	.byte   $37     			; BA27 37                       7
-	adc     $1200,x 			; BA28 7D 00 12                 }..
-	.byte   $03     			; BA2B 03                       .
-	asl     $2A,x   			; BA2C 16 2A                    .*
-	.byte   $1A     			; BA2E 1A                       .
-	clc             			; BA2F 18                       .
-	.byte   $3F     			; BA30 3F                       ?
-	.byte   $07     			; BA31 07                       .
-	.byte   $07     			; BA32 07                       .
-	and     $1414   			; BA33 2D 14 14                 -..
-	and     $090B,y 			; BA36 39 0B 09                 9..
-	.byte   $3A     			; BA39 3A                       :
-LBA3A:  .byte   $12     			; BA3A 12                       .
-LBA3B:  .byte   $1D     			; BA3B 1D                       .
-	brk             			; BA3C 00                       .
-LBA3D:  .byte   $0C     			; BA3D 0C                       .
-	.byte   $0F     			; BA3E 0F                       .
-	.byte   $15     			; BA3F 15                       .
-LBA40:  .byte   $02     			; BA40 02                       .
-	.byte   $0E     			; BA41 0E                       .
-	.byte   $23     			; BA42 23                       #
-LBA43:  .byte   $0D     			; BA43 0D                       .
-	.byte   $1E     			; BA44 1E                       .
-LBA45:  .byte   $61     			; BA45 61                       a
-LBA46:  .byte   $1F     			; BA46 1F                       .
-	.byte   $74     			; BA47 74                       t
-	ora     $0834,y 			; BA48 19 34 08                 .4.
-	.byte   $73     			; BA4B 73                       s
-	.byte   $7C     			; BA4C 7C                       |
-	bit     $4C0A   			; BA4D 2C 0A 4C                 ,.L
-	asl     $0D0C,x 			; BA50 1E 0C 0D                 ...
-LBA53:  .byte   $46     			; BA53 46                       F
-LBA54:  .byte   $2F     			; BA54 2F                       /
-	.byte   $47     			; BA55 47                       G
-	sei             			; BA56 78                       x
-	.byte   $4F     			; BA57 4F                       O
-	eor     #$5A    			; BA58 49 5A                    IZ
-	bit     $5B     			; BA5A 24 5B                    $[
-	.byte   $2B     			; BA5C 2B                       +
-	adc     $35,x   			; BA5D 75 35                    u5
-	.byte   $02     			; BA5F 02                       .
-	.byte   $BB     			; BA60 BB                       .
-	.byte   $5A     			; BA61 5A                       Z
-	.byte	$30,$5F
-	.byte	$EE,$3D,$A8
-LBA67:  bvs     LBAA9   			; BA67 70 40                    p@
-	bvs     LBAAB   			; BA69 70 40                    p@
-	rti             			; BA6B 40                       @
+LBA12:	.byte	$06,$23,$7E,$26,$60,$27,$07,$26
+	.byte	$40,$36,$5E,$5C,$3E,$01,$11,$0F
+	.byte	$04,$05,$0E,$13,$17,$37,$7D,$00
+	.byte	$12,$03,$16,$2A,$1A,$18,$3F,$07
+	.byte	$07,$2D,$14,$14,$39,$0B,$09,$3A
 
-; ----------------------------------------------------------------------------
-	asl     $0F     			; BA6C 06 0F                    ..
-	.byte   $06     			; BA6E 06                       .
-LBA6F:  ror     $76,x   			; BA6F 76 76                    vv
-	ror     $76,x   			; BA71 76 76                    vv
-	ror     $76,x   			; BA73 76 76                    vv
-	ror     $76,x   			; BA75 76 76                    vv
-	.byte   $77     			; BA77 77                       w
-	pha             			; BA78 48                       H
-	.byte   $5B     			; BA79 5B                       [
-	.byte   $A3     			; BA7A A3                       .
-	adc     ($4B,x) 			; BA7B 61 4B                    aK
-	ror     $76,x   			; BA7D 76 76                    vv
-	ror     $76,x   			; BA7F 76 76                    vv
-	ror     $76,x   			; BA81 76 76                    vv
-	ror     $76,x   			; BA83 76 76                    vv
-	ror     $76,x   			; BA85 76 76                    vv
-	ror     $03,x   			; BA87 76 03                    v.
-	ror     $C4,x   			; BA89 76 C4                    v.
-	.byte   $03     			; BA8B 03                       .
-	.byte   $03     			; BA8C 03                       .
-	ror     $03,x   			; BA8D 76 03                    v.
-	.byte	$76,$20
-	.byte   $1C     			; BA91 1C                       .
-	.byte	$20,$76,$76
-	ror     $76,x   			; BA95 76 76                    vv
-	ror     $76,x   			; BA97 76 76                    vv
-	ror     $76,x   			; BA99 76 76                    vv
-	brk             			; BA9B 00                       .
-	ror     $76,x   			; BA9C 76 76                    vv
-	ror     $76,x   			; BA9E 76 76                    vv
-	.byte   $13     			; BAA0 13                       .
-	.byte   $13     			; BAA1 13                       .
-	.byte   $13     			; BAA2 13                       .
-	.byte   $13     			; BAA3 13                       .
-	ror     $76,x   			; BAA4 76 76                    vv
-	ror     $76,x   			; BAA6 76 76                    vv
-	.byte   $76     			; BAA8 76                       v
-LBAA9:  ror     $C4,x   			; BAA9 76 C4                    v.
-LBAAB:  ror     $76,x   			; BAAB 76 76                    vv
-	ror     $76,x   			; BAAD 76 76                    vv
-	.byte   $2F     			; BAAF 2F                       /
-	.byte   $33     			; BAB0 33                       3
-	lda     #$A9    			; BAB1 A9 A9                    ..
-	lda     #$A9    			; BAB3 A9 A9                    ..
-	ror     $76,x   			; BAB5 76 76                    vv
-	ror     $76,x   			; BAB7 76 76                    vv
-	ror     $76,x   			; BAB9 76 76                    vv
-	ror     $76,x   			; BABB 76 76                    vv
-	rol     $2A     			; BABD 26 2A                    &*
-	.byte   $03     			; BABF 03                       .
-	cmp     $CA,x   			; BAC0 D5 CA                    ..
-	dex             			; BAC2 CA                       .
-	dex             			; BAC3 CA                       .
-	cmp     ($CA),y 			; BAC4 D1 CA                    ..
-	cmp     $D976,x 			; BAC6 DD 76 D9                 .v.
-	.byte   $37     			; BAC9 37                       7
+LBA3A:  .byte   $12
+
+LBA3B:  .byte   $1D,$00
+
+LBA3D:  .byte   $0C,$0F,$15
+
+LBA40:  .byte   $02,$0E,$23
+
+LBA43:  .byte   $0D,$1E
+
+LBA45:  .byte   $61
+
+LBA46:  .byte	$1F,$74,$19,$34,$08,$73,$7C,$2C
+	.byte	$0A,$4C,$1E,$0C,$0D
+
+LBA53:  .byte   $46
+
+LBA54:  .byte   $2F,$47,$78,$4F,$49,$5A,$24,$5B
+	.byte	$2B,$75,$35,$02,$BB,$5A,$30,$5F
+	.byte	$EE,$3D,$A8
+
+LBA67:	.byte	$70,$40,$70,$40,$40,$06,$0F,$06
+
+LBA6F:  .byte	$76,$76,$76,$76,$76,$76,$76,$76
+	.byte	$77,$48,$5B,$A3,$61,$4B,$76,$76
+	.byte	$76,$76,$76,$76,$76,$76,$76,$76
+	.byte	$76,$03,$76,$C4,$03,$03,$76,$03
+	.byte	$76,$20,$1C,$20,$76,$76,$76,$76
+	.byte	$76,$76,$76,$76,$00,$76,$76,$76
+	.byte	$76,$13,$13,$13,$13,$76,$76,$76
+	.byte	$76,$76
+
+LBAA9:  .byte	$76,$C4
+
+LBAAB:	.byte	$76,$76,$76,$76,$2F,$33,$A9,$A9
+	.byte	$A9,$A9,$76,$76,$76,$76,$76,$76
+	.byte	$76,$76,$26,$2A,$03,$D5,$CA,$CA
+	.byte	$CA,$D1,$CA,$DD,$76,$D9,$37
+
 LBACA:	.byte	>(sub_a6f6-1)
 	.byte	>(sub_a448-1),0,0
 	.byte	>(sub_a682-1)
 	.byte	>(sub_adf1-1),0
 	.byte   >(sub_ab5a-1)
+
 LBAD2:	.byte	<(sub_a6f6-1)
 	.byte	<(sub_a448-1),0,0
 	.byte	<(sub_a682-1)
 	.byte	<(sub_adf1-1),0
 	.byte	<(sub_ab5a-1)
-LBADA:  .byte   $03     			; BADA 03                       .
-	.byte   $80     			; BADB 80                       .
-	brk             			; BADC 00                       .
-	brk             			; BADD 00                       .
-	.byte   $80     			; BADE 80                       .
-	.byte   $80     			; BADF 80                       .
-	brk             			; BAE0 00                       .
-	.byte   $01     			; BAE1 01                       .
+
+LBADA:	.byte	$03,$80,$00,$00,$80,$80,$00,$01
 
 LBAE2:	.byte	>(sub_a8b3-1)
 	.byte	>(sub_a5b5-1)
