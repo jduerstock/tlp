@@ -1836,8 +1836,7 @@ LA9AB:  lda     $D8     			; A9AB A5 D8                    ..
 	cmp     #$27    			; A9AD C9 27                    .'
 	bne     LA9B5   			; A9AF D0 04                    ..
 	lda     #$7B    			; A9B1 A9 7B                    .{
-	.byte   $D0     			; A9B3 D0                       .
-LA9B4:  .byte   $F3     			; A9B4 F3                       .
+	bne	LA9A8
 LA9B5:  cmp     #$67    			; A9B5 C9 67                    .g
 	bne     LA9BD   			; A9B7 D0 04                    ..
 	lda     #$7F    			; A9B9 A9 7F                    ..
