@@ -285,11 +285,11 @@ LA035:  jsr     close_ch1			; Close CIO channel #1
 	ldx     #>LB91C				; 
 	ldy     #$08    			; String length - 1
 	jsr     print_string			; 
-	jmp     LA05E   			; Skip ahead
+	jmp     sub_main   			; Skip ahead
 
 ;** (n) If all else fails assume Microbits 300 ********************************
 :	jsr     sub_b272
-	jmp     LA05E   			; A04C 4C 5E A0                 L^.
+	jmp     sub_main   			; A04C 4C 5E A0                 L^.
 
 ; ----------------------------------------------------------------------------
 LA04F:	lda	#$4C
@@ -299,18 +299,26 @@ LA054:  lda     #$46    			;
 	lda     DVSTAT+1
 	bpl     LA054   			; Keep trying test??
 
-;** (n) Main loop?? ************************************************************
-LA05E:  jsr     sub_a963			; 
+;*******************************************************************************
+;*                                                                             *
+;*                                  sub_main                                   *
+;*                                                                             *
+;*          Aside from all the IRQs enabled this might be the main loop        *
+;*                                                                             *
+;*******************************************************************************
+LA05E:  
+sub_main:
+	jsr     sub_a963			; Check for key press
 	jsr     sub_ab35
 	jsr     sub_a12c
 	lda     byte_CC
-	beq     LA05E   			; A069 F0 F3                    ..
+	beq     sub_main   			; A069 F0 F3                    ..
 	jsr     sub_a079
-	bcc     LA05E   			; A06E 90 EE                    ..
+	bcc     sub_main   			; A06E 90 EE                    ..
 	jsr     LA0A3   			; A070 20 A3 A0                  ..
 	lda     #$00    			; A073 A9 00                    ..
 	sta     $B6     			; A075 85 B6                    ..
-	beq     LA05E   			; jump always
+	beq     sub_main   			; jump always
 
 ; ----------------------------------------------------------------------------
 sub_a079:
@@ -1789,13 +1797,20 @@ LA952:  sta     $A6     			; A952 85 A6                    ..
 	rol     $9F     			; A960 26 9F                    &.
 LA962:  rts             			; A962 60                       `
 
-; ----------------------------------------------------------------------------
+;*******************************************************************************
+;*                                                                             *
+;*                                sub_readkey                                  *
+;*                                                                             *
+;*                 Check for any key press. Return if nothing.                 *
+;*                                                                             *
+;*******************************************************************************
 sub_a963:  
+sub_readkey:
 	ldx     CH				; Get keyboard code ($FF if none)
 	inx             			; if key was pressed 
 	bne     LA976   			; then goto LA976
 	lda     HELPFG				; else examine HELP key
-	beq     LA962   			; if no HELP key then RTS
+	beq     LA962   			; if no HELP key then jump to nearby RTS
 	stx     HELPFG				; else save (but it's clobbered later)
 	lda     #$0B    			; 
 	jmp     sub_b1df			;
@@ -1804,20 +1819,24 @@ sub_a963:
 LA976:  dex             			; Restore original keyboard code
 	bmi     LA9CE   			; Branch if key press + control key
 	stx     $D8     			; Save keyboard code to RAM
+
+;** (n) Test START key *******************************************************
 	lda     CONSOL
-	lsr     a       			; A97E 4A                       J
-	bcs     LA9AB   			; A97F B0 2A                    .*
-	ldy     #$FF    			; A981 A0 FF                    ..
-	lsr     a       			; A983 4A                       J
-	bcc     LA98A   			; A984 90 04                    ..
-	cpx     #$40    			; A986 E0 40                    .@
-	bcc     LA98B   			; A988 90 01                    ..
-LA98A:  iny             			; A98A C8                       .
+	lsr     a       			; if START not pressed
+	bcs     LA9AB   			; then skip ahead
+	ldy     #$FF    			; else let Y = $FF
+
+;** (n) START is pressed. Now test SELECT key ********************************
+	lsr     a       			; if SELECT not pressed
+	bcc     LA98A   			; then skip ahead
+	cpx     #$40    			; else if key = shift + L
+	bcc     LA98B   			; then
+LA98A:  iny             			; let Y = $00
 LA98B:  sty     byte_D9 			; A98B 84 D9                    ..
-	lda     $D8     			; A98D A5 D8                    ..
-	and     #$3F    			; A98F 29 3F                    )?
-	ldy     #$30    			; A991 A0 30                    .0
-LA993:  cmp     LBA12,y 			; A993 D9 12 BA                 ...
+	lda     $D8     			; Let A = key code
+	and     #$3F    			; Ignore SHIFT and/or CTRL
+	ldy     #$30    			; 
+LA993:  cmp     LBA12,y 			; Compare against key code lookup table
 	beq     LA99F   			; A996 F0 07                    ..
 	dey             			; A998 88                       .
 	dey             			; A999 88                       .
@@ -3039,13 +3058,13 @@ LB1B5:  ldy     #$00    			; B1B5 A0 00                    ..
 
 ; ----------------------------------------------------------------------------
 sub_b1df:
-	tay             			; A=$0B if arrived from HELPFG else $E7 
+	tay             			; A=00001011($0B) if arrived from HELPFG else 11100111($E7)
 	ldx     #$00    			; Let X = $00
-:	lsr     a       			; If not here from HELPFG
-	bcc     :+
-	inx             			; 
-:	bne     :--
-	txa             			; 
+:	lsr     a       			; If not here from HELPFG then proceed now
+	bcc     :+				; otherwise loop 4 times?
+	inx             			; until 00001011 shifts to left?
+:	bne     :--				; 
+	txa             			; X = 4 or X = 0?
 	lsr     a       			; 
 	tya             			; 
 	bcc     :+
@@ -3059,7 +3078,7 @@ sub_b1df:
 ;*                                                                             *
 ;*******************************************************************************
 sub_b1ef:
-:	ldy     #LB986-LB96E			; Prepare CIO put char call
+:	ldy     #LB986-LB96E			; Prepare CIO put char to channel #1
 						; Fall through to CIO call
 
 ;*******************************************************************************
@@ -3614,25 +3633,40 @@ sub_b4f7:
 	cli             			; Enable IRQs
 	rts             			; 
 
-; ----------------------------------------------------------------------------
+;*******************************************************************************
+;*                                                                             *
+;*                                 sub_b51f                                    *
+;*                                                                             *
+;*                        Configure System Timer 1 IRQ	                       *
+;*                                                                             *
+;*******************************************************************************
+
 sub_b51f:
-	lda     #<sub_b534
+	lda     #<sub_b534			; Point to code that runs on system timer IRQ
 	sta     CDTMA1
 	lda     #>sub_b534
 	sta     CDTMA1+1
-	sei             			; B529 78                       x
-	lda     #$01    			; B52A A9 01                    ..
+
+	sei             			; Inhibit IRQs
+	lda     #$01    			; Set byte_1345 flag (timer event clears it)
 	sta     byte_1345
 	jsr	SETVBV
-	cli             			; B532 58                       X
-	rts             			; B533 60                       `
+	cli             			; Enable IRQs
 
-; ----------------------------------------------------------------------------
+	rts
+
+;*******************************************************************************
+;*                                                                             *
+;*                                 sub_b534                                    *
+;*                                                                             *
+;*                          System Timer 1 IRQ code                            *
+;*                                                                             *
+;*******************************************************************************
 
 sub_b534:
-	lda     #$00    			; B534 A9 00                    ..
-	sta     byte_1345
-	rts             			; B539 60                       `
+	lda     #$00    			; Clear byte_1345 flag
+	sta     byte_1345			
+	rts             			 
 
 ; ----------------------------------------------------------------------------
 sub_b53a:  
@@ -3676,12 +3710,13 @@ sub_irqen:
 
 ; ----------------------------------------------------------------------------
 sub_b54f:
-	ldx     #$00
-	ldy     #$03    			; B551 A0 03                    ..
-	jsr     sub_b51f
+	ldx     #$00				; Arg for SETVBV??
+	ldy     #$03    			; Arg for SETVBV??
+	jsr     sub_b51f			; Set System Timer 1 IRQ and run SETVBV
+
 :	lda     byte_1345
-	bne     :-
-	rts             			; B55B 60                       `
+	bne     :-				; Wait until System Timer 1 IRQ runs
+	rts             			; 
 
 ; ----------------------------------------------------------------------------
 sub_b55c:
@@ -4374,10 +4409,12 @@ LB9FA:  .byte   $00,$00,$01,$01,$01,$01,$01,$02
 LBA02:	.byte	$00,$03,$0C,$0F,$30,$33,$3C,$3F
 	.byte	$C0,$C3,$CC,$CF,$F0,$F3,$FC,$FF
 
+; Keyboard code lookup
 LBA12:	.byte	$06,$23,$7E,$26,$60,$27,$07,$26
 	.byte	$40,$36,$5E,$5C,$3E,$01,$11,$0F
 	.byte	$04,$05,$0E,$13,$17,$37,$7D,$00
-	.byte	$12,$03,$16,$2A,$1A,$18,$3F,$07
+	.byte	$12 ; 18 = 'C'
+	.byte	$03,$16,$2A,$1A,$18,$3F,$07
 	.byte	$07,$2D,$14,$14,$39,$0B,$09,$3A
 
 LBA3A:  .byte   $12
