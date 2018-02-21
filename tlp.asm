@@ -173,6 +173,7 @@ ISTOP		:= $134C
 L0070           := $0070
 L0080           := $0080
 
+word_9C		:= $009C
 CURRENT_BAUD	:= $00B1			; Current 850 baud rate: $FF->300 $00->1200
 byte_B2		:= $00B2
 byte_B3		:= $00B3
@@ -259,7 +260,7 @@ cart_start:
 
 ;**(n) Atari direct-connect modem detected *************************************
 	lda     #$1A    			;
-	sta     $9C     			; Set cursor X coordinate
+	sta     word_9C
 	ldy     #$33    			; String length - 1
 	lda     #<LB8DF				; "After the phone has a high..."
 	ldx     #>LB8DF				;
@@ -826,7 +827,7 @@ display_title:
 ;** (2) Print "WELCOME TO THE LEARNING PHONE" **********************************
 	lda     #$50    			; Set X coordinate for text
 	sta     $A4     			; TODO Save X coordinate for zoomed display?
-	sta     $9C     			; Save X coordinate for scaled display
+	sta     word_9C
 	ldy     #$1C    			; String length - 1
 	lda     #<LB8C2				; "WELCOME..."
 	ldx     #>LB8C2
@@ -836,7 +837,7 @@ display_title:
 ;** (3) Print "COPYRIGHT 1984 ATARI" *******************************************
 	lda     #$67    			; Set X coordinate for text
 	sta     $A4     			; Save X coordinate for scaled display?
-	sta     $9C     			; TODO Save X coordinate for zoomed display?
+	sta     word_9C
 	ldy     #$13    			; String length - 1
 	lda     #<LB8AE				; "COPYRIGHT..."
 	ldx     #>LB8AE
@@ -890,9 +891,9 @@ LA393:  sta     $CA     			; A393 85 CA                    ..
 	jmp     LA824   			; A39B 4C 24 A8                 L$.
 
 ; ----------------------------------------------------------------------------
-	lda     $9C     			; A39E A5 9C                    ..
+	lda     word_9C
 	sta     $AC     			; A3A0 85 AC                    ..
-	lda     $9D     			; A3A2 A5 9D                    ..
+	lda     word_9C+1
 	sta     $AD     			; A3A4 85 AD                    ..
 	lda     $A4     			; A3A6 A5 A4                    ..
 	sta     $AE     			; A3A8 85 AE                    ..
@@ -905,10 +906,10 @@ LA393:  sta     $CA     			; A393 85 CA                    ..
 
 ; ----------------------------------------------------------------------------
 LA3B2:  lda     $AC     			; TODO Set cursor X = $AC (172)?
-	sta     $9C     			; TODO Save cursor X for scaled display (or is this an index into a lookup table?)
+	sta     word_9C
 
 	lda     $AD     			; TODO Set cursor Y = $AD (173)?
-	sta     $9D     			; TODO Save cursor Y for scaled display?
+	sta     word_9C+1
 
 	lda     $AE     			; TODO Set cursor X = $AE (174)?
 	sta     $A4     			; TODO Save cursor X for zoomed display?
@@ -932,8 +933,8 @@ LA3C8:  lda     #$BA    			; A3C8 A9 BA                    ..
 	stx     $9F     			; A3D2 86 9F                    ..
 
 	dex             			; Reset cursor coodinates to 0
-	stx     $9C     			; Cursor x coordinate in scaled mode
-	stx     $9D     			; TODO Cursor y coordinate in scaled mode?
+	stx     word_9C
+	stx     word_9C+1
 	stx     $A4     			; TODO Cursor x coordinate in zoomed mode?
 	stx     $A5     			; TODO Cursor y coordinate in zoomed mode?
 LA3DD:  rts             			; 
@@ -947,12 +948,12 @@ LA3DD:  rts             			;
 	sta     $A4     			; A3E8 85 A4                    ..
 	bcs     LA3EE   			; A3EA B0 02                    ..
 	dec     $A5     			; A3EC C6 A5                    ..
-LA3EE:  lda     $9C     			; A3EE A5 9C                    ..
+LA3EE:  lda     word_9C
 	sec             			; A3F0 38                       8
 	sbc     $D8     			; A3F1 E5 D8                    ..
-	sta     $9C     			; A3F3 85 9C                    ..
+	sta     word_9C
 	bcs     LA3DD   			; A3F5 B0 E6                    ..
-	dec     $9D     			; A3F7 C6 9D                    ..
+	dec     word_9C+1
 	bpl     LA3DD   			; A3F9 10 E2                    ..
 	lda     #$40    			; A3FB A9 40                    .@
 	clc             			; A3FD 18                       .
@@ -960,7 +961,7 @@ LA3EE:  lda     $9C     			; A3EE A5 9C                    ..
 	sta     $A4     			; A400 85 A4                    ..
 	lda     #$01    			; A402 A9 01                    ..
 	sta     $A5     			; A404 85 A5                    ..
-	sta     $9D     			; A406 85 9D                    ..
+	sta     word_9C+1     			; A406 85 9D                    ..
 	bne     LA3DD   			; A408 D0 D3                    ..
 	jsr     LA882   			; A40A 20 82 A8                  ..
 	jmp     LA82D   			; A40D 4C 2D A8                 L-.
@@ -1009,7 +1010,7 @@ sub_a448:
 	ldx     #$03    			; A44F A2 03                    ..
 LA451:  lda     $A4,x   			; A451 B5 A4                    ..
 	sta     $A8,x   			; A453 95 A8                    ..
-	lda     $9C,x   			; A455 B5 9C                    ..
+	lda     word_9C,x   			; A455 B5 9C                    ..
 	sta     $F0,x   			; A457 95 F0                    ..
 	dex             			; A459 CA                       .
 	bpl     LA451   			; A45A 10 F5                    ..
@@ -1022,8 +1023,8 @@ LA45F:  lda     $BA     			; A45F A5 BA                    ..
 	bne     LA474   			; A463 D0 0F                    ..
 	lda     $9F     			; A465 A5 9F                    ..
 	sta     $FB     			; A467 85 FB                    ..
-	lda     $9C     			; A469 A5 9C                    ..
-	ldx     $9D     			; A46B A6 9D                    ..
+	lda     word_9C     			; A469 A5 9C                    ..
+	ldx     word_9C+1     			; A46B A6 9D                    ..
 	ldy     $9E     			; A46D A4 9E                    ..
 	jsr     LA489   			; A46F 20 89 A4                  ..
 	dec     $C9     			; A472 C6 C9                    ..
@@ -1069,7 +1070,7 @@ LA4BF:  ldx     #$03    			; A4BF A2 03                    ..
 	bit     $C9     			; A4C1 24 C9                    $.
 LA4C3:  lda     $F8,x   			; A4C3 B5 F8                    ..
 	bvs     LA4CD   			; A4C5 70 06                    p.
-	sta     $9C,x   			; A4C7 95 9C                    ..
+	sta     word_9C,x   			; A4C7 95 9C                    ..
 	ldy     #$40    			; A4C9 A0 40                    .@
 	bvc     LA4D1   			; A4CB 50 04                    P.
 LA4CD:  sta     $A4,x   			; A4CD 95 A4                    ..
@@ -1200,9 +1201,9 @@ sub_a5a2:
 
 ; ----------------------------------------------------------------------------
 sub_a5aa:
-	lda     $9D     			; A5AA A5 9D                    ..
+	lda     word_9C+1     			; A5AA A5 9D                    ..
 	lsr     a       			; A5AC 4A                       J
-	lda     $9C     			; A5AD A5 9C                    ..
+	lda     word_9C     			; A5AD A5 9C                    ..
 LA5AF:  ror     a       			; A5AF 6A                       j
 	lsr     a       			; A5B0 4A                       J
 	lsr     a       			; A5B1 4A                       J
@@ -1340,7 +1341,7 @@ sub_a682:
 	sta     $C9     			; A687 85 C9                    ..
 	bne     LA695   			; A689 D0 0A                    ..
 	jsr     sub_ad8e
-	lda     $9C     			; A68E A5 9C                    ..
+	lda     word_9C     			; A68E A5 9C                    ..
 	jsr     LA69A   			; A690 20 9A A6                  ..
 	dec     $C9     			; A693 C6 C9                    ..
 LA695:  jsr     sub_ad8e
@@ -1744,12 +1745,12 @@ LA901:  cmp     #$60    			; A901 C9 60                    .`
 	sta     $BB     			; A90F 85 BB                    ..
 	ldx     #$03    			; A911 A2 03                    ..
 LA913:  lda     $BB,x   			; A913 B5 BB                    ..
-	sta     $9C,x   			; A915 95 9C                    ..
+	sta     word_9C,x   			; A915 95 9C                    ..
 	dex             			; A917 CA                       .
 	bpl     LA913   			; A918 10 F9                    ..
-	lda     $9D     			; A91A A5 9D                    ..
+	lda     word_9C+1
 	lsr     a       			; A91C 4A                       J
-	lda     $9C     			; A91D A5 9C                    ..
+	lda     word_9C
 	sta     $D8     			; A91F 85 D8                    ..
 	ror     a       			; A921 6A                       j
 	sta     byte_D9 			; A922 85 D9                    ..
@@ -1848,7 +1849,7 @@ LA9BD:  cmp     #$3C    			; A9BD C9 3C                    .<
 LA9C5:  cmp     #$7C    			; A9C5 C9 7C                    .|
 	bne     LA9DD   			; A9C7 D0 14                    ..
 	lda     #$40    			; A9C9 A9 40                    .@
-LA9CB:  sta     $02BE   			; A9CB 8D BE 02                 ...
+LA9CB:  sta     SHFLOK
 LA9CE:  ldx     #$7F    			; A9CE A2 7F                    ..
 LA9D0:  stx     CONSOL
 	stx     WSYNC
@@ -2120,7 +2121,7 @@ LAB94:  jsr     LAD05   			; AB94 20 05 AD                  ..
 	bit     $B0     			; AB97 24 B0                    $.
 	bvs     LABD3   			; AB99 70 38                    p8
 	jsr     sub_a5aa
-	lda     $9C     			; AB9E A5 9C                    ..
+	lda     word_9C
 	and     #$04    			; ABA0 29 04                    ).
 	beq     LABA6   			; ABA2 F0 02                    ..
 	inc     off_F4
@@ -2159,11 +2160,11 @@ LABD3:  jsr     sub_a890
 	inc     $A5     			; ABDF E6 A5                    ..
 LABE1:  tya             			; ABE1 98                       .
 	clc             			; ABE2 18                       .
-	adc     $9C     			; ABE3 65 9C                    e.
-	sta     $9C     			; ABE5 85 9C                    ..
+	adc     word_9C     			; ABE3 65 9C                    e.
+	sta     word_9C     			; ABE5 85 9C                    ..
 	bcc     :+
-	inc     $9D     			; ABE9 E6 9D                    ..
-:	lda     $9D     			; ABEB A5 9D                    ..
+	inc     word_9C+1
+:	lda     word_9C+1
 	cmp     #$02    			; ABED C9 02                    ..
 	bcc     LABFE   			; ABEF 90 0D                    ..
 	lda     $A4     			; ABF1 A5 A4                    ..
@@ -2172,7 +2173,7 @@ LABE1:  tya             			; ABE1 98                       .
 	sta     $A4     			; ABF6 85 A4                    ..
 	lda     #$00    			; ABF8 A9 00                    ..
 	sta     $A5     			; ABFA 85 A5                    ..
-	sta     $9D     			; ABFC 85 9D                    ..
+	sta     word_9C+1     			; ABFC 85 9D                    ..
 LABFE:  rts             			; ABFE 60                       `
 
 ; ----------------------------------------------------------------------------
@@ -2226,7 +2227,7 @@ LAC3C:  lda     $D8     			; AC3C A5 D8                    ..
 	jmp     LAC58   			; AC53 4C 58 AC                 LX.
 
 ; ----------------------------------------------------------------------------
-LAC56:  lda     $9C     			; AC56 A5 9C                    ..
+LAC56:  lda     word_9C     			; AC56 A5 9C                    ..
 LAC58:  jsr     sub_adcb
 	ldx     #$0B    			; AC5B A2 0B                    ..
 LAC5D:  ldy     #$00    			; AC5D A0 00                    ..
@@ -2485,10 +2486,10 @@ LADFF:  bit     $C9     			; ADFF 24 C9                    $.
 	bvs     LAE13   			; AE01 70 10                    p.
 	lda     $A0     			; AE03 A5 A0                    ..
 	ldx     $A1     			; AE05 A6 A1                    ..
-	ldy     $9C     			; AE07 A4 9C                    ..
+	ldy     word_9C     			; AE07 A4 9C                    ..
 	sty     $EC     			; AE09 84 EC                    ..
 	sty     $A0     			; AE0B 84 A0                    ..
-	ldy     $9D     			; AE0D A4 9D                    ..
+	ldy     word_9C+1
 	sty     $A1     			; AE0F 84 A1                    ..
 	bvc     LAE21   			; AE11 50 0E                    P.
 LAE13:  lda     $A8     			; AE13 A5 A8                    ..
@@ -3076,7 +3077,7 @@ call_cio_or_err:
 	bpl     LB252   			; Success. Jump to nearby RTS
 display_comm_error:
 	ldy     #$18    			; Set cursor X coord in scaled mode
-	sty     $9C     			; 
+	sty     word_9C     			; 
 	ldy     #$12    			; Set string length - 1
 	lda     #<LB89B				; Point to string "COMMUNIC..."
 	ldx     #>LB89B				;
@@ -3157,7 +3158,7 @@ LB252:  rts             			;
 LB253:  jsr     close_ch1
 	bmi     display_comm_error
 	ldy     #$18    			; B258 A0 18                    ..
-	sty     $9C     			; B25A 84 9C                    ..
+	sty     word_9C     			; B25A 84 9C                    ..
 	ldy     #$08    			; B25C A0 08                    ..
 	lda     CURRENT_BAUD			; Get baud ($FF=300, $00=1200)
 	bne     LB268   			; B260 D0 06                    ..
