@@ -175,7 +175,8 @@ L0080           := $0080
 
 word_9C		:= $009C
 CURRENT_BAUD	:= $00B1			; Current 850 baud rate: $FF->300 $00->1200
-byte_B2		:= $00B2
+byte_B2		:= $00B2			; Used during init
+IS_MPP		:= $00B2			; If Microbits 300 then 1 else 0
 byte_B3		:= $00B3
 byte_B5		:= $00B5
 byte_B7		:= $00B7
@@ -280,17 +281,17 @@ cart_start:
 
 ;** (n) Try changing baud rate and re-opening channel #1 ***********************
 LA035:  jsr     close_ch1			; Close CIO channel #1
-	jsr     sub_b719			; Attempt to open R: on channel #1
-	bmi     :+				; if CIO returned error then goto next
+	jsr     sub_open_modem			; Attempt to open R: on channel #1 at CURRENT_BAUD
+	bmi     :+				; if unsuccessful then default to Microbits 300
 	lda     #<LB91C				; otherwise print "1200 baud"
 	ldx     #>LB91C				; 
 	ldy     #$08    			; String length - 1
 	jsr     print_string			; 
-	jmp     LA05E   			; Skip ahead
+	jmp     sub_main   			; and proceed to main loop
 
 ;** (n) If all else fails assume Microbits 300 ********************************
 :	jsr     sub_b272
-	jmp     LA05E   			; A04C 4C 5E A0                 L^.
+	jmp     sub_main   			; A04C 4C 5E A0                 L^.
 
 ; ----------------------------------------------------------------------------
 LA04F:	lda	#$4C
@@ -300,18 +301,26 @@ LA054:  lda     #$46    			;
 	lda     DVSTAT+1
 	bpl     LA054   			; Keep trying test??
 
-;** (n) Main loop?? ************************************************************
-LA05E:  jsr     sub_a963			; 
+;*******************************************************************************
+;*                                                                             *
+;*                                  sub_main                                   *
+;*                                                                             *
+;*          Aside from all the IRQs enabled this might be the main loop        *
+;*                                                                             *
+;*******************************************************************************
+LA05E:  
+sub_main:
+	jsr     sub_a963			; Check for key press
 	jsr     sub_ab35
 	jsr     sub_a12c
 	lda     byte_CC
-	beq     LA05E   			; A069 F0 F3                    ..
+	beq     sub_main   			; A069 F0 F3                    ..
 	jsr     sub_a079
-	bcc     LA05E   			; A06E 90 EE                    ..
+	bcc     sub_main   			; A06E 90 EE                    ..
 	jsr     LA0A3   			; A070 20 A3 A0                  ..
 	lda     #$00    			; A073 A9 00                    ..
 	sta     $B6     			; A075 85 B6                    ..
-	beq     LA05E   			; jump always
+	beq     sub_main   			; jump always
 
 ; ----------------------------------------------------------------------------
 sub_a079:
@@ -1790,13 +1799,20 @@ LA952:  sta     $A6     			; A952 85 A6                    ..
 	rol     $9F     			; A960 26 9F                    &.
 LA962:  rts             			; A962 60                       `
 
-; ----------------------------------------------------------------------------
+;*******************************************************************************
+;*                                                                             *
+;*                                sub_readkey                                  *
+;*                                                                             *
+;*                 Check for any key press. Return if nothing.                 *
+;*                                                                             *
+;*******************************************************************************
 sub_a963:  
+sub_readkey:
 	ldx     CH				; Get keyboard code ($FF if none)
 	inx             			; if key was pressed 
 	bne     LA976   			; then goto LA976
 	lda     HELPFG				; else examine HELP key
-	beq     LA962   			; if no HELP key then RTS
+	beq     LA962   			; if no HELP key then jump to nearby RTS
 	stx     HELPFG				; else save (but it's clobbered later)
 	lda     #$0B    			; 
 	jmp     sub_b1df			;
@@ -1805,20 +1821,24 @@ sub_a963:
 LA976:  dex             			; Restore original keyboard code
 	bmi     LA9CE   			; Branch if key press + control key
 	stx     $D8     			; Save keyboard code to RAM
+
+;** (n) Test START key *******************************************************
 	lda     CONSOL
-	lsr     a       			; A97E 4A                       J
-	bcs     LA9AB   			; A97F B0 2A                    .*
-	ldy     #$FF    			; A981 A0 FF                    ..
-	lsr     a       			; A983 4A                       J
-	bcc     LA98A   			; A984 90 04                    ..
-	cpx     #$40    			; A986 E0 40                    .@
-	bcc     LA98B   			; A988 90 01                    ..
-LA98A:  iny             			; A98A C8                       .
+	lsr     a       			; if START not pressed
+	bcs     LA9AB   			; then skip ahead
+	ldy     #$FF    			; else let Y = $FF
+
+;** (n) START is pressed. Now test SELECT key ********************************
+	lsr     a       			; if SELECT not pressed
+	bcc     LA98A   			; then skip ahead
+	cpx     #$40    			; else if key = shift + L
+	bcc     LA98B   			; then
+LA98A:  iny             			; let Y = $00
 LA98B:  sty     byte_D9 			; A98B 84 D9                    ..
-	lda     $D8     			; A98D A5 D8                    ..
-	and     #$3F    			; A98F 29 3F                    )?
-	ldy     #$30    			; A991 A0 30                    .0
-LA993:  cmp     LBA12,y 			; A993 D9 12 BA                 ...
+	lda     $D8     			; Let A = key code
+	and     #$3F    			; Ignore SHIFT and/or CTRL
+	ldy     #$30    			; 
+LA993:  cmp     LBA12,y 			; Compare against key code lookup table
 	beq     LA99F   			; A996 F0 07                    ..
 	dey             			; A998 88                       .
 	dey             			; A999 88                       .
@@ -1877,19 +1897,27 @@ LA9DD:  ldy     #LB97E-LB96E			; Prepare CIO call to read keyboard
 	sta     $1353   			; A9FF 8D 53 13                 .S.
 	rts             			; AA02 60                       `
 
-; ----------------------------------------------------------------------------
+;** (n) If user pressed OPTION + '1' then change baud to 1200 ****************
 LAA03:  cmp     #$1F    			; if keyboard press = '1'
-	bne     LAA12   			; then 
+	bne     :++				; then 
 	lda     #$00    			;   $00 -> baud = 1200
-LAA09:  ldy     byte_B2				; 
+
+;** (n) Skip all this if using Microbits 300 *********************************
+:	ldy     IS_MPP				; 1->MPP 0->Modem
 	bne     LAA23   			;
-	sta     CURRENT_BAUD			;   Set baud (FF=300 00=1200)
-	jmp     LB253   			;   
-LAA12:  cmp     #$1A    			; else if keyboard press = '3'
+
+;** (n) Force new baud *******************************************************
+	sta     CURRENT_BAUD			; Save new baud (FF=300 00=1200)
+	jmp     sub_user_baud			; sub_user_baud will RTS
+
+;** (n) If user pressed OPTION + '3' then change baud to 300 *****************
+:	cmp     #$1A    			; if keyboard press = '3'
 	bne     LAA1A   			; then
 	lda     #$FF    			;   $FF -> baud = 300
-	bne     LAA09   			;   Jump back to store baud in $B1
-LAA1A:  cmp     #$12    			; else if keyboard press = 'c'
+	bne     :--				;   Jump back to store baud in $B1
+
+;** (n) If user pressed OPTION + 'c' then change colors **********************
+LAA1A:  cmp     #$12    			; if keyboard press = 'c'
 	bne     LAA24   			; AA1C D0 06                    ..
 	lda     #$00    			; AA1E A9 00                    ..
 LAA20:  sta     $1355   			; AA20 8D 55 13                 .U.
@@ -3041,13 +3069,13 @@ LB1B5:  ldy     #$00    			; B1B5 A0 00                    ..
 
 ; ----------------------------------------------------------------------------
 sub_b1df:
-	tay             			; A=$0B if arrived from HELPFG else $E7 
+	tay             			; A=00001011($0B) if arrived from HELPFG else 11100111($E7)
 	ldx     #$00    			; Let X = $00
-:	lsr     a       			; If not here from HELPFG
-	bcc     :+
-	inx             			; 
-:	bne     :--
-	txa             			; 
+:	lsr     a       			; If not here from HELPFG then proceed now
+	bcc     :+				; otherwise loop 4 times?
+	inx             			; until 00001011 shifts to left?
+:	bne     :--				; 
+	txa             			; X = 4 or X = 0?
 	lsr     a       			; 
 	tya             			; 
 	bcc     :+
@@ -3061,7 +3089,7 @@ sub_b1df:
 ;*                                                                             *
 ;*******************************************************************************
 sub_b1ef:
-:	ldy     #LB986-LB96E			; Prepare CIO put char call
+:	ldy     #LB986-LB96E			; Prepare CIO put char to channel #1
 						; Fall through to CIO call
 
 ;*******************************************************************************
@@ -3154,8 +3182,20 @@ sub_b242:
 	sta     TSTDAT				;
 LB252:  rts             			;
 
-; ----------------------------------------------------------------------------
-LB253:  jsr     close_ch1
+;*******************************************************************************
+;*                                                                             *
+;*                               sub_user_baud                                 *
+;*                                                                             *
+;*               User-requested baud change from OPTION + 1 or 3               *
+;*                                                                             *
+;*******************************************************************************
+
+; DESCRIPTION:
+; This subroutine is called from the key press combination OPTION + '1' to 
+; force 1200 baud. Or OPTION + '3' to force 300 baud.
+LB253: 
+sub_user_baud:
+	jsr     close_ch1
 	bmi     display_comm_error
 	ldy     #$18    			; B258 A0 18                    ..
 	sty     word_9C     			; B25A 84 9C                    ..
@@ -3165,36 +3205,52 @@ LB253:  jsr     close_ch1
 	lda     #<LB91C				; String "1200 baud"
 	ldx     #>LB91C
 	bne     LB26C   			; will always branch
-
-; ----------------------------------------------------------------------------
-LB268:  lda     #<LB913
+LB268:  lda     #<LB913				; "300  baud"
 	ldx     #>LB913
-LB26C:  jsr     sub_a89f
-	jmp     sub_b719
+LB26C:  jsr     print_string
+	jmp     sub_open_modem			; sub_open_modem will RTS
 
-; ----------------------------------------------------------------------------
+;*******************************************************************************
+;*                                                                             *
+;*                                  sub_b272                                   *
+;*                                                                             *
+;*                        Configure for Microbits 300                          *
+;*                                                                             *
+;*******************************************************************************
 sub_b272:
-	jsr     close_ch1
-	jsr     sub_b5b0   			; B275 20 B0 B5                  ..
-	ldy     #LB96E-LB96E			; RS232
-	jsr     call_cio_or_err			; Open "R:" for read/write
-	ldy     #$01    			; B27D A0 01                    ..
-	sty     byte_B2
-	ldy     #$10    			; B281 A0 10                    ..
-	lda     #<LB925
-	ldx     #>LB925
-	jmp     sub_a89f
+	jsr     close_ch1			; 
+	jsr     sub_register_mpp		; Register Microbits 300 in HATABS
+	ldy     #LB96E-LB96E			; Open "R:" on channel #1
+	jsr     call_cio_or_err			; 
 
-; ----------------------------------------------------------------------------
-LB28A:  ldx     byte_B2
-	dex             			; B28C CA                       .
-	beq     :+
+;**(n) Set flag that MPP is assumed ********************************************
+	ldy     #$01    			; 
+	sty     IS_MPP				; Let IS_MPP = 1
+
+;**(n) Print "Microbits 300" message *******************************************
+	ldy     #$10    			; String length - 1
+	lda     #<LB925				; 'Microbits 300'
+	ldx     #>LB925				;
+	jmp     print_string			; print_string will RTS
+
+;*******************************************************************************
+;*                                                                             *
+;*                                    LB28A                                    *
+;*                                                                             *
+;*                            ???????????????????                              *
+;*                                                                             *
+;*******************************************************************************
+LB28A:  ldx     IS_MPP				; 
+	dex             			; 
+	beq     :+				; If modem then close channel #1
 	jsr     close_ch1
-:	ldy     #LB99E-LB96E			; Printer
-	jsr     call_cio			; Open "P:" for write
+:	ldy     #LB99E-LB96E			; Open "P:" on channel #3
+	jsr     call_cio			; 
 	bmi     LB2C0   			; B297 30 27                    0'
+
 	lda     #$20    			; B299 A9 20                    . 
 	sta     byte_D9 			; B29B 85 D9                    ..
+
 	lda     #<$1800    			; B29D A9 00                    ..
 	sta     off_FA
 	lda     #>$1800    			; B2A1 A9 18                    ..
@@ -3204,7 +3260,7 @@ LB28A:  ldx     byte_B2
 	bne     :-
 LB2AC:  ldx     #$30    			; Set CIO Channel #3 (Printer)
 	jsr     sub_b23a			; Call CIO close channel
-	ldx     byte_B2
+	ldx     IS_MPP
 	dex             			; B2B3 CA                       .
 	beq     LB2F9   			; B2B4 F0 43                    .C
 	bpl     :+
@@ -3616,25 +3672,40 @@ sub_b4f7:
 	cli             			; Enable IRQs
 	rts             			; 
 
-; ----------------------------------------------------------------------------
+;*******************************************************************************
+;*                                                                             *
+;*                                 sub_b51f                                    *
+;*                                                                             *
+;*                        Configure System Timer 1 IRQ	                       *
+;*                                                                             *
+;*******************************************************************************
+
 sub_b51f:
-	lda     #<sub_b534
+	lda     #<sub_b534			; Point to code that runs on system timer IRQ
 	sta     CDTMA1
 	lda     #>sub_b534
 	sta     CDTMA1+1
-	sei             			; B529 78                       x
-	lda     #$01    			; B52A A9 01                    ..
+
+	sei             			; Inhibit IRQs
+	lda     #$01    			; Set byte_1345 flag (timer event clears it)
 	sta     byte_1345
 	jsr	SETVBV
-	cli             			; B532 58                       X
-	rts             			; B533 60                       `
+	cli             			; Enable IRQs
 
-; ----------------------------------------------------------------------------
+	rts
+
+;*******************************************************************************
+;*                                                                             *
+;*                                 sub_b534                                    *
+;*                                                                             *
+;*                          System Timer 1 IRQ code                            *
+;*                                                                             *
+;*******************************************************************************
 
 sub_b534:
-	lda     #$00    			; B534 A9 00                    ..
-	sta     byte_1345
-	rts             			; B539 60                       `
+	lda     #$00    			; Clear byte_1345 flag
+	sta     byte_1345			
+	rts             			 
 
 ; ----------------------------------------------------------------------------
 sub_b53a:  
@@ -3678,12 +3749,13 @@ sub_irqen:
 
 ; ----------------------------------------------------------------------------
 sub_b54f:
-	ldx     #$00
-	ldy     #$03    			; B551 A0 03                    ..
-	jsr     sub_b51f
+	ldx     #$00				; Arg for SETVBV??
+	ldy     #$03    			; Arg for SETVBV??
+	jsr     sub_b51f			; Set System Timer 1 IRQ and run SETVBV
+
 :	lda     byte_1345
-	bne     :-
-	rts             			; B55B 60                       `
+	bne     :-				; Wait until System Timer 1 IRQ runs
+	rts             			; 
 
 ; ----------------------------------------------------------------------------
 sub_b55c:
@@ -3746,12 +3818,13 @@ t_handler:
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                  sub_b5b0                                   *
+;*                               sub_register_mpp                              *
 ;*                                                                             *
 ;*                 Register MPP Microbit 300 modem in IOCB??                   *
 ;*                                                                             *
 ;*******************************************************************************
 sub_b5b0:
+sub_register_mpp:
 	lda     #$00    			; B5B0 A9 00                    ..
 	sta     PACTL
 	ori	PORTA, $50
@@ -3916,7 +3989,7 @@ sub_b6b8:
 	ldy     #$00    			; 
 	sty     byte_1342   			; Let $1342	= $00
 	sty     byte_133d                       ; Let byte_133d = $00
-	iny             			; return code? = 1
+	iny             			; return code?  = 1
 	sty     $CB     			; Let $CB       = $01
 	rts             			; 
 
@@ -3993,21 +4066,40 @@ JREAD:	cli             			; Enable IRQs
 	ldy     #$01    			; 
 	rts             			; 
 
-; ----------------------------------------------------------------------------
+;*******************************************************************************
+;*                                                                             *
+;*                               sub_open_modem                                 *
+;*                                                                             *
+;*                           ?????????????????????                             *
+;*                                                                             *
+;*******************************************************************************
+
+; DESCRIPTION
+; At this point there are 3 possibilites:
+; 1) A direct-connect modem was found but user is asking to set it to 1200 baud
+;    (by pressing '1' at the connection prompt). If the direct-connect modem 
+;    does not support 1200 baud, return with sign flag set.
+; 2) A Microbits 300 is connected then return with sign flag set.
+; 3) An 850 is connected and will be set to the default 1200 baud and return 
+;    with sign flag clear.
 sub_b719:
+sub_open_modem:
 	jsr     sub_setbaud			; Set baud/word/etc and request ACK
 LB71C:  ldy     #$00    			; Prepare CIO open R: on channel #1
 	jsr     call_cio			; Call CIO
-	bpl     :+				; Continue if CIO returned success
-	rts             			; Return if CIO returned error
-:	lda     #$00    			; B724 A9 00                    ..
-	sta     byte_B2
-	sta     INPBFPT                         ; Let INPBFPT = 0
-	sta     BUFLEN  			; Let BUFLEN  = 0
-	sta     byte_1342   			; 
-	sta     byte_1341   			; 
-	sta     DBYT+1 			        ; MSB of buffer size (0 in this case)
+	bpl     :+				; Return if direct connect modem... 
+	rts             			; ...could not be set to 1200 baud
 
+;** (n) If here then either an 850 or presumed Microbits is connected **********
+:	lda     #$00    			; Let X = 0
+	sta     IS_MPP				; Default IS_MPP to modem (0)
+	sta     INPBFPT                         ; Let INPBFPT   = 0
+	sta     BUFLEN  			; Let BUFLEN    = 0
+	sta     byte_1342   			; Let byte_1342 = 0
+	sta     byte_1341   			; Let byte_1341 = 0
+	sta     DBYT+1 			        ; Set MSB of buffer size to 0
+
+;** (n) Construct SIO command frame for possible 850 ***************************
 	lda     #<byte_1330			; 
 	sta     DBUF				; 
 	lda     #>byte_1330			;
@@ -4015,17 +4107,27 @@ LB71C:  ldy     #$00    			; Prepare CIO open R: on channel #1
 
 	lda     byte_133a                       ; Construct SIO command frame
 	sta     DAUX1   			; 
+
 	lda     #$09    			; 
 	sta     DBYT    			; Tell SIO to receive 9 bytes
-	ldy     #$40    			; DSTATS direction = receive data
-	lda     #$58    			; DCOMND
+
+	ldy     #$40    			; Prep Y for DSTATS ($40->receive data)
+	lda     #$58    			; Prep A for DCOMND ($58->?? ('X'?)
+
+;** (n) Submit SIO command to possible 850 *************************************
 	jsr     sub_sendsio                     ; Send SIO command frame
-	bpl     :+				; Continue if SIO returned success
-	rts             			; Return if SIO returned error
+	bpl     :+				; Continue if 850 is present
+	rts             			; Return with minus if couldnt talk to 850
+
+;** As far as I can tell, the remainder can only be run if an 850 is connected.
+
+;** (n) 850! Set serial port mode control **************************************
 :	sei             			; Inhibit IRQs
-	ldi	SKCTL, $73
+	ldi	SKCTL, $73			; Set serial port mode control
+
+;** (n) Set audio control ******************************************************
 	lda     $1338   			; B75C AD 38 13                 .8.
-	sta     AUDCTL
+	sta     AUDCTL				; Set audio control
 
 ;** (n) Copy 8 bytes from $1330-$1337 to AUDF1/C1-AUDF4/C4 *******************
 	ldy     #$07    			; B762 A0 07                    ..
@@ -4056,31 +4158,39 @@ LB71C:  ldy     #$00    			; Prepare CIO open R: on channel #1
 	cli             			; Enable IRQs
 	ldy     #$01    			; 
 	lda     byte_133a                       ; 
-	sta     ICAX1Z
+	sta     ICAX1Z				; Let ICAX1Z = byte_133a
 	cpy     #$00    			; B796 C0 00                    ..
 	rts             			; B798 60                       `
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                  sub_b799                                   *
+;*                                  sub_R_status                               *
 ;*                                                                             *
-;*                      ?????????????????????????????????                      *
+;*                        Add R to HATABS and run status.                      *
 ;*                                                                             *
 ;*******************************************************************************
-sub_b799:
 
-;** (n) Initialize *************************************************************
+; DESCRIPTION
+; Add R device to HATABS. Then send SIO status command. 
+; From observation in an emulator:
+; Returns Y=$8A and sign flag set if no 850 found.
+; Returns Y=$01 and sign flag clear if 850 found.
+
+sub_b799:
+sub_R_status:
+
+;** (1) Initialize *************************************************************
 	lda     #$00    			; Let Y         = 0
 	sta     byte_133a       		; Let byte_133a = 0
 	sta     DBYT+1  			; Let DBYTHI    = 0
 	tax             			; Let X         = 0
 
-;** (n) Find first empty Handler Table slot ************************************
-	jsr     sub_bf86			; Let X = offset to new slot
+;** (2) Find first empty Handler Table slot ************************************
+	jsr     sub_hatabs_slot			; Let X = offset to new slot
 	beq     :+	   			; If slot was found, create new handler entry
 	rts             			; otherwise return
 
-;** (n) Create new handler table record (3 bytes) ******************************
+;** (3) Create new handler table record (3 bytes) ******************************
 :	lda     #'R'    			; RS232 Device
 	sta     byte_1346       		; Save "R" in RAM
 	sta     HATABS,x			; Save "R" in the new slot
@@ -4091,7 +4201,7 @@ sub_b799:
 	lda     #>LB81A 			; LSB of start of handler vector table
 	sta     HATABS+2,x      		; Save LSB in the new slot
 
-;** (n) Prepare SIO to load STATUS results into DVSTAT *************************
+;** (4) Prepare SIO to load STATUS results into DVSTAT *************************
 	lda     #<DVSTAT			; LSB of data buffer address
 	sta     DBUF                            ;
 
@@ -4099,16 +4209,16 @@ sub_b799:
 	sta     DBUF+1                          ; By luck, >DVSTAT is 2
 	sta     DBYT    			; Tell SIO to load 2 bytes
 
-;** (n) ************************************************************************
-	ldy     #$40    			; Let Y for DSTATS = receive data
-	lda     #$53    			; Let A = STATUS operation
-	jsr     sub_sendsio			; 
+;** (5) ************************************************************************
+	ldy     #$40    			; Prep Y for use by DSTATS ($40->receive data)
+	lda     #'S'    			; Prep A for use by DCOMND ($53->STATUS)
+	jsr     sub_sendsio			; SIOV returns with Y=($01->850,$8A->No 850)
 
-	lda     character                       ; SIO returns $51 'Q'?
-	ora     DVSTAT  			; 
-	sta     DVSTAT  			; 
-	cpy     #$00    			; If no 850 then sign flag is set
-	rts             			; 
+	lda     character                       ; A = $51 from somewhere earlier
+	ora     DVSTAT  			; DSTAT currently ($00,$F0->850, $00,$00->no 850)
+	sta     DVSTAT  			; DSTAT become ($51,$F0 or $51,$00)
+	cpy     #$00    			; Sign flag set->850
+	rts             			; Sign flag clear->850
 
 ; ----------------------------------------------------------------------------
 
@@ -4376,10 +4486,12 @@ LB9FA:  .byte   $00,$00,$01,$01,$01,$01,$01,$02
 LBA02:	.byte	$00,$03,$0C,$0F,$30,$33,$3C,$3F
 	.byte	$C0,$C3,$CC,$CF,$F0,$F3,$FC,$FF
 
+; Keyboard code lookup
 LBA12:	.byte	$06,$23,$7E,$26,$60,$27,$07,$26
 	.byte	$40,$36,$5E,$5C,$3E,$01,$11,$0F
 	.byte	$04,$05,$0E,$13,$17,$37,$7D,$00
-	.byte	$12,$03,$16,$2A,$1A,$18,$3F,$07
+	.byte	$12 ; 18 = 'C'
+	.byte	$03,$16,$2A,$1A,$18,$3F,$07
 	.byte	$07,$2D,$14,$14,$39,$0B,$09,$3A
 
 LBA3A:  .byte   $12
@@ -5812,12 +5924,13 @@ LBE84:
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                  sub_bf86                                   *
+;*                               sub_hatabs_slot                               *
 ;*                                                                             *
-;*                              Poll Handler Table???                          *
+;*                    Return first unused HATABS table entry                   *
 ;*                                                                             *
 ;*******************************************************************************
 sub_bf86:
+sub_hatabs_slot:
 
 ;** (n) Return the first empty slot in the Handler Address Table *****************
 	cmp     HATABS,x			; Is entry empty?
