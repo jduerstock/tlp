@@ -1465,18 +1465,20 @@ LA6D0:  sta     L2000,y 			; A6D0 99 00 20                 ..
 	inc     $87     			; Self modifying code
 	inc     $8D     			; Self modifying code
 	inc     $8A     			; Self modifying code
-	.byte   $10     			; A6E9 10	At runtime, turns into "bpl L0080" 
-LA6EA:  sbc     $60     			; A6EA E5 60	At runtime, turns into "rts"
+	bpl	LA6D0				; points to L0080 at runtime
+	rts
 
 ; ----------------------------------------------------------------------------
 ; Self-modifying code #2 to be copied from ROM to RAM
 ; ----------------------------------------------------------------------------
-LA6EC:  clc             			; A6EC 18                       .
+; LA6EC-2:					; first two bytes are reused from
+;	sta	L1800,y				; LA6D0 above when this is copied
+LA6EC:  .byte	$18         			; to $0082
 	iny             			; A6ED C8                       .
-	bne     LA6EA   			; A6EE D0 FA                    ..
+	bne     LA6EC-2   			; A6EE D0 FA                    ..
 	inc     $82     			; Self modifying code
 	dex             			; A6F2 CA                       .
-	bne     LA6EA   			; A6F3 D0 F5                    ..
+	bne     LA6EC-2   			; A6F3 D0 F5                    ..
 	rts             			; A6F5 60                       `
 
 ; ----------------------------------------------------------------------------
