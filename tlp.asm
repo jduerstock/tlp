@@ -924,6 +924,7 @@ sub_a39a:
 	jmp     LA824   			; A39B 4C 24 A8                 L$.
 
 ; ----------------------------------------------------------------------------
+sub_a39e:
 	lda     word_9C
 	sta     word_AC
 	lda     word_9C+1
@@ -1047,8 +1048,14 @@ sub_a438:
 sub_a43c:
 	lda     #$02    			; A43C A9 02                    ..
 	bne     LA433   			; A43E D0 F3                    ..
+
+; ----------------------------------------------------------------------------
+sub_a440:
 	lda     #$03    			; A440 A9 03                    ..
 	bne     LA433   			; A442 D0 EF                    ..
+
+; ----------------------------------------------------------------------------
+sub_a444:
 	lda     #$04    			; A444 A9 04                    ..
 	bne     LA433   			; A446 D0 EB                    ..
 
@@ -1458,18 +1465,20 @@ LA6D0:  sta     L2000,y 			; A6D0 99 00 20                 ..
 	inc     $87     			; Self modifying code
 	inc     $8D     			; Self modifying code
 	inc     $8A     			; Self modifying code
-	.byte   $10     			; A6E9 10	At runtime, turns into "bpl L0080" 
-LA6EA:  sbc     $60     			; A6EA E5 60	At runtime, turns into "rts"
+	bpl	LA6D0				; points to L0080 at runtime
+	rts
 
 ; ----------------------------------------------------------------------------
 ; Self-modifying code #2 to be copied from ROM to RAM
 ; ----------------------------------------------------------------------------
-LA6EC:  clc             			; A6EC 18                       .
+; LA6EC-2:					; first two bytes are reused from
+;	sta	L1800,y				; LA6D0 above when this is copied
+LA6EC:  .byte	$18         			; to $0082
 	iny             			; A6ED C8                       .
-	bne     LA6EA   			; A6EE D0 FA                    ..
+	bne     LA6EC-2   			; A6EE D0 FA                    ..
 	inc     $82     			; Self modifying code
 	dex             			; A6F2 CA                       .
-	bne     LA6EA   			; A6F3 D0 F5                    ..
+	bne     LA6EC-2   			; A6F3 D0 F5                    ..
 	rts             			; A6F5 60                       `
 
 ; ----------------------------------------------------------------------------
@@ -4700,8 +4709,11 @@ LBA6F:
 		jt1	sub_a431
 	.endrepeat
 	jt1	sub_a438
-	.byte	$CA,$DD
-	.byte	$76,$D9,$37
+	jt1	sub_a431
+	jt1	sub_a444
+	jt1	sub_a3dd
+	jt1	sub_a440
+	jt1	sub_a39e
 
 LBACA:	.byte	>(sub_a6f6-1)
 	.byte	>(sub_a448-1),0,0
