@@ -862,6 +862,8 @@ sub_a367:
 	jmp     clear_screen
 
 ; ----------------------------------------------------------------------------
+
+sub_a36a:
 	txa             			; A36A 8A                       .
 	and     #$07    			; A36B 29 07                    ).
 	sta     byte_B3 			; A36D 85 B3                    ..
@@ -917,6 +919,8 @@ LA389:  sta     $1353   			; A389 8D 53 13                 .S.
 	rts             			; A3AE 60                       `
 
 ; ----------------------------------------------------------------------------
+
+sub_a3af:
 	jmp     LABD3   			; A3AF 4C D3 AB                 L..
 
 ; ----------------------------------------------------------------------------
@@ -952,9 +956,13 @@ LA3C8:  lda     #$BA    			; A3C8 A9 BA                    ..
 	stx     word_9C+1
 	stx     $A4     			; TODO Cursor x coordinate in zoomed mode?
 	stx     $A5     			; TODO Cursor y coordinate in zoomed mode?
-LA3DD:  rts             			; 
+
+sub_a3dd:  
+	rts             			; 
 
 ; ----------------------------------------------------------------------------
+
+sub_a3de:
 	jsr     sub_a890
 	sta     byte_D9 			; A3E1 85 D9                    ..
 	sec             			; A3E3 38                       8
@@ -967,9 +975,9 @@ LA3EE:  lda     word_9C
 	sec             			; A3F0 38                       8
 	sbc     $D8     			; A3F1 E5 D8                    ..
 	sta     word_9C
-	bcs     LA3DD   			; A3F5 B0 E6                    ..
+	bcs     sub_a3dd   			; A3F5 B0 E6                    ..
 	dec     word_9C+1
-	bpl     LA3DD   			; A3F9 10 E2                    ..
+	bpl     sub_a3dd   			; A3F9 10 E2                    ..
 	lda     #$40    			; A3FB A9 40                    .@
 	clc             			; A3FD 18                       .
 	adc     $A4     			; A3FE 65 A4                    e.
@@ -977,7 +985,7 @@ LA3EE:  lda     word_9C
 	lda     #$01    			; A402 A9 01                    ..
 	sta     $A5     			; A404 85 A5                    ..
 	sta     word_9C+1     			; A406 85 9D                    ..
-	bne     LA3DD   			; A408 D0 D3                    ..
+	bne     sub_a3dd   			; A408 D0 D3                    ..
 	jsr     LA882   			; A40A 20 82 A8                  ..
 	jmp     LA82D   			; A40D 4C 2D A8                 L-.
 
@@ -4526,21 +4534,32 @@ LBA54:  .byte   $2F,$47,$78,$4F,$49,$5A,$24,$5B
 
 LBA67:	.byte	$70,$40,$70,$40,$40,$06,$0F,$06
 
-LBA6F:  .byte	$76,$76,$76,$76,$76,$76,$76,$76
-	.byte	$77,$48,$5B,$A3,$61,$4B,$76,$76
+.macro	jt1	arg1
+	.byte	(arg1-sub_a367)
+.endmacro
+
+LBA6F:	jt1	sub_a3dd
+	jt1	sub_a3dd
+	jt1	sub_a3dd
+	jt1	sub_a3dd
+	jt1	sub_a3dd
+	jt1	sub_a3dd
+	jt1	sub_a3dd
+	jt1	sub_a3dd
+	jt1	sub_a3de
+	jt1	sub_a3af
+	.byte	$5B,$A3,$61,$4B,$76,$76
 	.byte	$76,$76,$76,$76,$76,$76,$76,$76
 	.byte	$76,$03,$76,$C4,$03,$03,$76,$03
 	.byte	$76,$20,$1C,$20,$76,$76,$76,$76
 	.byte	$76,$76,$76,$76,$00,$76,$76,$76
 	.byte	$76,$13,$13,$13,$13,$76,$76,$76
-	.byte	$76,$76
-
-LBAA9:  .byte	$76,$C4
-
-LBAAB:	.byte	$76,$76,$76,$76,$2F,$33,$A9,$A9
-	.byte	$A9,$A9,$76,$76,$76,$76,$76,$76
-	.byte	$76,$76,$26,$2A,$03,$D5,$CA,$CA
-	.byte	$CA,$D1,$CA,$DD,$76,$D9,$37
+	.byte	$76,$76,$76,$C4,$76,$76,$76,$76
+	.byte	$2F,$33,$A9,$A9,$A9,$A9,$76,$76
+	.byte	$76,$76,$76,$76,$76,$76,$26,$2A
+	jt1	sub_a36a
+	.byte	$D5,$CA,$CA,$CA,$D1,$CA,$DD
+	.byte	$76,$D9,$37
 
 LBACA:	.byte	>(sub_a6f6-1)
 	.byte	>(sub_a448-1),0,0
