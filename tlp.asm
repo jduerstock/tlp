@@ -1010,6 +1010,8 @@ sub_a40a:
 	rts             			; A42A 60                       `
 
 ; ----------------------------------------------------------------------------
+
+sub_a42b:
 	asl     byte_B3 			; A42B 06 B3                    ..
 	sec             			; A42D 38                       8
 	ror     byte_B3 			; A42E 66 B3                    f.
@@ -4543,24 +4545,26 @@ LBA67:	.byte	$70,$40,$70,$40,$40,$06,$0F,$06
 	.byte	(arg1-sub_a367)
 .endmacro
 
-LBA6F:	jt1	sub_a3dd
-	jt1	sub_a3dd
-	jt1	sub_a3dd
-	jt1	sub_a3dd
-	jt1	sub_a3dd
-	jt1	sub_a3dd
-	jt1	sub_a3dd
-	jt1	sub_a3dd
+LBA6F:
+	.repeat 8
+		jt1	sub_a3dd
+	.endrepeat
 	jt1	sub_a3de
 	jt1	sub_a3af
 	jt1	sub_a3c2
 	jt1	sub_a40a
 	jt1	sub_a3c8
 	jt1	sub_a3b2
+	.repeat 11
+		jt1	sub_a3dd
+	.endrepeat
+	jt1	sub_a36a
 	jt1	sub_a3dd
+	jt1	sub_a42b
+	jt1	sub_a36a
+	jt1	sub_a36a
 	jt1	sub_a3dd
-	.byte	$76,$76,$76,$76,$76,$76,$76,$76
-	.byte	$76,$03,$76,$C4,$03,$03,$76,$03
+	jt1	sub_a36a
 	.byte	$76,$20,$1C,$20,$76,$76,$76,$76
 	.byte	$76,$76,$76,$76,$00,$76,$76,$76
 	.byte	$76,$13,$13,$13,$13,$76,$76,$76
