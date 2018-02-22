@@ -237,6 +237,12 @@ L4000           := $4000
 L6000           := $6000
 L8000           := $8000
 
+; Keyboard scan codes
+keycode_1	:= $1F
+keycode_3	:= $1A
+keycode_c	:= $12
+keycode_L	:= $40
+
 ;*******************************************************************************
 ;*                                                                             *
 ;*                                 cart_start                                  *
@@ -250,7 +256,7 @@ L8000           := $8000
 ; the end of the cart's address space, then jumps to here.
  
 cart_start:
-	jsr     sub_b799			; 
+	jsr     sub_register_R			; Add R device to HATABS
 	jsr     init_graphics			; Initialize display lists, colors
 	jsr     display_title			; Display program title and copyright
 
@@ -278,7 +284,7 @@ cart_start:
 	stx     CH				; Clear keyboard register
 
 ;** (n) If user presses '1' instead of RETURN try to set baud to 1200 **********
-	cmp     #$1F    			; if last key press <> '1'
+	cmp     #keycode_1			; if last key press <> '1'
 	bne     LA04F   			; then skip ahead
 	jsr     display_title			; otherwise clear screen and..
 
@@ -293,27 +299,27 @@ LA035:  jsr     close_ch1			; Close CIO channel #1
 	jmp     sub_main   			; and proceed to main loop
 
 ;** (n) If all else fails assume Microbits 300 ********************************
-:	jsr     sub_b272
-	jmp     sub_main   			; A04C 4C 5E A0                 L^.
+:	jsr     sub_config_mpp			; 
+	jmp     sub_main   			; Skip test and goto main loop
 
-; ----------------------------------------------------------------------------
+;** (n) Test 850 or direct-connect modem **************************************
 LA04F:	lda	#$4C
 	jsr	sub_b242			; Send test??
 LA054:  lda     #$46    			; 
 	jsr     sub_b242			; Send test??
-	lda     DVSTAT+1
-	bpl     LA054   			; Keep trying test??
+	lda     DVSTAT+1			; Keep trying until successful...
+	bpl     LA054   			; ...then fall through to main loop.
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                  sub_main                                   *
+;*                                 sub_main                                    *
 ;*                                                                             *
 ;*          Aside from all the IRQs enabled this might be the main loop        *
 ;*                                                                             *
 ;*******************************************************************************
 LA05E:  
 sub_main:
-	jsr     sub_a963			; Check for key press
+	jsr     sub_readkey			; Check for key press
 	jsr     sub_ab35
 	jsr     sub_a12c
 	lda     byte_CC
@@ -1848,46 +1854,57 @@ sub_a963:
 sub_readkey:
 	ldx     CH				; Get keyboard code ($FF if none)
 	inx             			; if key was pressed 
-	bne     LA976   			; then goto LA976
+	bne     LA976   			; then skip ahead
+
+;** (n) Test HELP key or RTS ***************************************************
 	lda     HELPFG				; else examine HELP key
 	beq     LA962   			; if no HELP key then jump to nearby RTS
+
+;** (n) TODO Jump to HELP key routine? (Undocumented?) *************************
 	stx     HELPFG				; else save (but it's clobbered later)
 	lda     #$0B    			; 
-	jmp     sub_b1df			;
+	jmp     sub_b1df			; Called routine will RTS
 
-; ----------------------------------------------------------------------------
+;** (n) ************************************************************************
 LA976:  dex             			; Restore original keyboard code
-	bmi     LA9CE   			; Branch if key press + control key
-	stx     $D8     			; Save keyboard code to RAM
+	bmi     LA9CE   			; if key press + control key then goto LA9CE
+	stx     $D8     			; else save keyboard code to RAM
 
-;** (n) Test START key *******************************************************
-	lda     CONSOL
+;** (n) Test START key *********************************************************
+	lda     CONSOL				; Examine console keys (0000,0111 if nothing pressed)
 	lsr     a       			; if START not pressed
 	bcs     LA9AB   			; then skip ahead
 	ldy     #$FF    			; else let Y = $FF
 
-;** (n) START is pressed. Now test SELECT key ********************************
-	lsr     a       			; if SELECT not pressed
+;** (n) START is pressed. Now test SELECT key **********************************
+	lsr     a       			; if SELECT is pressed
 	bcc     LA98A   			; then skip ahead
-	cpx     #$40    			; else if key = shift + L
-	bcc     LA98B   			; then
-LA98A:  iny             			; let Y = $00
-LA98B:  sty     byte_D9 			; A98B 84 D9                    ..
+
+;** (n) We are here only if START is pressed ***********************************
+	cpx     #$40    			; check if shift key pressed ($40 is min keycode with shift pressed)
+	bcc     LA98B   			; if shift is not pressed then...
+LA98A:  iny             			; ...Let Y = $00
+LA98B:  sty     byte_D9 			; Let byte_D9 = $00 
+
+;** (n) Search for key code in 16x3 table at LBA12 *****************************
 	lda     $D8     			; Let A = key code
-	and     #$3F    			; Ignore SHIFT and/or CTRL
+	and     #$3F    			; Strip SHIFT and/or CTRL leaving simple key
+
 	ldy     #$30    			; 
-LA993:  cmp     LBA12,y 			; Compare against key code lookup table
-	beq     LA99F   			; A996 F0 07                    ..
-	dey             			; A998 88                       .
-	dey             			; A999 88                       .
-	dey             			; A99A 88                       .
-	bpl     LA993   			; A99B 10 F6                    ..
-	bmi     LA9CE   			; A99D 30 2F                    0/
-LA99F:  ldx     byte_D9 			; A99F A6 D9                    ..
-	bmi     LA9A4   			; A9A1 30 01                    0.
-	iny             			; A9A3 C8                       .
-LA9A4:  iny             			; A9A4 C8                       .
-	lda     LBA12,y 			; A9A5 B9 12 BA                 ...
+LA993:  cmp     LBA12,y 			; Compare key code to lookup table entry
+	beq     LA99F   			; if key code matches table entry then goto LA99F
+	dey             			; Skip to next table row
+	dey             			; 
+	dey             			; 
+	bpl     LA993   			; 
+	bmi     LA9CE   			; End loop after 16 iterations
+
+;** (n) ************************************************************************
+LA99F:  ldx     byte_D9 			; if byte_D9 == $FF (shifted?) then goto LA9A$
+	bmi     LA9A4   			; then let Y = Y + 2 (Y is our table index)
+	iny             			; 
+LA9A4:  iny             			; else let Y = Y + 1
+	lda     LBA12,y 			; Get table entry immediately after matching keycode
 LA9A8:  jmp     LAA91   			; A9A8 4C 91 AA                 L..
 
 ; ----------------------------------------------------------------------------
@@ -1908,13 +1925,14 @@ LA9C5:  cmp     #$7C    			; A9C5 C9 7C                    .|
 	bne     LA9DD   			; A9C7 D0 14                    ..
 	lda     #$40    			; A9C9 A9 40                    .@
 LA9CB:  sta     SHFLOK
-LA9CE:  ldx     #$7F    			; A9CE A2 7F                    ..
-LA9D0:  stx     CONSOL
-	stx     WSYNC
-	dex             			; A9D6 CA                       .
-	bpl     LA9D0   			; A9D7 10 F7                    ..
-	stx     CH
-	rts             			; A9DC 60                       `
+
+LA9CE:  ldx     #$7F    			; for X = 127 to 0 step -1
+LA9D0:  stx     CONSOL				; 
+	stx     WSYNC				; 127 WSYNCs?
+	dex             			; 
+	bpl     LA9D0   			; next X
+	stx     CH				; Clear key code (X = $FF)
+	rts             			; 
 
 ; ----------------------------------------------------------------------------
 LA9DD:  ldy     #LB97E-LB96E			; Prepare CIO call to read keyboard
@@ -1936,7 +1954,7 @@ LA9DD:  ldy     #LB97E-LB96E			; Prepare CIO call to read keyboard
 	rts             			; AA02 60                       `
 
 ;** (n) If user pressed OPTION + '1' then change baud to 1200 ****************
-LAA03:  cmp     #$1F    			; if keyboard press = '1'
+LAA03:  cmp     #keycode_1    			; if keyboard press = '1'
 	bne     :++				; then 
 	lda     #$00    			;   $00 -> baud = 1200
 
@@ -1949,13 +1967,13 @@ LAA03:  cmp     #$1F    			; if keyboard press = '1'
 	jmp     sub_user_baud			; sub_user_baud will RTS
 
 ;** (n) If user pressed OPTION + '3' then change baud to 300 *****************
-:	cmp     #$1A    			; if keyboard press = '3'
+:	cmp     #keycode_3    			; if keyboard press = '3'
 	bne     LAA1A   			; then
 	lda     #$FF    			;   $FF -> baud = 300
 	bne     :--				;   Jump back to store baud in $B1
 
 ;** (n) If user pressed OPTION + 'c' then change colors **********************
-LAA1A:  cmp     #$12    			; if keyboard press = 'c'
+LAA1A:  cmp     #keycode_c    			; if keyboard press = 'c'
 	bne     LAA24   			; AA1C D0 06                    ..
 	lda     #$00    			; AA1E A9 00                    ..
 LAA20:  sta     $1355   			; AA20 8D 55 13                 .U.
@@ -2019,7 +2037,7 @@ LAA7C:  sty     $E7     			; AA7C 84 E7                    ..
 LAA8A:  lda     LBA46,y 			; AA8A B9 46 BA                 .F.
 LAA8D:  sta     $E7     			; AA8D 85 E7                    ..
 	bne     LAA96   			; AA8F D0 05                    ..
-LAA91:  sta     $E7     			; AA91 85 E7                    ..
+LAA91:  sta     $E7     			; Let E7 = table entry after matching keycode
 	jsr     LA9CE   			; AA93 20 CE A9                  ..
 LAA96:  bit     $1353   			; AA96 2C 53 13                 ,S.
 	bmi     LAB00   			; AA99 30 65                    0e
@@ -2030,7 +2048,7 @@ LAA96:  bit     $1353   			; AA96 2C 53 13                 ,S.
 	jmp     LAB00   			; AAA4 4C 00 AB                 L..
 
 ; ----------------------------------------------------------------------------
-LAAA7:  jmp     sub_b272
+LAAA7:  jmp     sub_config_mpp
 
 ; ----------------------------------------------------------------------------
 LAAAA:  jmp     LB28A   			; AAAA 4C 8A B2                 L..
@@ -2139,7 +2157,7 @@ sub_ab5a:
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                print_char                                   *
+;*                                 print_char                                  *
 ;*                                                                             *
 ;*                        Draw character on the screen                         *
 ;*                                                                             *
@@ -3250,12 +3268,13 @@ LB26C:  jsr     print_string
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                  sub_b272                                   *
+;*                              sub_config_mpp                                 *
 ;*                                                                             *
 ;*                        Configure for Microbits 300                          *
 ;*                                                                             *
 ;*******************************************************************************
 sub_b272:
+sub_config_mpp:
 	jsr     close_ch1			; 
 	jsr     sub_register_mpp		; Register Microbits 300 in HATABS
 	ldy     #LB96E-LB96E			; Open "R:" on channel #1
@@ -3423,6 +3442,15 @@ sub_b37c:
 	cpy     INPBFPT  
 	beq     :-
 
+;*******************************************************************************
+;*                                                                             *
+;*                                 sub_b39c                                    *
+;*                                                                             *
+;*                            RS232 Get Status???                              *
+;*                                                                             *
+;*******************************************************************************
+
+; DESCRIPTION
 ; Get character from input buffer
 sub_b38a:  
 	lda     INPBUF,y 			; Get byte from buffer
@@ -3432,7 +3460,7 @@ sub_b38a:
 	sty     BUFLEN  			; Increment BUFLEN
 	dec     byte_CC                         ;
 	cli             			; Enable interrupts
-	ldy     #$01    			; 
+	ldy     #$01    			; Return success
 	rts             			;
 
 ;*******************************************************************************
@@ -3876,10 +3904,10 @@ sub_register_mpp:
 	bne     LB5D5   			; Quit if no slots
 
 ;** (n) Add Microbit 300 jump table to HATABS **********************************
-	lda     #<LB5D6				; 
+	lda     #<handler_mpp			; 
 	sta     HATABS+1,x			;
 
-	lda     #>LB5D6				;
+	lda     #>handler_mpp			;
 	sta     HATABS+2,x			;
 
 LB5D5:  rts             			; 
@@ -3888,10 +3916,11 @@ LB5D5:  rts             			;
 ; MPP Microbit 300 Jump Table
 ; ----------------------------------------------------------------------------
 LB5D6:
+handler_mpp:
 	.addr	JOPEN-1                         ; MPP JOPEN $B667 
 	.addr   JCLOSE-1                        ; MPP JCLOSE $B6A4
-	.addr	JREAD-1                         ; MPP GET BYTE $B708
-	.addr	sub_b6e9-1                      ; MPP PUT BYTE $B6E8
+	.addr	sub_read-1			; Generic get char $B708
+	.addr	sub_write-1                     ; Generic put char $B6E8
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -4060,18 +4089,22 @@ sub_b6c9:
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                 sub_b6e9                                    *
+;*                                 sub_write                                   *
 ;*                                                                             *
-;*                                MPP JWRITE                                   *
+;*                      Write character to output buffer.                      *
 ;*                                                                             *
 ;*******************************************************************************
+
+; DESCRIPTION
+
 sub_b6e9:
-JWRITE: sta     character                       ; 
+sub_write:
+	sta     character                       ; 
 	ldx     #$01    			; 
-	stx     $21     			;
+	stx     $21     			; TODO I can't find address $21 being used elsewhere.
 
 :	lda     OUTBFPT                         ; 
-	cmp     #$1F    			; 31?
+	cmp     #$1F    			; 
 	bcs     :-                              ; Waiting for something to appear?
 
 	sei             			; Disable interrupts
@@ -4084,29 +4117,42 @@ JWRITE: sta     character                       ;
 	ldy     #$00    			; 
 	sty     $CB     			; Let $CB = 0
 	cli             			; Enable interrupts
-	iny             			; Let Y = $01
-	rts             			; 
+	iny             			; 
+	rts             			; Return success
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                 sub_b709                                    *
+;*                                  sub_read                                   *
 ;*                                                                             *
-;*                  READ (this address is in 2 jump tables)                    *
+;*                  High-level read character from input buffer.               *
 ;*                                                                             *
 ;*******************************************************************************
+
+; DESCRIPTION
+; TODO This appears to be layer of abstraction for reading a character from 
+; the communication device (850, modem, or Microbits 300). So far it looks like
+; the different devices will handle populating the input buffer using SERIN 
+; (850/modem) or PIA (Microbits 300) interrupts.
+; TODO I suspect a timer interrupt breaks out of the "wait" loop.
+
 sub_b709:
-JREAD:	cli             			; Enable IRQs
-	sei             			; Disable IRQs
+sub_read:	
+
+;**(n) Wait for something to appear in the input buffer ************************
+	cli             			; Enable IRQ
+	sei             			; Disable IRQ
 	ldy     BUFLEN  			; 
-	cpy     INPBFPT                         ;
-	beq     sub_b709                        ; Continue waiting?
-	jsr     sub_b38a			; Get char from buffer
-	ldy     #$01    			; 
-	rts             			; 
+	cpy     INPBFPT                         ; Wait until IRQ writes to buffer
+	beq     sub_read			; 
+
+;**(n) Copy most-recent byte from buffer to "character" ************************
+	jsr     sub_b38a			; Using Y as offset, get last char from buffer...
+	ldy     #$01    			; ...and store in "character".
+	rts             			; Return success
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                               sub_open_modem                                 *
+;*                               sub_open_modem                                *
 ;*                                                                             *
 ;*                           ?????????????????????                             *
 ;*                                                                             *
@@ -4215,7 +4261,7 @@ LB71C:  ldy     #$00    			; Prepare CIO open R: on channel #1
 ; Returns Y=$01 and sign flag clear if 850 found.
 
 sub_b799:
-sub_R_status:
+sub_register_R:
 
 ;** (1) Initialize *************************************************************
 	lda     #$00    			; Let Y         = 0
@@ -4233,10 +4279,10 @@ sub_R_status:
 	sta     byte_1346       		; Save "R" in RAM
 	sta     HATABS,x			; Save "R" in the new slot
 
-	lda     #<LB81A 			; MSB of start of handler vector table
+	lda     #<handler_R 			; MSB of start of handler vector table
 	sta     HATABS+1,x      		; Save MSB in the new slot
 
-	lda     #>LB81A 			; LSB of start of handler vector table
+	lda     #>handler_R 			; LSB of start of handler vector table
 	sta     HATABS+2,x      		; Save LSB in the new slot
 
 ;** (4) Prepare SIO to load STATUS results into DVSTAT *************************
@@ -4276,13 +4322,15 @@ sub_b7da:
 ;*******************************************************************************
 
 ; DESCRIPTION
-; Send two command frames to 850
-;
+; Send two command frames to 850 or direct connect modem. First is to change the
+; baud rate and a second to request an acknowledgement. Presumably the ACK will
+; fail if an unsupported baud rate is requested.
+
 sub_b7e7:
 sub_setbaud:
 
 ; **(1) Send command frame #1 for setting baud and word size *******************
-	lda     #$42    			; DCOMND for setting baud, parity, stopbits
+	lda     #'B'    			; DCOMND for setting baud, parity, stopbits
 	bit     CURRENT_BAUD			; 
 	bmi     :+				; if CURRENT_BAUD == $FF
 	ldx     #$0A    			; then AUX1 = $00 ( 300 baud, 8 bit word)
@@ -4290,8 +4338,8 @@ sub_setbaud:
 :	ldx	#$00    			; 
 LB7F3:  jsr     LB7FA   			; 
 
-; **(2) Send command frame #2 for ACKnowledge **********************************
-	lda     #'A'    			; DCOMND $41->ACKnowledge (returns 'C'omplete or 'E'rror)
+; **(2) Send command frame #2 for acknowledgement ******************************
+	lda     #'A'    			; DCOMND for requesting an ACK (returns 'C'omplete or 'E'rror)
 	ldx     #$F3    			; AUX1 for ????
 LB7FA:  stx     DAUX1   			; 
 	ldy     #$00    			; AUX2: 1 stop bit, no monitoring of DSR, CTS, CRX
@@ -4332,10 +4380,11 @@ sub_sendsio:
 ;*                                                                             *
 ;*******************************************************************************
 LB81A:
+handler_R:
 	.addr	sub_b6b8-1      		; OPEN vector???
 	.addr	sub_b6c9-1      		; CLOSE vector???
-	.addr	sub_b709-1      		; GET BYTE vector???
-	.addr	sub_b6e9-1      		; PUT BYTE vector???
+	.addr	sub_read-1      		; Generic get character
+	.addr	sub_write-1      		; Generic put character
 
 ; the last two vectors and the jump are not included or used
 
@@ -4524,13 +4573,21 @@ LB9FA:  .byte   $00,$00,$01,$01,$01,$01,$01,$02
 LBA02:	.byte	$00,$03,$0C,$0F,$30,$33,$3C,$3F
 	.byte	$C0,$C3,$CC,$CF,$F0,$F3,$FC,$FF
 
-; Keyboard code lookup
-LBA12:	.byte	$06,$23,$7E,$26,$60,$27,$07,$26
-	.byte	$40,$36,$5E,$5C,$3E,$01,$11,$0F
-	.byte	$04,$05,$0E,$13,$17,$37,$7D,$00
-	.byte	$12 ; 18 = 'C'
-	.byte	$03,$16,$2A,$1A,$18,$3F,$07
-	.byte	$07,$2D,$14,$14,$39,$0B,$09,$3A
+; Keyboard code lookup (iterated upon in reverse order)
+LBA12:	.byte	$06,$23,$7E
+	.byte	$26,$60,$27
+	.byte	$07,$26,$40
+	.byte	$36,$5E,$5C
+	.byte	$3E,$01,$11
+	.byte	$0F,$04,$05
+	.byte	$0E,$13,$17
+	.byte	$37,$7D,$00
+	.byte	$12,$03,$16				; 'c'
+	.byte	$2A,$1A,$18
+	.byte	$3F,$07,$07
+	.byte	$2D,$14,$14
+	.byte	$39,$0B,$09
+	.byte	$3A
 
 LBA3A:  .byte   $12
 
@@ -4538,8 +4595,9 @@ LBA3B:  .byte   $1D,$00
 
 LBA3D:  .byte   $0C,$0F,$15
 
-LBA40:  .byte   $02,$0E,$23
+LBA40:  .byte   $02,$0E
 
+	.byte	$23
 LBA43:  .byte   $0D,$1E
 
 LBA45:  .byte   $61
