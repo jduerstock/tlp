@@ -174,6 +174,7 @@ L0070           := $0070
 L0080           := $0080
 
 word_9C		:= $009C
+word_AC		:= $00AC
 CURRENT_BAUD	:= $00B1			; Current 850 baud rate: $FF->300 $00->1200
 byte_B2		:= $00B2			; Used during init
 IS_MPP		:= $00B2			; If Microbits 300 then 1 else 0
@@ -331,7 +332,7 @@ sub_a079:
 	bmi     LA0D2   			; A082 30 4E                    0N
 	cmp     #$20    			; A084 C9 20                    . 
 	bcs     LA08D   			; A086 B0 05                    ..
-	jsr     LA0F3   			; A088 20 F3 A0                  ..
+	jsr     sub_a0f3   			; A088 20 F3 A0                  ..
 LA08B:  clc             			; A08B 18                       .
 	rts             			; A08C 60                       `
 
@@ -403,14 +404,17 @@ LA0EB:  cmp     #$32    			; A0EB C9 32                    .2
 	beq     LA10B   			; A0ED F0 1C                    ..
 	cmp     #$40    			; A0EF C9 40                    .@
 	bcc     LA0DA   			; A0F1 90 E7                    ..
-LA0F3:  tax             			; A0F3 AA                       .
+LA0F3:
+
+sub_a0f3:
+	tax             			; A0F3 AA                       .
 	clc             			; A0F4 18                       .
-	lda     #$66    			; A0F5 A9 66                    .f
+	lda     #<(sub_a367-1) 			; A0F5 A9 66                    .f
 	adc     LBA6F,x 			; A0F7 7D 6F BA                 }o.
 	tay             			; A0FA A8                       .
 	lda     #$00    			; A0FB A9 00                    ..
 	sta     $B6     			; A0FD 85 B6                    ..
-	adc     #$A3    			; A0FF 69 A3                    i.
+	adc     #>(sub_a367-1) 			; A0FF 69 A3                    i.
 	pha             			; A101 48                       H
 	tya             			; A102 98                       .
 	pha             			; A103 48                       H
@@ -886,9 +890,11 @@ LA389:  sta     $1353   			; A389 8D 53 13                 .S.
 
 ; ----------------------------------------------------------------------------
 	lda     #$00    			; A38D A9 00                    ..
-	beq     LA393   			; A38F F0 02                    ..
+	beq     :+
+
+; ----------------------------------------------------------------------------
 	lda     #$FF    			; A391 A9 FF                    ..
-LA393:  sta     $CA     			; A393 85 CA                    ..
+:	sta     $CA     			; A393 85 CA                    ..
 	rts             			; A395 60                       `
 
 ; ----------------------------------------------------------------------------
@@ -901,9 +907,9 @@ LA393:  sta     $CA     			; A393 85 CA                    ..
 
 ; ----------------------------------------------------------------------------
 	lda     word_9C
-	sta     $AC     			; A3A0 85 AC                    ..
+	sta     word_AC
 	lda     word_9C+1
-	sta     $AD     			; A3A4 85 AD                    ..
+	sta     word_AC+1     			; A3A4 85 AD                    ..
 	lda     $A4     			; A3A6 A5 A4                    ..
 	sta     $AE     			; A3A8 85 AE                    ..
 	lda     $A5     			; A3AA A5 A5                    ..
@@ -914,10 +920,10 @@ LA393:  sta     $CA     			; A393 85 CA                    ..
 	jmp     LABD3   			; A3AF 4C D3 AB                 L..
 
 ; ----------------------------------------------------------------------------
-LA3B2:  lda     $AC     			; TODO Set cursor X = $AC (172)?
+LA3B2:  lda     word_AC     			; TODO Set cursor X = $AC (172)?
 	sta     word_9C
 
-	lda     $AD     			; TODO Set cursor Y = $AD (173)?
+	lda     word_AC+1     			; TODO Set cursor Y = $AD (173)?
 	sta     word_9C+1
 
 	lda     $AE     			; TODO Set cursor X = $AE (174)?
@@ -1228,7 +1234,7 @@ sub_a5b5:
 	lda     $DB     			; A5BB A5 DB                    ..
 	and     #$20    			; A5BD 29 20                    ) 
 	beq     LA5E4   			; A5BF F0 23                    .#
-	jsr     LA5F6   			; A5C1 20 F6 A5                  ..
+	jsr     sub_a5f6   			; A5C1 20 F6 A5                  ..
 	ldx     $C1     			; A5C4 A6 C1                    ..
 	beq     :+
 	bmi     LA5D1   			; A5C8 30 07                    0.
@@ -1260,7 +1266,10 @@ LA5E4:  lda     $C1     			; A5E4 A5 C1                    ..
 LA5F0:  ldx     #$00    			; A5F0 A2 00                    ..
 	lda     #$FF    			; A5F2 A9 FF                    ..
 	bne     LA5D9   			; A5F4 D0 E3                    ..
-LA5F6:  ldx     #$00    			; A5F6 A2 00                    ..
+
+; ----------------------------------------------------------------------------
+sub_a5f6:
+	ldx     #$00    			; A5F6 A2 00                    ..
 	stx     HPOSM3
 	stx     HPOSM2
 	rts             			; A5FE 60                       `
@@ -1988,7 +1997,7 @@ LAA96:  bit     $1353   			; AA96 2C 53 13                 ,S.
 	lda     $E7     			; AA9B A5 E7                    ..
 	cmp     #$20    			; AA9D C9 20                    . 
 	bcs     LAAFD   			; AA9F B0 5C                    .\
-	jsr     LA0F3   			; AAA1 20 F3 A0                  ..
+	jsr     sub_a0f3   			; AAA1 20 F3 A0                  ..
 	jmp     LAB00   			; AAA4 4C 00 AB                 L..
 
 ; ----------------------------------------------------------------------------
@@ -1998,7 +2007,7 @@ LAAA7:  jmp     sub_b272
 LAAAA:  jmp     LB28A   			; AAAA 4C 8A B2                 L..
 
 ; ----------------------------------------------------------------------------
-LAAAD:  jsr     LA5F6   			; AAAD 20 F6 A5                  ..
+LAAAD:  jsr     sub_a5f6   			; AAAD 20 F6 A5                  ..
 	lda     $C1     			; AAB0 A5 C1                    ..
 	cmp     #$02    			; AAB2 C9 02                    ..
 	bne     LAAB8   			; AAB4 D0 02                    ..
