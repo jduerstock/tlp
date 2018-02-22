@@ -835,7 +835,7 @@ sub_a33d:
 display_title:
 ;** (1) Clear screen ***********************************************************
 	jsr     sub_a367			; Clear screen
-	jsr     LA3C8   			; TODO Initialize Screen Variables?
+	jsr     sub_a3c8   			; TODO Initialize Screen Variables?
 
 ;** (2) Print "WELCOME TO THE LEARNING PHONE" **********************************
 	lda     #$50    			; Set X coordinate for text
@@ -845,7 +845,7 @@ display_title:
 	lda     #<LB8C2				; "WELCOME..."
 	ldx     #>LB8C2
 	jsr     print_string
-	jsr     LA3C2   			; A352 20 C2 A3                  ..
+	jsr     sub_a3c2   			; A352 20 C2 A3                  ..
 
 ;** (3) Print "COPYRIGHT 1984 ATARI" *******************************************
 	lda     #$67    			; Set X coordinate for text
@@ -855,7 +855,7 @@ display_title:
 	lda     #<LB8AE				; "COPYRIGHT..."
 	ldx     #>LB8AE
 	jsr     print_string
-	jmp     LA3C2   			; A364 4C C2 A3                 L..
+	jmp     sub_a3c2   			; A364 4C C2 A3                 L..
 
 ; ----------------------------------------------------------------------------
 sub_a367:
@@ -924,7 +924,8 @@ sub_a3af:
 	jmp     LABD3   			; A3AF 4C D3 AB                 L..
 
 ; ----------------------------------------------------------------------------
-LA3B2:  lda     word_AC     			; TODO Set cursor X = $AC (172)?
+sub_a3b2:
+	lda     word_AC     			; TODO Set cursor X = $AC (172)?
 	sta     word_9C
 
 	lda     word_AC+1     			; TODO Set cursor Y = $AD (173)?
@@ -936,13 +937,15 @@ LA3B2:  lda     word_AC     			; TODO Set cursor X = $AC (172)?
 	lda     $AF     			; TODO Set cursor Y = $AE (174)? 
 	sta     $A5     			; TODO Save cursor Y for zoomed display?
 
-LA3C2:  jsr     LA882   			; A3C2 20 82 A8                  ..
+sub_a3c2:
+	jsr     LA882   			; A3C2 20 82 A8                  ..
 	jmp     LA857   			; A3C5 4C 57 A8                 LW.
 
 ; ----------------------------------------------------------------------------
 ; TODO Initialize screen cursor variables?
 ; ----------------------------------------------------------------------------
-LA3C8:  lda     #$BA    			; A3C8 A9 BA                    ..
+sub_a3c8:
+	lda     #$BA    			; A3C8 A9 BA                    ..
 	sta     $A6     			; A3CA 85 A6                    ..
 
 	lda     #$74    			; A3CC A9 74                    .t
@@ -986,6 +989,8 @@ LA3EE:  lda     word_9C
 	sta     $A5     			; A404 85 A5                    ..
 	sta     word_9C+1     			; A406 85 9D                    ..
 	bne     sub_a3dd   			; A408 D0 D3                    ..
+
+sub_a40a:
 	jsr     LA882   			; A40A 20 82 A8                  ..
 	jmp     LA82D   			; A40D 4C 2D A8                 L-.
 
@@ -1716,7 +1721,7 @@ print_string:
 	jsr     sub_ab5d
 	dec     $EE     			; A8AC C6 EE                    ..
 	bpl     :-
-	jmp     LA3B2   			; A8B0 4C B2 A3                 L..
+	jmp     sub_a3b2   			; A8B0 4C B2 A3                 L..
 
 ; ----------------------------------------------------------------------------
 sub_a8b3:
@@ -4548,7 +4553,12 @@ LBA6F:	jt1	sub_a3dd
 	jt1	sub_a3dd
 	jt1	sub_a3de
 	jt1	sub_a3af
-	.byte	$5B,$A3,$61,$4B,$76,$76
+	jt1	sub_a3c2
+	jt1	sub_a40a
+	jt1	sub_a3c8
+	jt1	sub_a3b2
+	jt1	sub_a3dd
+	jt1	sub_a3dd
 	.byte	$76,$76,$76,$76,$76,$76,$76,$76
 	.byte	$76,$03,$76,$C4,$03,$03,$76,$03
 	.byte	$76,$20,$1C,$20,$76,$76,$76,$76
