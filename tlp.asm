@@ -174,7 +174,9 @@ L0070           := $0070
 L0080           := $0080
 
 word_9C		:= $009C
+word_A4		:= $00A4
 word_AC		:= $00AC
+word_AE		:= $00AE
 CURRENT_BAUD	:= $00B1			; Current 850 baud rate: $FF->300 $00->1200
 byte_B2		:= $00B2			; Used during init
 IS_MPP		:= $00B2			; If Microbits 300 then 1 else 0
@@ -839,7 +841,7 @@ display_title:
 
 ;** (2) Print "WELCOME TO THE LEARNING PHONE" **********************************
 	lda     #$50    			; Set X coordinate for text
-	sta     $A4     			; TODO Save X coordinate for zoomed display?
+	sta     word_A4     			; TODO Save X coordinate for zoomed display?
 	sta     word_9C
 	ldy     #$1C    			; String length - 1
 	lda     #<LB8C2				; "WELCOME..."
@@ -849,7 +851,7 @@ display_title:
 
 ;** (3) Print "COPYRIGHT 1984 ATARI" *******************************************
 	lda     #$67    			; Set X coordinate for text
-	sta     $A4     			; Save X coordinate for scaled display?
+	sta     word_A4     			; Save X coordinate for scaled display?
 	sta     word_9C
 	ldy     #$13    			; String length - 1
 	lda     #<LB8AE				; "COPYRIGHT..."
@@ -904,10 +906,12 @@ LA389:  sta     $1353   			; A389 8D 53 13                 .S.
 	rts             			; A395 60                       `
 
 ; ----------------------------------------------------------------------------
+sub_a396:
 	clc             			; A396 18                       .
 	jmp     LA824   			; A397 4C 24 A8                 L$.
 
 ; ----------------------------------------------------------------------------
+sub_a39a:
 	sec             			; A39A 38                       8
 	jmp     LA824   			; A39B 4C 24 A8                 L$.
 
@@ -915,15 +919,14 @@ LA389:  sta     $1353   			; A389 8D 53 13                 .S.
 	lda     word_9C
 	sta     word_AC
 	lda     word_9C+1
-	sta     word_AC+1     			; A3A4 85 AD                    ..
-	lda     $A4     			; A3A6 A5 A4                    ..
-	sta     $AE     			; A3A8 85 AE                    ..
-	lda     $A5     			; A3AA A5 A5                    ..
-	sta     $AF     			; A3AC 85 AF                    ..
-	rts             			; A3AE 60                       `
+	sta     word_AC+1
+	lda     word_A4
+	sta     word_AE
+	lda     word_A4+1
+	sta     word_AE+1
+	rts
 
 ; ----------------------------------------------------------------------------
-
 sub_a3af:
 	jmp     LABD3   			; A3AF 4C D3 AB                 L..
 
@@ -935,11 +938,11 @@ sub_a3b2:
 	lda     word_AC+1     			; TODO Set cursor Y = $AD (173)?
 	sta     word_9C+1
 
-	lda     $AE     			; TODO Set cursor X = $AE (174)?
-	sta     $A4     			; TODO Save cursor X for zoomed display?
+	lda     word_AE     			; TODO Set cursor X = $AE (174)?
+	sta     word_A4     			; TODO Save cursor X for zoomed display?
 
-	lda     $AF     			; TODO Set cursor Y = $AE (174)? 
-	sta     $A5     			; TODO Save cursor Y for zoomed display?
+	lda     word_AE+1     			; TODO Set cursor Y = $AE (174)? 
+	sta     word_A4+1     			; TODO Save cursor Y for zoomed display?
 
 sub_a3c2:
 	jsr     LA882   			; A3C2 20 82 A8                  ..
@@ -961,8 +964,8 @@ sub_a3c8:
 	dex             			; Reset cursor coodinates to 0
 	stx     word_9C
 	stx     word_9C+1
-	stx     $A4     			; TODO Cursor x coordinate in zoomed mode?
-	stx     $A5     			; TODO Cursor y coordinate in zoomed mode?
+	stx     word_A4     			; TODO Cursor x coordinate in zoomed mode?
+	stx     word_A4+1     			; TODO Cursor y coordinate in zoomed mode?
 
 sub_a3dd:  
 	rts             			; 
@@ -973,11 +976,11 @@ sub_a3de:
 	jsr     sub_a890
 	sta     byte_D9 			; A3E1 85 D9                    ..
 	sec             			; A3E3 38                       8
-	lda     $A4     			; A3E4 A5 A4                    ..
+	lda     word_A4     			; A3E4 A5 A4                    ..
 	sbc     byte_D9 			; A3E6 E5 D9                    ..
-	sta     $A4     			; A3E8 85 A4                    ..
+	sta     word_A4     			; A3E8 85 A4                    ..
 	bcs     LA3EE   			; A3EA B0 02                    ..
-	dec     $A5     			; A3EC C6 A5                    ..
+	dec     word_A4+1     			; A3EC C6 A5                    ..
 LA3EE:  lda     word_9C
 	sec             			; A3F0 38                       8
 	sbc     $D8     			; A3F1 E5 D8                    ..
@@ -987,10 +990,10 @@ LA3EE:  lda     word_9C
 	bpl     sub_a3dd   			; A3F9 10 E2                    ..
 	lda     #$40    			; A3FB A9 40                    .@
 	clc             			; A3FD 18                       .
-	adc     $A4     			; A3FE 65 A4                    e.
-	sta     $A4     			; A400 85 A4                    ..
+	adc     word_A4     			; A3FE 65 A4                    e.
+	sta     word_A4     			; A400 85 A4                    ..
 	lda     #$01    			; A402 A9 01                    ..
-	sta     $A5     			; A404 85 A5                    ..
+	sta     word_A4+1     			; A404 85 A5                    ..
 	sta     word_9C+1     			; A406 85 9D                    ..
 	bne     sub_a3dd   			; A408 D0 D3                    ..
 
@@ -1042,7 +1045,7 @@ sub_a448:
 	ldx     $DA     			; A44B A6 DA                    ..
 	bne     LA45F   			; A44D D0 10                    ..
 	ldx     #$03    			; A44F A2 03                    ..
-LA451:  lda     $A4,x   			; A451 B5 A4                    ..
+LA451:  lda     word_A4,x   			; A451 B5 A4                    ..
 	sta     $A8,x   			; A453 95 A8                    ..
 	lda     word_9C,x   			; A455 B5 9C                    ..
 	sta     $F0,x   			; A457 95 F0                    ..
@@ -1070,8 +1073,8 @@ LA476:  lda     $A7,x   			; A476 B5 A7                    ..
 	stx     $FB     			; A47D 86 FB                    ..
 	stx     $F3     			; A47F 86 F3                    ..
 	stx     $DA     			; A481 86 DA                    ..
-	lda     $A4     			; A483 A5 A4                    ..
-	ldx     $A5     			; A485 A6 A5                    ..
+	lda     word_A4     			; A483 A5 A4                    ..
+	ldx     word_A4+1     			; A485 A6 A5                    ..
 	ldy     $A6     			; A487 A4 A6                    ..
 LA489:  sta     $F8     			; A489 85 F8                    ..
 	stx     $F9     			; A48B 86 F9                    ..
@@ -1107,7 +1110,7 @@ LA4C3:  lda     $F8,x   			; A4C3 B5 F8                    ..
 	sta     word_9C,x   			; A4C7 95 9C                    ..
 	ldy     #$40    			; A4C9 A0 40                    .@
 	bvc     LA4D1   			; A4CB 50 04                    P.
-LA4CD:  sta     $A4,x   			; A4CD 95 A4                    ..
+LA4CD:  sta     word_A4,x   			; A4CD 95 A4                    ..
 	ldy     #$28    			; A4CF A0 28                    .(
 LA4D1:  dex             			; A4D1 CA                       .
 	bpl     LA4C3   			; A4D2 10 EF                    ..
@@ -1228,9 +1231,9 @@ sub_a596:
 
 ; ----------------------------------------------------------------------------
 sub_a5a2:
-	lda     $A5     			; A5A2 A5 A5                    ..
+	lda     word_A4+1     			; A5A2 A5 A5                    ..
 	lsr     a       			; A5A4 4A                       J
-	lda     $A4     			; A5A5 A5 A4                    ..
+	lda     word_A4     			; A5A5 A5 A4                    ..
 	jmp     LA5AF   			; A5A7 4C AF A5                 L..
 
 ; ----------------------------------------------------------------------------
@@ -1382,7 +1385,7 @@ sub_a682:
 	jsr     LA69A   			; A690 20 9A A6                  ..
 	dec     $C9     			; A693 C6 C9                    ..
 LA695:  jsr     sub_ad8e
-	lda     $A4     			; A698 A5 A4                    ..
+	lda     word_A4     			; A698 A5 A4                    ..
 LA69A:  and     #$07    			; A69A 29 07                    ).
 	tax             			; A69C AA                       .
 	ldy     #$00    			; A69D A0 00                    ..
@@ -1796,11 +1799,11 @@ LA913:  lda     $BB,x   			; A913 B5 BB                    ..
 	bcs     LA92A   			; A926 B0 02                    ..
 	lsr     $D8     			; A928 46 D8                    F.
 LA92A:  adc     byte_D9 			; A92A 65 D9                    e.
-	sta     $A4     			; A92C 85 A4                    ..
+	sta     word_A4     			; A92C 85 A4                    ..
 	ldx     #$00    			; A92E A2 00                    ..
-	stx     $A5     			; A930 86 A5                    ..
+	stx     word_A4+1     			; A930 86 A5                    ..
 	bcc     LA936   			; A932 90 02                    ..
-	inc     $A5     			; A934 E6 A5                    ..
+	inc     word_A4+1     			; A934 E6 A5                    ..
 LA936:  lda     $9E     			; A936 A5 9E                    ..
 	and     #$07    			; A938 29 07                    ).
 	tax             			; A93A AA                       .
@@ -2165,9 +2168,9 @@ print_char:
 
 ; ----------------------------------------------------------------------------
 sub_ab88:
-	inc     $A4     			; AB88 E6 A4                    ..
+	inc     word_A4     			; AB88 E6 A4                    ..
 	bne     :+
-	inc     $A5     			; AB8C E6 A5                    ..
+	inc     word_A4+1     			; AB8C E6 A5                    ..
 :	ldx     #$7F    			; AB8E A2 7F                    ..
 	stx     $CA     			; AB90 86 CA                    ..
 	bne     sub_abff
@@ -2210,10 +2213,10 @@ LABD1:  sta     (off_E3),y
 LABD3:  jsr     sub_a890
 	ldy     $D8     			; ABD6 A4 D8                    ..
 	clc             			; ABD8 18                       .
-	adc     $A4     			; ABD9 65 A4                    e.
-	sta     $A4     			; ABDB 85 A4                    ..
+	adc     word_A4     			; ABD9 65 A4                    e.
+	sta     word_A4     			; ABDB 85 A4                    ..
 	bcc     LABE1   			; ABDD 90 02                    ..
-	inc     $A5     			; ABDF E6 A5                    ..
+	inc     word_A4+1     			; ABDF E6 A5                    ..
 LABE1:  tya             			; ABE1 98                       .
 	clc             			; ABE2 18                       .
 	adc     word_9C     			; ABE3 65 9C                    e.
@@ -2223,12 +2226,12 @@ LABE1:  tya             			; ABE1 98                       .
 :	lda     word_9C+1
 	cmp     #$02    			; ABED C9 02                    ..
 	bcc     LABFE   			; ABEF 90 0D                    ..
-	lda     $A4     			; ABF1 A5 A4                    ..
+	lda     word_A4     			; ABF1 A5 A4                    ..
 	sec             			; ABF3 38                       8
 	sbc     #$40    			; ABF4 E9 40                    .@
-	sta     $A4     			; ABF6 85 A4                    ..
+	sta     word_A4     			; ABF6 85 A4                    ..
 	lda     #$00    			; ABF8 A9 00                    ..
-	sta     $A5     			; ABFA 85 A5                    ..
+	sta     word_A4+1     			; ABFA 85 A5                    ..
 	sta     word_9C+1     			; ABFC 85 9D                    ..
 LABFE:  rts             			; ABFE 60                       `
 
@@ -2279,7 +2282,7 @@ LAC3C:  lda     $D8     			; AC3C A5 D8                    ..
 	bne     LAC56   			; AC4B D0 09                    ..
 	lda     #$00    			; AC4D A9 00                    ..
 	sta     $C9     			; AC4F 85 C9                    ..
-	lda     $A4     			; AC51 A5 A4                    ..
+	lda     word_A4     			; AC51 A5 A4                    ..
 	jmp     LAC58   			; AC53 4C 58 AC                 LX.
 
 ; ----------------------------------------------------------------------------
@@ -2400,7 +2403,7 @@ LAD05:  asl     a       			; AD05 0A                       .
 	adc     chset6_base+1   		; AD19 65 E9                    e.
 	sta     off_E5+1
 	jsr     sub_ad8e
-	lda     $A4     			; AD20 A5 A4                    ..
+	lda     word_A4     			; AD20 A5 A4                    ..
 	jsr     sub_adcb
 	ldx     #$05    			; AD25 A2 05                    ..
 :	jsr     sub_ad34   			; AD27 20 34 AD                  4.
@@ -2550,10 +2553,10 @@ LADFF:  bit     $C9     			; ADFF 24 C9                    $.
 	bvc     LAE21   			; AE11 50 0E                    P.
 LAE13:  lda     $A8     			; AE13 A5 A8                    ..
 	ldx     $A9     			; AE15 A6 A9                    ..
-	ldy     $A4     			; AE17 A4 A4                    ..
+	ldy     word_A4     			; AE17 A4 A4                    ..
 	sty     $EC     			; AE19 84 EC                    ..
 	sty     $A8     			; AE1B 84 A8                    ..
-	ldy     $A5     			; AE1D A4 A5                    ..
+	ldy     word_A4+1     			; AE1D A4 A5                    ..
 	sty     $A9     			; AE1F 84 A9                    ..
 LAE21:  sta     $F0     			; AE21 85 F0                    ..
 	stx     $F1     			; AE23 86 F1                    ..
@@ -4587,8 +4590,12 @@ LBA6F:
 		jt1	sub_a3dd
 	.endrepeat
 	jt1	sub_a42b
-	.byte	$76,$76,$76,$76
-	.byte	$2F,$33,$A9,$A9,$A9,$A9,$76,$76
+	.repeat 4
+		jt1	sub_a3dd
+	.endrepeat
+	jt1	sub_a396
+	jt1	sub_a39a
+	.byte	$A9,$A9,$A9,$A9,$76,$76
 	.byte	$76,$76,$76,$76,$76,$76,$26,$2A
 	jt1	sub_a36a
 	.byte	$D5,$CA,$CA,$CA,$D1,$CA,$DD
