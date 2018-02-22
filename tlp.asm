@@ -1886,7 +1886,7 @@ LA976:  dex             			; Restore original keyboard code
 LA98A:  iny             			; ...Let Y = $00
 LA98B:  sty     byte_D9 			; Let byte_D9 = $00 
 
-;** (n) Search for key code in 16x3 table at LBA12 *****************************
+;** (n) Search for key code in 17x3 table at LBA12 *****************************
 	lda     $D8     			; Let A = key code
 	and     #$3F    			; Strip SHIFT and/or CTRL leaving simple key
 
@@ -1897,7 +1897,7 @@ LA993:  cmp     LBA12,y 			; Compare key code to lookup table entry
 	dey             			; 
 	dey             			; 
 	bpl     LA993   			; 
-	bmi     LA9CE   			; End loop after 16 iterations
+	bmi     LA9CE   			; End loop after 17 iterations
 
 ;** (n) ************************************************************************
 LA99F:  ldx     byte_D9 			; if byte_D9 == $FF (shifted?) then goto LA9A$
@@ -4573,32 +4573,58 @@ LB9FA:  .byte   $00,$00,$01,$01,$01,$01,$01,$02
 LBA02:	.byte	$00,$03,$0C,$0F,$30,$33,$3C,$3F
 	.byte	$C0,$C3,$CC,$CF,$F0,$F3,$FC,$FF
 
-; Keyboard code lookup (iterated upon in reverse order)
-LBA12:	.byte	$06,$23,$7E
-	.byte	$26,$60,$27
-	.byte	$07,$26,$40
-	.byte	$36,$5E,$5C
-	.byte	$3E,$01,$11
-	.byte	$0F,$04,$05
-	.byte	$0E,$13,$17
-	.byte	$37,$7D,$00
-	.byte	$12,$03,$16				; 'c'
-	.byte	$2A,$1A,$18
-	.byte	$3F,$07,$07
-	.byte	$2D,$14,$14
-	.byte	$39,$0B,$09
-	.byte	$3A
+; Keyboard code lookup (17x3)
+LBA12:	.byte	$06					; '+'
+	.byte	$23,$7E
 
-LBA3A:  .byte   $12
+	.byte	$26					; '/'
+	.byte	$60,$27
 
-LBA3B:  .byte   $1D,$00
+	.byte	$07					; '*'
+	.byte	$26,$40
 
-LBA3D:  .byte   $0C,$0F,$15
+	.byte	$36					; '<'
+	.byte	$5E,$5C
 
+	.byte	$3E					; 's'
+	.byte	$01,$11
+
+	.byte	$0F					; '='
+	.byte	$04,$05
+
+	.byte	$0E					; '-'
+	.byte	$13,$17
+
+	.byte	$37					; '>'
+	.byte	$7D,$00
+
+	.byte	$12					; 'c'
+	.byte	$03,$16
+
+	.byte	$2A					; 'e'
+	.byte	$1A,$18
+
+	.byte	$3F					; 'a'
+	.byte	$07,$07
+
+	.byte	$2D					; 't'
+	.byte	$14,$14
+
+	.byte	$39					; 'h'
+	.byte	$0B,$09
+
+	.byte	$3A					; 'd'
+LBA3A:  .byte   $12,$1D
+
+	.byte	$00					; 'l'
+LBA3D:  .byte   $0C,$0F
+
+	.byte	$15					; 'b'
 LBA40:  .byte   $02,$0E
 
-	.byte	$23
+	.byte	$23					; 'n'
 LBA43:  .byte   $0D,$1E
+; End of Keyboard code lookup
 
 LBA45:  .byte   $61
 
