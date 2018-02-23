@@ -230,6 +230,7 @@ off_134d	:= $134D
 byte_134f	:= $134F
 byte_1350	:= $1350
 word_1351	:= $1351
+byte_1353	:= $1353
 L2000           := $2000
 L3E2E		:= $3E2E
 L3E33           := $3E33
@@ -899,7 +900,7 @@ sub_a383:
 ; ----------------------------------------------------------------------------
 sub_a387:
 	lda     #$00    			; A387 A9 00                    ..
-LA389:  sta     $1353   			; A389 8D 53 13                 .S.
+LA389:  sta     byte_1353   			; A389 8D 53 13                 .S.
 	rts             			; A38C 60                       `
 
 ; ----------------------------------------------------------------------------
@@ -1654,7 +1655,7 @@ sub_a7fe:
 ; ----------------------------------------------------------------------------
 LA824:  lda     #$02    			; A824 A9 02                    ..
 	ldy     #$04    			; A826 A0 04                    ..
-	jsr     LA886   			; A828 20 86 A8                  ..
+	jsr     sub_a886   			; A828 20 86 A8                  ..
 	bcs     LA857   			; A82B B0 2A                    .*
 LA82D:  adc     $A6     			; A82D 65 A6                    e.
 	sta     $A6     			; A82F 85 A6                    ..
@@ -1710,7 +1711,9 @@ LA881:  rts             			; A881 60                       `
 ; Called from end of print string
 LA882:  lda     #$06    			; A882 A9 06                    ..
 	ldy     #$0C    			; A884 A0 0C                    ..
-LA886:  bit     $CA     			; A886 24 CA                    $.
+
+sub_a886:  
+	bit     $CA     			; A886 24 CA                    $.
 	sty     $D8     			; A888 84 D8                    ..
 	bvs     :+
 	rts             			; TODO Return immediately if something
@@ -1957,9 +1960,9 @@ LA9DD:  ldy     #LB97E-LB96E			; Prepare CIO call to read keyboard
 	and     #$3F    			; A9F4 29 3F                    )?
 	cmp     #$32    			; A9F6 C9 32                    .2
 	bne     LAA03   			; A9F8 D0 09                    ..
-	lda     $1353   			; A9FA AD 53 13                 .S.
+	lda     byte_1353   			; A9FA AD 53 13                 .S.
 	eor     #$80    			; A9FD 49 80                    I.
-	sta     $1353   			; A9FF 8D 53 13                 .S.
+	sta     byte_1353   			; A9FF 8D 53 13                 .S.
 	rts             			; AA02 60                       `
 
 ;** (n) If user pressed OPTION + '1' then change baud to 1200 ****************
@@ -2048,7 +2051,7 @@ LAA8D:  sta     $E7     			; AA8D 85 E7                    ..
 	bne     LAA96   			; AA8F D0 05                    ..
 LAA91:  sta     $E7     			; Let E7 = table entry after matching keycode
 	jsr     LA9CE   			; AA93 20 CE A9                  ..
-LAA96:  bit     $1353   			; AA96 2C 53 13                 ,S.
+LAA96:  bit     byte_1353   			; AA96 2C 53 13                 ,S.
 	bmi     LAB00   			; AA99 30 65                    0e
 	lda     $E7     			; AA9B A5 E7                    ..
 	cmp     #$20    			; AA9D C9 20                    . 
