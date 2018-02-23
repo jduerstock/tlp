@@ -2088,12 +2088,7 @@ LAA8D:  sta     $E7     			; AA8D 85 E7                    ..
 ;** Then store one of the corresponding table values into $E7
 LAA91:  sta     $E7     			; Let E7 = table entry after matching keycode
 	jsr     LA9CE   			; AA93 20 CE A9                  ..
-<<<<<<< HEAD
-
-LAA96:  bit     $1353   			; AA96 2C 53 13                 ,S.
-=======
 LAA96:  bit     byte_1353   			; AA96 2C 53 13                 ,S.
->>>>>>> upstream/master
 	bmi     LAB00   			; AA99 30 65                    0e
 	lda     $E7     			; AA9B A5 E7                    ..
 	cmp     #$20    			; AA9D C9 20                    . 
