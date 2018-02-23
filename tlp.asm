@@ -238,10 +238,27 @@ L6000           := $6000
 L8000           := $8000
 
 ; Keyboard scan codes
-keycode_1	:= $1F
-keycode_3	:= $1A
-keycode_c	:= $12
-keycode_L	:= $40
+key_1		:= $1F
+key_3		:= $1A
+key_a		:= $3F
+key_b		:= $15
+key_c		:= $12
+key_d		:= $3A
+key_e		:= $2A
+key_h		:= $39
+key_l		:= $00
+key_n		:= $23
+key_s		:= $3E
+key_t		:= $2D
+key_eq		:= $0F					; '>'
+key_gt		:= $37					; '>'
+key_lt		:= $36					; '<'
+key_plus	:= $06					; '+'
+key_minus 	:= $0E					; '-'
+key_mult	:= $07					; '*'
+key_div		:= $26					; '/'
+key_atari	:= $27					; '/|\'
+key_L		:= $40
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -284,7 +301,7 @@ cart_start:
 	stx     CH				; Clear keyboard register
 
 ;** (n) If user presses '1' instead of RETURN try to set baud to 1200 **********
-	cmp     #keycode_1			; if last key press <> '1'
+	cmp     #key_1				; if last key press <> '1'
 	bne     LA04F   			; then skip ahead
 	jsr     display_title			; otherwise clear screen and..
 
@@ -1859,6 +1876,15 @@ LA962:  rts             			; A962 60                       `
 ;*                 Check for any key press. Return if nothing.                 *
 ;*                                                                             *
 ;*******************************************************************************
+; DESCRIPTION
+
+; Special Screen Displays and Printing Features
+;
+; Press OPTION + c to enter 'change background color mode'. 
+; Press OPTION + b to enter 'change background brightness mode'.
+; Press OPTION + t to enter 'change text brightness mode." 
+; Then press SELECT to cycle through values.
+
 sub_a963:  
 sub_readkey:
 	ldx     CH				; Get keyboard code ($FF if none)
@@ -1874,29 +1900,31 @@ sub_readkey:
 	lda     #$0B    			; 
 	jmp     sub_b1df			; Called routine will RTS
 
-;** (n) ************************************************************************
+;** (n) If Ctrl + key was pressed then goto LA9CE ******************************
 LA976:  dex             			; Restore original keyboard code
 	bmi     LA9CE   			; if key press + control key then goto LA9CE
+
+;** (n) ************************************************************************
 	stx     $D8     			; else save keyboard code to RAM
 
-;** (n) Test START key *********************************************************
+;** (n) If OPTION + key was pressed then Y = $FF else skip ahead ***************
 	lda     CONSOL				; Examine console keys (0000,0111 if nothing pressed)
-	lsr     a       			; if START not pressed
-	bcs     LA9AB   			; then skip ahead
+	lsr     a       			; if OPTION is not pressed
+	bcs     LA9AB   			; then skip to LA9AB
 	ldy     #$FF    			; else let Y = $FF
 
-;** (n) START is pressed. Now test SELECT key **********************************
+;** (n) If OPTION + SELECT + key was pressed then byte_D9 = $FF ****************
 	lsr     a       			; if SELECT is pressed
-	bcc     LA98A   			; then skip ahead
+	bcc     LA98A   			; then skip to LA98A
 
-;** (n) We are here only if START is pressed ***********************************
+;** (n) If OPTION + shifted key then byte_D9 = $FF else byte_D9 = $00 **********
 	cpx     #$40    			; check if shift key pressed ($40 is min keycode with shift pressed)
 	bcc     LA98B   			; if shift is not pressed then...
 LA98A:  iny             			; ...Let Y = $00
 LA98B:  sty     byte_D9 			; Let byte_D9 = $00 
 
 ;** (n) Search for key code in 17x3 table at LBA12 *****************************
-	lda     $D8     			; Let A = key code
+	lda     $D8     			; Let A = original key code
 	and     #$3F    			; Strip SHIFT and/or CTRL leaving simple key
 
 	ldy     #$30    			; 
@@ -1905,36 +1933,41 @@ LA993:  cmp     LBA12,y 			; Compare key code to lookup table entry
 	dey             			; Skip to next table row
 	dey             			; 
 	dey             			; 
-	bpl     LA993   			; 
-	bmi     LA9CE   			; End loop after 17 iterations
+	bpl     LA993   			; End loop after 17 iterations
+	bmi     LA9CE   			; Skip ahead if no match? TODO
 
-;** (n) ************************************************************************
-LA99F:  ldx     byte_D9 			; if byte_D9 == $FF (shifted?) then goto LA9A$
-	bmi     LA9A4   			; then let Y = Y + 2 (Y is our table index)
-	iny             			; 
-LA9A4:  iny             			; else let Y = Y + 1
-	lda     LBA12,y 			; Get table entry immediately after matching keycode
-LA9A8:  jmp     LAA91   			; A9A8 4C 91 AA                 L..
+;** (n) Found OPTION + key code match *****************************************
+LA99F:  ldx     byte_D9 			; 
+	bmi     :+				; if byte_D9 < $00
+	iny             			; then Y = Y + 1
+:	iny             			; else Y = Y + 2
+	lda     LBA12,y 			; Let A = table entry + offset
+LA9A8:  jmp     LAA91   			; Store let $E7 = offset entry and RTS
 
 ; ----------------------------------------------------------------------------
-LA9AB:  lda     $D8     			; A9AB A5 D8                    ..
-	cmp     #$27    			; A9AD C9 27                    .'
-	bne     LA9B5   			; A9AF D0 04                    ..
-	lda     #$7B    			; A9B1 A9 7B                    .{
-	bne	LA9A8
-LA9B5:  cmp     #$67    			; A9B5 C9 67                    .g
-	bne     LA9BD   			; A9B7 D0 04                    ..
-	lda     #$7F    			; A9B9 A9 7F                    ..
-	bne     LA9A8   			; A9BB D0 EB                    ..
-LA9BD:  cmp     #$3C    			; A9BD C9 3C                    .<
-	bne     LA9C5   			; A9BF D0 04                    ..
-	lda     #$00    			; A9C1 A9 00                    ..
-	beq     LA9CB   			; A9C3 F0 06                    ..
-LA9C5:  cmp     #$7C    			; A9C5 C9 7C                    .|
-	bne     LA9DD   			; A9C7 D0 14                    ..
-	lda     #$40    			; A9C9 A9 40                    .@
-LA9CB:  sta     SHFLOK
+LA9AB:  lda     $D8     			; Let A = original keycode
 
+	cmp     #key_atari			; if Atari key is pressed	A9AD C9 27                    .'
+	bne     :+				; A9AF D0 04                    ..
+	lda     #$7B    			; A9B1 A9 7B                    .{
+	bne	LA9A8				; then let $E7 = $7B and RTS
+
+:	cmp     #$67    			; if SHIFT + Atari key		A9B5 C9 67                    .g
+	bne     :+				; A9B7 D0 04                    ..
+	lda     #$7F    			; A9B9 A9 7F                    ..
+	bne     LA9A8   			; then let $E7 = $7F and RTS	A9BB D0 EB                    ..
+
+:	cmp     #$3C    			; if CAPS/LOWR			A9BD C9 3C                    .<
+	bne     :+				; A9BF D0 04                    ..
+	lda     #$00    			; A9C1 A9 00                    ..
+	beq     LA9CB   			; then let SHFLOK = lower case	A9C3 F0 06                    ..
+
+:	cmp     #$7C    			; if SHIFT + CAPS/LOWR		A9C5 C9 7C                    .|
+	bne     LA9DD   			; A9C7 D0 14                    ..
+	lda     #$40    			; then let SHFLOK  = upper case	A9C9 A9 40                    .@
+LA9CB:  sta     SHFLOK				
+
+;** (n) Ctrl key pressed or OPTION + no matching key ***************************
 LA9CE:  ldx     #$7F    			; for X = 127 to 0 step -1
 LA9D0:  stx     CONSOL				; 
 	stx     WSYNC				; 127 WSYNCs?
@@ -1963,7 +1996,7 @@ LA9DD:  ldy     #LB97E-LB96E			; Prepare CIO call to read keyboard
 	rts             			; AA02 60                       `
 
 ;** (n) If user pressed OPTION + '1' then change baud to 1200 ****************
-LAA03:  cmp     #keycode_1    			; if keyboard press = '1'
+LAA03:  cmp     #key_1    			; if keyboard press = '1'
 	bne     :++				; then 
 	lda     #$00    			;   $00 -> baud = 1200
 
@@ -1976,13 +2009,13 @@ LAA03:  cmp     #keycode_1    			; if keyboard press = '1'
 	jmp     sub_user_baud			; sub_user_baud will RTS
 
 ;** (n) If user pressed OPTION + '3' then change baud to 300 *****************
-:	cmp     #keycode_3    			; if keyboard press = '3'
+:	cmp     #key_3    			; if keyboard press = '3'
 	bne     LAA1A   			; then
 	lda     #$FF    			;   $FF -> baud = 300
 	bne     :--				;   Jump back to store baud in $B1
 
 ;** (n) If user pressed OPTION + 'c' then change colors **********************
-LAA1A:  cmp     #keycode_c    			; if keyboard press = 'c'
+LAA1A:  cmp     #key_c    			; if keyboard press = 'c'
 	bne     LAA24   			; AA1C D0 06                    ..
 	lda     #$00    			; AA1E A9 00                    ..
 LAA20:  sta     $1355   			; AA20 8D 55 13                 .U.
@@ -2046,8 +2079,12 @@ LAA7C:  sty     $E7     			; AA7C 84 E7                    ..
 LAA8A:  lda     LBA46,y 			; AA8A B9 46 BA                 .F.
 LAA8D:  sta     $E7     			; AA8D 85 E7                    ..
 	bne     LAA96   			; AA8F D0 05                    ..
+
+;** (n) If OPTION + key was matched in lookup table ****************************
+;** Then store one of the corresponding table values into $E7
 LAA91:  sta     $E7     			; Let E7 = table entry after matching keycode
 	jsr     LA9CE   			; AA93 20 CE A9                  ..
+
 LAA96:  bit     $1353   			; AA96 2C 53 13                 ,S.
 	bmi     LAB00   			; AA99 30 65                    0e
 	lda     $E7     			; AA9B A5 E7                    ..
@@ -4583,55 +4620,55 @@ LBA02:	.byte	$00,$03,$0C,$0F,$30,$33,$3C,$3F
 	.byte	$C0,$C3,$CC,$CF,$F0,$F3,$FC,$FF
 
 ; Keyboard code lookup (17x3)
-LBA12:	.byte	$06					; '+'
+LBA12:	.byte	key_plus
 	.byte	$23,$7E
 
-	.byte	$26					; '/'
+	.byte	key_div
 	.byte	$60,$27
 
-	.byte	$07					; '*'
+	.byte	key_mult
 	.byte	$26,$40
 
-	.byte	$36					; '<'
+	.byte	key_lt
 	.byte	$5E,$5C
 
-	.byte	$3E					; 's'
+	.byte	key_s
 	.byte	$01,$11
 
-	.byte	$0F					; '='
+	.byte	key_eq
 	.byte	$04,$05
 
-	.byte	$0E					; '-'
+	.byte	key_minus
 	.byte	$13,$17
 
-	.byte	$37					; '>'
+	.byte	key_gt
 	.byte	$7D,$00
 
-	.byte	$12					; 'c'
+	.byte	key_c
 	.byte	$03,$16
 
-	.byte	$2A					; 'e'
+	.byte	key_e
 	.byte	$1A,$18
 
-	.byte	$3F					; 'a'
+	.byte	key_a
 	.byte	$07,$07
 
-	.byte	$2D					; 't'
+	.byte	key_t
 	.byte	$14,$14
 
-	.byte	$39					; 'h'
+	.byte	key_h
 	.byte	$0B,$09
 
-	.byte	$3A					; 'd'
+	.byte	key_d
 LBA3A:  .byte   $12,$1D
 
-	.byte	$00					; 'l'
+	.byte	key_l
 LBA3D:  .byte   $0C,$0F
 
-	.byte	$15					; 'b'
+	.byte	key_b
 LBA40:  .byte   $02,$0E
 
-	.byte	$23					; 'n'
+	.byte	key_n
 LBA43:  .byte   $0D,$1E
 ; End of Keyboard code lookup
 
