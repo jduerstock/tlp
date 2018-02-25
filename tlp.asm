@@ -1,4 +1,4 @@
-;*******************************************************************************
+;dd*******************************************************************************
 ;*                                                                             *
 ;*                    T H E   L E A R N I N G   P H O N E                      *
 ;*                                                                             *
@@ -40,6 +40,16 @@
 	lda	arg1
 	ora	#arg2
 	sta	arg1
+.endmacro
+
+.macro	add16i8	arg1, arg2
+	clc
+	lda	arg1
+	adc	#arg2
+	sta	arg1
+	bcc	:+
+	inc	arg1+1
+:
 .endmacro
 
 	.segment "SEG1"
@@ -3120,19 +3130,9 @@ LB1B5:  ldy     #$00    			; B1B5 A0 00                    ..
 	iny             			; B1C0 C8                       .
 	lda     off_DF+1 			; B1C1 A5 E0                    ..
 	sta     (off_DD),y
-	clc             			; B1C5 18                       .
-	lda     off_DF 				; B1C6 A5 DF                    ..
-	adc     #$40    			; B1C8 69 40                    i@
-	sta     off_DF	 			; B1CA 85 DF                    ..
-	bcc     :+
-	inc     off_DF+1 			; B1CE E6 E0                    ..
-:	clc             			; B1D0 18                       .
-	lda     off_DD
-	adc     #$03    			; B1D3 69 03                    i.
-	sta     off_DD
-	bcc     :+
-	inc     off_DD+1
-:	dex             			; B1DB CA                       .
+	add16i8	off_DF, $40
+	add16i8	off_DD, $03
+	dex             			; B1DB CA                       .
 	bne     LB1B5   			; B1DC D0 D7                    ..
 	rts             			; B1DE 60                       `
 
@@ -3591,6 +3591,7 @@ sub_b422:
 	jsr     sub_b369			; Store character in output buffer
 	cli             			; Enable IRQs
 	jsr     sub_b53a
+
 sub_b43f:
 	ldy     LB47A,x 			; B43F BC 7A B4                 .z.
 	ldx     #$00    			; B442 A2 00                    ..
@@ -3828,8 +3829,8 @@ sub_irqen:
 
 ; ----------------------------------------------------------------------------
 sub_b54f:
-	ldx     #$00				; Arg for SETVBV??
-	ldy     #$03    			; Arg for SETVBV??
+	ldx     #>$0003				; Arg for SETVBV??
+	ldy     #<$0003   			; Arg for SETVBV??
 	jsr     sub_b51f			; Set System Timer 1 IRQ and run SETVBV
 
 :	lda     byte_1345
@@ -3872,6 +3873,8 @@ sub_b581:
 	bne     LB595   			; B58F D0 04                    ..
 	lda     #$51    			; B591 A9 51                    .Q
 	bne     LB597   			; B593 D0 02                    ..
+
+; ----------------------------------------------------------------------------
 LB595:  lda     #$5A    			; 'Z'
 LB597:  sta     character                       ; byte_1347
 	jsr     sub_b420
