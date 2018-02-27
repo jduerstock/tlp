@@ -52,6 +52,13 @@
 :
 .endmacro
 
+.macro	inc16 arg1
+	inc	arg1
+	bcc	:+
+	inc	arg1+1
+	:
+.endmacro
+
 	.segment "SEG1"
 
 ;*******************************************************************************
@@ -73,6 +80,7 @@ DLIST		:= $0230			; Starting address of the display list.
 SSKCTL		:= $0232			; Serial port control register
 GPRIOR		:= $026F			; Priority selection register for screen objects
 STICK0		:= $0278			; Joystick 0
+STRIG0		:= $0284
 SHFLOK		:= $02BE			; Flag for shift and control keys
 PCOLR0		:= $02C0			; Color for player 0 and missile 0
 COLOR1		:= $02C5			; Playfield 1 color register
@@ -216,6 +224,7 @@ off_E5		:= $00E5
 chset6_base 	:= $00E8			; charset_sm address lo/hi at E8/E9
 off_EC		:= $00EC
 off_F4		:= $00F4
+word_F6		:= $00F6
 off_FA		:= $00FA
 byte_FF		:= $00FF
 
@@ -744,8 +753,7 @@ init_graphics:
 	bne	:-				; End Loop
 
 ;** (n) Configure Player Missile Graphics ***************************************
-:	lda     #$03    			;
-	sta     GRACTL				; Enable display of PMG
+:	ldi     GRACTL, $03    			; Enable display of PMG
 
 	lda     #$04    			; TODO Confused - page 4 contains pointers to scan line addresses
 	sta     PMBASE  			; PMG will be stored in page 4
@@ -1188,11 +1196,11 @@ LA4F2:  sta     $AB     			; A4F2 85 AB                    ..
 	lda     off_FA
 	sbc     $F2     			; A51B E5 F2                    ..
 	eor     #$FF    			; A51D 49 FF                    I.
-	sta     $F6     			; A51F 85 F6                    ..
+	sta     word_F6     			; A51F 85 F6                    ..
 	lda     off_FA+1
 	sbc     $F3     			; A523 E5 F3                    ..
 	eor     #$FF    			; A525 49 FF                    I.
-	sta     $F7     			; A527 85 F7                    ..
+	sta     word_F6+1     			; A527 85 F7                    ..
 	lda     $F5     			; A529 A5 F5                    ..
 	sec             			; A52B 38                       8
 	sbc     off_F4
@@ -1212,9 +1220,9 @@ LA543:  jsr     sub_a596
 LA549:  lda     $A7     			; A549 A5 A7                    ..
 	beq     LA550   			; A54B F0 03                    ..
 	jsr     sub_a596
-LA550:  inc     $F6     			; A550 E6 F6                    ..
+LA550:  inc     word_F6     			; A550 E6 F6                    ..
 	bne     LA558   			; A552 D0 04                    ..
-	inc     $F7     			; A554 E6 F7                    ..
+	inc     word_F6+1    			; A554 E6 F7                    ..
 	beq     LA573   			; A556 F0 1B                    ..
 LA558:  lda     byte_D9 			; A558 A5 D9                    ..
 	clc             			; A55A 18                       .
@@ -1339,6 +1347,8 @@ sub_a5ff:
 	jsr     sub_ab54
 	lda     #$43    			; A610 A9 43                    .C
 	bne     LA63D   			; A612 D0 29                    .)
+
+; ----------------------------------------------------------------------------
 :	cmp     #$71    			; A614 C9 71                    .q
 	bne     :+
 	lda     #$1B    			; A618 A9 1B                    ..
@@ -2727,10 +2737,10 @@ LAF05:  stx     $FB     			; AF05 86 FB                    ..
 	sta     $FA     			; AF07 85 FA                    ..
 	lda     off_F4
 	eor     #$FF    			; AF0B 49 FF                    I.
-	sta     $F6     			; AF0D 85 F6                    ..
+	sta     word_F6     			; AF0D 85 F6                    ..
 	lda     $F5     			; AF0F A5 F5                    ..
 	eor     #$FF    			; AF11 49 FF                    I.
-	sta     $F7     			; AF13 85 F7                    ..
+	sta     word_F6+1     			; AF13 85 F7                    ..
 	lsr     $F5     			; AF15 46 F5                    F.
 	ror     off_F4
 	lda     $F2     			; AF19 A5 F2                    ..
@@ -2762,9 +2772,9 @@ LAF36:  sty     off_E3
 	lsr     a       			; AF46 4A                       J
 	tay             			; AF47 A8                       .
 LAF48:  jsr     sub_b004
-	inc     $F6     			; AF4B E6 F6                    ..
+	inc     word_F6     			; AF4B E6 F6                    ..
 	bne     LAF53   			; AF4D D0 04                    ..
-	inc     $F7     			; AF4F E6 F7                    ..
+	inc     word_F6+1     			; AF4F E6 F7                    ..
 	beq     LAF94   			; AF51 F0 41                    .A
 LAF53:  clc             			; AF53 18                       .
 	lda     $FC     			; AF54 A5 FC                    ..
@@ -2894,7 +2904,7 @@ sub_b013:
 	bne     LB01E   			; B018 D0 04                    ..
 	ldx     $C6     			; B01A A6 C6                    ..
 	bne     LB02B   			; B01C D0 0D                    ..
-LB01E:  lda     $0284   			; B01E AD 84 02                 ...
+LB01E:  lda     STRIG0
 	bne     LB02D   			; B021 D0 0A                    ..
 	ldx     $C6     			; B023 A6 C6                    ..
 	bne     LB045   			; B025 D0 1E                    ..
@@ -2910,7 +2920,7 @@ LB02D:  ldx     STICK0				; read joystick 0
 	bne     :+
 	sta     $C2     			; B03E 85 C2                    ..
 	beq     LB045   			; B040 F0 03                    ..
-:	jsr     LB0A8   			; B042 20 A8 B0                  ..
+:	jsr     sub_b0a8   			; B042 20 A8 B0                  ..
 LB045:  ldx     $C6     			; B045 A6 C6                    ..
 	beq     LB04B   			; B047 F0 02                    ..
 	dec     $C6     			; B049 C6 C6                    ..
@@ -2964,7 +2974,8 @@ LB09A:  tya             			; B09A 98                       .
 	jmp     LB076   			; B0A5 4C 76 B0                 Lv.
 
 ; ----------------------------------------------------------------------------
-LB0A8:  ldy     $C1     			; B0A8 A4 C1                    ..
+sub_b0a8:
+	ldy     $C1     			; B0A8 A4 C1                    ..
 	beq     LB103   			; B0AA F0 57                    .W
 	bpl	:+
 	jmp     LB17D   			; B0AE 4C 7D B1                 L}.
@@ -3625,9 +3636,9 @@ LB471:  lda     byte_133a
 
 ; ----------------------------------------------------------------------------
 
-LB47A:  .byte   $08     			; B47A 08                       .
-	.byte   $3C     			; B47B 3C                       <
-	.byte   $B4     			; B47C B4                       .
+LB47A:  .byte   <$0008     			; B47A 08                       .
+	.byte   <$003C     			; B47B 3C                       <
+	.byte   <$00B4     			; B47C B4                       .
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -4352,12 +4363,14 @@ sub_setbaud:
 	ldx     #$0A    			; then AUX1 = $00 ( 300 baud, 8 bit word)
 	bne     LB7F3   			; else AUX1 = $0A (1200 baud, 8 bit word)
 :	ldx	#$00    			; 
-LB7F3:  jsr     LB7FA   			; 
+LB7F3:  jsr     sub_b7fa
 
 ; **(2) Send command frame #2 for acknowledgement ******************************
 	lda     #'A'    			; DCOMND for requesting an ACK (returns 'C'omplete or 'E'rror)
 	ldx     #$F3    			; AUX1 for ????
-LB7FA:  stx     DAUX1   			; 
+
+sub_b7fa:
+	stx     DAUX1   			; 
 	ldy     #$00    			; AUX2: 1 stop bit, no monitoring of DSR, CTS, CRX
 	sty     DAUX2   			; Fall into sub_sendio
 
