@@ -185,6 +185,7 @@ byte_B5		:= $00B5
 byte_B7		:= $00B7
 CURRENT_DL	:= $00B8			; Current Display List (80 or FF = DL #1, 00 = DL #2)
 byte_C0		:= $00C0
+CURRENT_FNKEY	:= $00C1			; Joystick function keys ($02->?? $00->disabled)
 byte_C3		:= $00C3
 byte_C4		:= $00C4
 byte_C7		:= $00C7
@@ -230,7 +231,7 @@ off_134d	:= $134D
 byte_134f	:= $134F
 byte_1350	:= $1350
 word_1351	:= $1351
-byte_1353	:= $1353
+CURRENT_ECHO	:= $1353			; $80->local echo $00->remote echo
 L2000           := $2000
 L3E2E		:= $3E2E
 L3E33           := $3E33
@@ -239,6 +240,7 @@ L6000           := $6000
 L8000           := $8000
 
 ; Keyboard scan codes
+key_0		:= $32
 key_1		:= $1F
 key_3		:= $1A
 key_a		:= $3F
@@ -246,11 +248,16 @@ key_b		:= $15
 key_c		:= $12
 key_d		:= $3A
 key_e		:= $2A
+key_f		:= $38
 key_h		:= $39
 key_l		:= $00
+key_m		:= $25
 key_n		:= $23
+key_p		:= $0A
 key_s		:= $3E
 key_t		:= $2D
+key_z		:= $17
+key_return	:= $0A
 key_eq		:= $0F					; '>'
 key_gt		:= $37					; '>'
 key_lt		:= $36					; '<'
@@ -917,7 +924,7 @@ sub_a383:
 ; ----------------------------------------------------------------------------
 sub_a387:
 	lda     #$00    			; A387 A9 00                    ..
-LA389:  sta     byte_1353   			; A389 8D 53 13                 .S.
+LA389:  sta     CURRENT_ECHO   			; A389 8D 53 13                 .S.
 	rts             			; A38C 60                       `
 
 ; ----------------------------------------------------------------------------
@@ -1881,95 +1888,99 @@ LA962:  rts             			; A962 60                       `
 ;*                                                                             *
 ;*******************************************************************************
 ; DESCRIPTION
-
-; Special Screen Displays and Printing Features
 ;
-; Press OPTION + c to enter 'change background color mode'. 
-; Press OPTION + b to enter 'change background brightness mode'.
-; Press OPTION + t to enter 'change text brightness mode." 
-; Then press SELECT to cycle through values.
+; 
 
 sub_a963:  
 sub_readkey:
-	ldx     CH				; Get keyboard code ($FF if none)
-	inx             			; if key was pressed 
-	bne     LA976   			; then skip ahead
+	ldx     CH				; Get key code ($FF if none)
+	inx             			; Is key pressed?
+	bne     :+				; Yes, skip ahead.
 
 ;** (n) Test HELP key or RTS ***************************************************
-	lda     HELPFG				; else examine HELP key
-	beq     LA962   			; if no HELP key then jump to nearby RTS
+	lda     HELPFG				; Is HELP pressed?
+	beq     LA962   			; No, jump to nearby RTS.
 
 ;** (n) TODO Jump to HELP key routine? (Undocumented?) *************************
-	stx     HELPFG				; else save (but it's clobbered later)
-	lda     #$0B    			; 
+	stx     HELPFG				; X = HELP (clobbered later?)
+	lda     #$0B    			; A = $0B
 	jmp     sub_b1df			; Called routine will RTS
 
-;** (n) If Ctrl + key was pressed then goto LA9CE ******************************
-LA976:  dex             			; Restore original keyboard code
-	bmi     LA9CE   			; if key press + control key then goto LA9CE
+;** (n) Test if CTRL + key was pressed *****************************************
+:	dex             			; X = key code
+	bmi     LA9CE   			; Is CTRL pressed? Yes, skip way ahead.
 
-;** (n) ************************************************************************
-	stx     $D8     			; else save keyboard code to RAM
 
-;** (n) If OPTION + key was pressed then Y = $FF else skip ahead ***************
-	lda     CONSOL				; Examine console keys (0000,0111 if nothing pressed)
-	lsr     a       			; if OPTION is not pressed
-	bcs     LA9AB   			; then skip to LA9AB
-	ldy     #$FF    			; else let Y = $FF
+;*******************************************************************************
+;* key + SHIFT + START + SELECT =  $D9
+;*         -       X       -      #$FF
+;*         -       X       X      #$00
+;*         X       X       -      #$00
+;*******************************************************************************
 
-;** (n) If OPTION + SELECT + key was pressed then byte_D9 = $FF ****************
-	lsr     a       			; if SELECT is pressed
-	bcc     LA98A   			; then skip to LA98A
+;** (n) Test if START + key was pressed *****************************************
+	stx     $D8     			; $D8 = key code
+	lda     CONSOL				; 
+	lsr     a       			; Is START pressed?
+	bcs     LA9AB   			; No, skip way ahead
+	ldy     #$FF    			; Yes, Y = -1
 
-;** (n) If OPTION + shifted key then byte_D9 = $FF else byte_D9 = $00 **********
-	cpx     #$40    			; check if shift key pressed ($40 is min keycode with shift pressed)
-	bcc     LA98B   			; if shift is not pressed then...
-LA98A:  iny             			; ...Let Y = $00
-LA98B:  sty     byte_D9 			; Let byte_D9 = $00 
+;** (n) Process START + key ****************************************************
+	lsr     a       			; Is (for some reason?) SELECT also pressed?
+	bcc     :+				; Yes, skip ahead (Y = 0).
+
+	cpx     #$40    			; Is SHIFT pressed?
+	bcc     :++				; No, skip ahead (Y = -1).
+
+:	iny             			; Y = 0				A98A 
+:	sty     byte_D9 			; 				A98B
 
 ;** (n) Search for key code in 17x3 table at LBA12 *****************************
 	lda     $D8     			; Let A = original key code
 	and     #$3F    			; Strip SHIFT and/or CTRL leaving simple key
 
 	ldy     #$30    			; 
-LA993:  cmp     LBA12,y 			; Compare key code to lookup table entry
-	beq     LA99F   			; if key code matches table entry then goto LA99F
+:	cmp     LBA12,y 			; Compare key code to lookup table entry LA993 
+	beq     :+				; if key code matches table entry then goto LA99F
 	dey             			; Skip to next table row
 	dey             			; 
 	dey             			; 
-	bpl     LA993   			; End loop after 17 iterations
-	bmi     LA9CE   			; Skip ahead if no match? TODO
+	bpl     :-				; End loop after 17 iterations
+	bmi     LA9CE   			; Skip ahead and RTS if no match.
 
-;** (n) Found OPTION + key code match *****************************************
-LA99F:  ldx     byte_D9 			; 
-	bmi     :+				; if byte_D9 < $00
-	iny             			; then Y = Y + 1
-:	iny             			; else Y = Y + 2
-	lda     LBA12,y 			; Let A = table entry + offset
-LA9A8:  jmp     LAA91   			; Store let $E7 = offset entry and RTS
+;** (n) Found START + key code match ********************************************
+:	ldx     byte_D9 			; 
+	bmi     :+				; was SHIFT key pressed earlier?
+	iny             			; no,  set offset mod = 2
+:	iny             			; yes, set offset mod = 1
+	lda     LBA12,y 			; Let A = table entry + offset mod
+LA9A8:  jmp     LAA91   			; Let $E7 = offset entry and RTS
 
-; ----------------------------------------------------------------------------
+
+;** (n) Test for Atari or CAPS/LOWR key presses ********************************
 LA9AB:  lda     $D8     			; Let A = original keycode
 
-	cmp     #key_atari			; if Atari key is pressed	A9AD C9 27                    .'
-	bne     :+				; A9AF D0 04                    ..
-	lda     #$7B    			; A9B1 A9 7B                    .{
-	bne	LA9A8				; then let $E7 = $7B and RTS
+;** (n) Test for Atari key press ***********************************************
+	cmp     #key_atari			; was Atari key pressed?
+	bne     :+				; no, skip to next
+	lda     #$7B    			; 
+	bne	LA9A8				; let $E7 = $7B and RTS
 
-:	cmp     #$67    			; if SHIFT + Atari key		A9B5 C9 67                    .g
-	bne     :+				; A9B7 D0 04                    ..
-	lda     #$7F    			; A9B9 A9 7F                    ..
-	bne     LA9A8   			; then let $E7 = $7F and RTS	A9BB D0 EB                    ..
+:	cmp     #$67    			; was SHIFT + Atari key pressed?
+	bne     :+				; no, skip to next
+	lda     #$7F    			; 
+	bne     LA9A8   			; let $E7 = $7F and RTS
 
-:	cmp     #$3C    			; if CAPS/LOWR			A9BD C9 3C                    .<
-	bne     :+				; A9BF D0 04                    ..
-	lda     #$00    			; A9C1 A9 00                    ..
-	beq     LA9CB   			; then let SHFLOK = lower case	A9C3 F0 06                    ..
+;** (n) Test for CAPS/LOWR press ***********************************************
+:	cmp     #$3C    			; was CAPS/LOWR key pressed?
+	bne     :+				; no, skip to next
+	lda     #$00    			; 
+	beq     :++				; let SHFLOK = lower case
 
-:	cmp     #$7C    			; if SHIFT + CAPS/LOWR		A9C5 C9 7C                    .|
-	bne     LA9DD   			; A9C7 D0 14                    ..
-	lda     #$40    			; then let SHFLOK  = upper case	A9C9 A9 40                    .@
-LA9CB:  sta     SHFLOK				
+:	cmp     #$7C    			; was SHIFT + CAPS/LOWR pressed?
+	bne     LA9DD   			; no, skip
+	lda     #$40    			; 
+:	sta     SHFLOK				; Set SHFLOK to upper case
 
 ;** (n) Ctrl key pressed or OPTION + no matching key ***************************
 LA9CE:  ldx     #$7F    			; for X = 127 to 0 step -1
@@ -1990,17 +2001,19 @@ LA9DD:  ldy     #LB97E-LB96E			; Prepare CIO call to read keyboard
 	bne     LAA62				; no, skip out
 	lda     SRTIMR				; check key repeat timer
 	beq     LAA62   			; A9F0 F0 70                    .p
-	lda     $D8     			; A9F2 A5 D8                    ..
-	and     #$3F    			; A9F4 29 3F                    )?
-	cmp     #$32    			; A9F6 C9 32                    .2
-	bne     LAA03   			; A9F8 D0 09                    ..
-	lda     byte_1353   			; A9FA AD 53 13                 .S.
-	eor     #$80    			; A9FD 49 80                    I.
-	sta     byte_1353   			; A9FF 8D 53 13                 .S.
-	rts             			; AA02 60                       `
+	lda     $D8     			; Load original key press
+	and     #$3F    			; Strip off CTRL and SHIFT
+
+;** (n) If user pressed OPTION + '0' then toggle echo **********************
+	cmp     #key_0    			; was OPTION + 0 pressed?
+	bne     :+				; no, skip to next
+	lda     CURRENT_ECHO   			; 
+	eor     #$80    			; 
+	sta     CURRENT_ECHO   			; toggle echo setting
+	rts             			; and return
 
 ;** (n) If user pressed OPTION + '1' then change baud to 1200 ****************
-LAA03:  cmp     #key_1    			; if keyboard press = '1'
+:	cmp     #key_1    			; if keyboard press = '1'
 	bne     :++				; then 
 	lda     #$00    			;   $00 -> baud = 1200
 
@@ -2018,48 +2031,58 @@ LAA03:  cmp     #key_1    			; if keyboard press = '1'
 	lda     #$FF    			;   $FF -> baud = 300
 	bne     :--				;   Jump back to store baud in $B1
 
-;** (n) If user pressed OPTION + 'c' then change colors **********************
+;** (n) If user pressed OPTION + 'c' then adjust backgroun color *************
 LAA1A:  cmp     #key_c    			; if keyboard press = 'c'
-	bne     LAA24   			; AA1C D0 06                    ..
+	bne     :+				; AA1C D0 06                    ..
 	lda     #$00    			; AA1E A9 00                    ..
 LAA20:  sta     $1355   			; AA20 8D 55 13                 .U.
 LAA23:  rts             			; AA23 60                       `
 
-; ----------------------------------------------------------------------------
-LAA24:  cmp     #$15    			; AA24 C9 15                    ..
-	bne     LAA2C   			; AA26 D0 04                    ..
+;** (n) If user pressed OPTION + 'b' then adjust background brightness *******
+:	cmp     #key_b    			; was OPTION + 'b' pressed?
+	bne     :+				; no, skip ahead
 	lda     #$80    			; AA28 A9 80                    ..
 	bne     LAA20   			; AA2A D0 F4                    ..
-LAA2C:  cmp     #$2D    			; AA2C C9 2D                    .-
-	bne     LAA34   			; AA2E D0 04                    ..
+
+;** (n) If user pressed OPTION + 't' then adjust text brightness *************
+:	cmp     #key_t				; was OPTION + 't' pressed?
+	bne     :+				; no, skip ahead
 	lda     #$C0    			; AA30 A9 C0                    ..
 	bne     LAA20   			; AA32 D0 EC                    ..
-LAA34:  cmp     #$38    			; AA34 C9 38                    .8
-	bne     LAA56   			; AA36 D0 1E                    ..
-	ldx     CURRENT_DL
-	beq     LAA56   			; AA3A F0 1A                    ..
-	lda     $C1     			; AA3C A5 C1                    ..
-	beq     LAA44   			; AA3E F0 04                    ..
-	cmp     #$02    			; AA40 C9 02                    ..
-	bne     LAA23   			; AA42 D0 DF                    ..
-LAA44:  eor     #$02    			; AA44 49 02                    I.
-	sta     $C1     			; AA46 85 C1                    ..
-	tax             			; AA48 AA                       .
-	beq     LAA4D   			; AA49 F0 02                    ..
-	ldx     #$32    			; AA4B A2 32                    .2
-LAA4D:  stx     HPOSM3
-	inx             			; AA50 E8                       .
-	inx             			; AA51 E8                       .
-	stx     HPOSM2
-	rts             			; AA55 60                       `
 
-; ----------------------------------------------------------------------------
-LAA56:  cmp     #$17    			; AA56 C9 17                    ..
-	beq     LAAAD   			; AA58 F0 53                    .S
-	cmp     #$25    			; AA5A C9 25                    .%
+;** (n) If user pressed OPTION + 'f' enable Function Key mode ****************
+:	cmp     #key_f    			; was OPTION + 'f' pressed?
+	bne     LAA56   			; no, skip out
+	ldx     CURRENT_DL			; is display currently zoomed?
+	beq     LAA56   			; yes, skip out
+	lda     CURRENT_FNKEY			; is joystick function key mode active?
+	beq     :+				; no, skip ahead
+	cmp     #$02    			; is it set to mode $02?
+	bne     LAA23   			; no, skip out
+:	eor     #$02    			; toggle current mode
+	sta     CURRENT_FNKEY     		; 
+	tax             			; let x = current mode
+	beq     :+				; 
+	ldx     #$32    			; Configure touchscreen cursor position
+:	stx     HPOSM3				;
+	inx             			;
+	inx             			;
+	stx     HPOSM2				;
+	rts             			;
+
+;** (n) If user pressed OPTION + 'z' enable zoomed display *********************
+LAA56:  cmp     #key_z    			; was OPTION + 'z' pressed?
+	beq     LAAAD   			; yes,
+
+;** (n) If user pressed OPTION + 'm' then force Microbits 300 ******************
+	cmp     #key_m    			; was OPTION + 'm' pressed?
 	beq     LAAA7   			; AA5C F0 49                    .I
-	cmp     #$0A    			; AA5E C9 0A                    ..
+
+;** (n) If user pressed OPTION + 'p' then print screen *************************
+	cmp     #$0A    			; was OPTION + 'p'
 	beq     LAAAA   			; AA60 F0 48                    .H
+
+;** (n) If user pressed OPTION + RETURN then print screen *************************
 LAA62:  ldy     #$0C    			; AA62 A0 0C                    ..
 	lda     $D8     			; AA64 A5 D8                    ..
 LAA66:  cmp     LBA45,y 			; AA66 D9 45 BA                 .E.
@@ -2084,11 +2107,10 @@ LAA8A:  lda     LBA46,y 			; AA8A B9 46 BA                 .F.
 LAA8D:  sta     $E7     			; AA8D 85 E7                    ..
 	bne     LAA96   			; AA8F D0 05                    ..
 
-;** (n) If OPTION + key was matched in lookup table ****************************
-;** Then store one of the corresponding table values into $E7
-LAA91:  sta     $E7     			; Let E7 = table entry after matching keycode
-	jsr     LA9CE   			; AA93 20 CE A9                  ..
-LAA96:  bit     byte_1353   			; AA96 2C 53 13                 ,S.
+;** (n) ************************************************************************
+LAA91:  sta     $E7     			; Let A = value associated with key code
+	jsr     LA9CE   			; Clear CONSOL and wait		AA93 20 CE A9                  ..
+LAA96:  bit     CURRENT_ECHO   			; AA96 2C 53 13                 ,S.
 	bmi     LAB00   			; AA99 30 65                    0e
 	lda     $E7     			; AA9B A5 E7                    ..
 	cmp     #$20    			; AA9D C9 20                    . 
