@@ -1,4 +1,4 @@
-;dd*******************************************************************************
+;*******************************************************************************
 ;*                                                                             *
 ;*                    T H E   L E A R N I N G   P H O N E                      *
 ;*                                                                             *
@@ -1371,8 +1371,6 @@ sub_a5ff:
 	jsr     sub_ab54
 	lda     #$43    			; A610 A9 43                    .C
 	bne     LA63D   			; A612 D0 29                    .)
-
-; ----------------------------------------------------------------------------
 :	cmp     #$71    			; A614 C9 71                    .q
 	bne     :+
 	lda     #$1B    			; A618 A9 1B                    ..
@@ -2099,7 +2097,7 @@ LAA56:  cmp     #key_z    			; was OPTION + 'z' pressed?
 	beq     LAAA7   			; AA5C F0 49                    .I
 
 ;** (n) If user pressed OPTION + 'p' then print screen *************************
-	cmp     #$0A    			; was OPTION + 'p'
+	cmp     #key_p  			; was OPTION + 'p'
 	beq     LAAAA   			; AA60 F0 48                    .H
 
 ;** (n) If user pressed OPTION + RETURN then print screen *************************
@@ -3942,8 +3940,6 @@ sub_b581:
 	bne     LB595   			; B58F D0 04                    ..
 	lda     #$51    			; B591 A9 51                    .Q
 	bne     LB597   			; B593 D0 02                    ..
-
-; ----------------------------------------------------------------------------
 LB595:  lda     #$5A    			; 'Z'
 LB597:  sta     character                       ; byte_1347
 	jsr     sub_b420
