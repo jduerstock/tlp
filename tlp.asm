@@ -1,4 +1,4 @@
-;dd*******************************************************************************
+;*******************************************************************************
 ;*                                                                             *
 ;*                    T H E   L E A R N I N G   P H O N E                      *
 ;*                                                                             *
@@ -108,17 +108,17 @@ HATABS		:= $031A			; Handler Address Table
 ; I/O Control Block
 ICCOM		:= $0342
 ICBA		:= $0344			; Address to buffer for read/write operations
-ICBL		:= $0348
+ICBL		:= $0348			; IO buffer length
 ICAX1		:= $034A
 ICAX2		:= $034B
 
 
 ; GTIA (D000-D01F)
 
-HPOSM0		:= $D004                        ;
-HPOSM1		:= $D005                        ;
-HPOSM2		:= $D006                        ;
-HPOSM3		:= $D007                        ;
+HPOSM0		:= $D004                        ; Position of touchscreen crosshair (right half)
+HPOSM1		:= $D005                        ; Position of touchscreen crosshair (left half)
+HPOSM2		:= $D006                        ; Position of "=" part of "F" in joystick function key mode
+HPOSM3		:= $D007                        ; Position of "|" part of "F" in joystick function key mode
 SIZEM		:= $D00C			; Size for all missiles
 GRACTL		:= $D01D			; Turn on/off player missiles or latch triggers
 CONSOL		:= $D01F                        ;
@@ -203,9 +203,9 @@ byte_B5		:= $00B5
 byte_B7		:= $00B7
 CURRENT_DL	:= $00B8			; Current Display List (80 or FF = DL #1, 00 = DL #2)
 byte_C0		:= $00C0
-CURRENT_FNKEY	:= $00C1			; Joystick function keys ($02->?? $00->disabled)
+INPUT_MODE	:= $00C1			; Input/display mode ($00->scaled, $FF->zoomed, $01->touchscreen, $FE->zoomed from touchscreen, $02->joystick func keys)
 byte_C3		:= $00C3
-byte_C4		:= $00C4
+CROSS_HPOS	:= $00C4			; Touchscreen crosshair horizontal position
 byte_C7		:= $00C7
 byte_CC		:= $00CC
 byte_CD		:= $00CD
@@ -259,33 +259,37 @@ L6000           := $6000
 L8000           := $8000
 
 ; Keyboard scan codes
-key_0		:= $32
-key_1		:= $1F
-key_3		:= $1A
-key_a		:= $3F
-key_b		:= $15
-key_c		:= $12
-key_d		:= $3A
-key_e		:= $2A
-key_f		:= $38
-key_h		:= $39
-key_l		:= $00
-key_m		:= $25
-key_n		:= $23
-key_p		:= $0A
-key_s		:= $3E
-key_t		:= $2D
-key_z		:= $17
-key_return	:= $0A
-key_eq		:= $0F					; '>'
-key_gt		:= $37					; '>'
-key_lt		:= $36					; '<'
-key_plus	:= $06					; '+'
-key_minus 	:= $0E					; '-'
-key_mult	:= $07					; '*'
-key_div		:= $26					; '/'
-key_atari	:= $27					; '/|\'
-key_L		:= $40
+key_0		= $32
+key_1		= $1F
+key_3		= $1A
+key_a		= $3F
+key_b		= $15
+key_c		= $12
+key_d		= $3A
+key_e		= $2A
+key_f		= $38
+key_h		= $39
+key_l		= $00
+key_m		= $25
+key_n		= $23
+key_p		= $0A
+key_s		= $3E
+key_t		= $2D
+key_z		= $17
+key_return	= $0A
+key_eq		= $0F					; '>'
+key_gt		= $37					; '>'
+key_lt		= $36					; '<'
+key_plus	= $06					; '+'
+key_minus 	= $0E					; '-'
+key_mult	= $07					; '*'
+key_div		= $26					; '/'
+key_caps	= $3C					; 'CAPS/LOWR'
+key_atari	= $27					; '/|\'
+key_L		= $40
+
+mod_shift	= $40
+mod_ctrl	= $80
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -349,10 +353,10 @@ LA035:  jsr     close_ch1			; Close CIO channel #1
 ;** (n) Test 850 or direct-connect modem **************************************
 LA04F:	lda	#$4C
 	jsr	sub_b242			; Send test??
-LA054:  lda     #$46    			; 
+:	lda     #$46    			; 
 	jsr     sub_b242			; Send test??
 	lda     DVSTAT+1			; Keep trying until successful...
-	bpl     LA054   			; ...then fall through to main loop.
+	bpl     :-				; ...then fall through to main loop.
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -361,8 +365,7 @@ LA054:  lda     #$46    			;
 ;*          Aside from all the IRQs enabled this might be the main loop        *
 ;*                                                                             *
 ;*******************************************************************************
-LA05E:  
-sub_main:
+sub_main:					; A05E
 	jsr     sub_readkey			; Check for key press
 	jsr     sub_ab35
 	jsr     sub_a12c
@@ -792,8 +795,8 @@ init_graphics:
 	bpl     :-      			; End Loop
 
 ;** (n) *************************************************************************
-	ldx     #$32    			; TODO
-	stx     byte_C4                         ;
+	ldx     #$32    			; Set initial touchscreen cursor
+	stx     CROSS_HPOS                      ; horizontal position
 
 	ldx     #$0F    			; TODO
 	stx     byte_C0 			;
@@ -812,16 +815,16 @@ init_graphics:
 	sta     byte_C3 			;
 	sta     byte_B5 			; Set priority for screen objects...
 	sta     GPRIOR  			; 0000 0001 = Player 0-3, Playfied 0-3, BAK
-	lda     #$16				; Set initial background color
+	lda     #$16				; $10 = rust + $06 luminance
 	sta     COLOR4  			; for the border and background
 	sta     COLOR2  			; to hue: 1 (orange), luminance: 6
 	sta     BG_COLOR_DL1    		; Save color value to RAM
 
 ;** (n) Change Player/Missile colors to something different than background *****
-	jsr     sub_a324
+	jsr     sub_set_pm_color
 
 ;** (n) Set default background and border color for Display List #2 *************
-	lda     #$94    			; Default background and border for Display List #2
+	lda     #$94    			; $90 = dark blue + $04 luminance
 	sta     BG_COLOR_DL2    		; Save color value to RAM
 
 ;** (n) Set default text luminance **********************************************
@@ -852,12 +855,12 @@ init_graphics:
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                  sub_a324                                   *
+;*                             sub_set_pm_color                                *
 ;*                                                                             *
 ;*      Set Player/Missile Colors to something different than background.      *
 ;*                                                                             *
 ;*******************************************************************************
-sub_a324:
+sub_set_pm_color:				; A324
 	tay             			; Let Y = current background color
 	clc             			;
 	adc     #$04    			; Increment luminance by 4
@@ -1319,8 +1322,8 @@ sub_a5b5:
 	lda     $DB     			; A5BB A5 DB                    ..
 	and     #$20    			; A5BD 29 20                    ) 
 	beq     LA5E4   			; A5BF F0 23                    .#
-	jsr     sub_a5f6   			; A5C1 20 F6 A5                  ..
-	ldx     $C1     			; A5C4 A6 C1                    ..
+	jsr     sub_hide_F   			; A5C1 20 F6 A5                  ..
+	ldx     INPUT_MODE  			; A5C4 A6 C1                    ..
 	beq     :+
 	bmi     LA5D1   			; A5C8 30 07                    0.
 	dex             			; A5CA CA                       .
@@ -1332,13 +1335,13 @@ sub_a5b5:
 LA5D1:  lda     #$FE    			; A5D1 A9 FE                    ..
 	ldx     #$00    			; A5D3 A2 00                    ..
 	beq     LA5D9   			; A5D5 F0 02                    ..
-LA5D7:  ldx     byte_C4 			; A5D7 A6 C4                    ..
-LA5D9:  sta     $C1     			; A5D9 85 C1                    ..
-	stx     HPOSM1
-	inx             			; A5DE E8                       .
-	inx             			; A5DF E8                       .
-	stx     HPOSM0
-LA5E3:  rts             			; A5E3 60                       `
+LA5D7:  ldx     CROSS_HPOS 			; A5D7 A6 C4                    ..
+LA5D9:  sta     INPUT_MODE  			; A5D9 85 C1                    ..
+	stx     HPOSM1				; Set position for left half...
+	inx             			; ...of crosshair cursor.
+	inx             			; Right half of crosshair cursor...
+	stx     HPOSM0				; ...is a couple ticks further.
+LA5E3:  rts             			; 
 
 ; ----------------------------------------------------------------------------
 LA5E4:  lda     $C1     			; A5E4 A5 C1                    ..
@@ -1352,12 +1355,18 @@ LA5F0:  ldx     #$00    			; A5F0 A2 00                    ..
 	lda     #$FF    			; A5F2 A9 FF                    ..
 	bne     LA5D9   			; A5F4 D0 E3                    ..
 
-; ----------------------------------------------------------------------------
-sub_a5f6:
-	ldx     #$00    			; A5F6 A2 00                    ..
-	stx     HPOSM3
-	stx     HPOSM2
-	rts             			; A5FE 60                       `
+;*******************************************************************************
+;*                                                                             *
+;*                                sub_hide_F                                   *
+;*                                                                             *
+;*      Hide letter "F" left over from joystick-mapped function key mode       *
+;*                                                                             *
+;*******************************************************************************
+sub_hide_F:					; A5F6
+	ldx     #$00    			; 
+	stx     HPOSM3				; Hide "|" part of large "F"
+	stx     HPOSM2				; Hide "=" part of large "F"
+	rts             			; 
 
 ; ----------------------------------------------------------------------------
 
@@ -1911,8 +1920,7 @@ LA962:  rts             			; A962 60                       `
 ;
 ; 
 
-sub_a963:  
-sub_readkey:
+sub_readkey:					; A963
 	ldx     CH				; Get key code ($FF if none)
 	inx             			; Is key pressed?
 	bne     :+				; Yes, skip ahead.
@@ -1986,28 +1994,28 @@ LA9AB:  lda     $D8     			; Let A = original keycode
 	lda     #$7B    			; 
 	bne	LA9A8				; let $E7 = $7B and RTS
 
-:	cmp     #$67    			; was SHIFT + Atari key pressed?
+:	cmp     #key_atari + mod_shift    	; was SHIFT + Atari key pressed?
 	bne     :+				; no, skip to next
 	lda     #$7F    			; 
 	bne     LA9A8   			; let $E7 = $7F and RTS
 
 ;** (n) Test for CAPS/LOWR press ***********************************************
-:	cmp     #$3C    			; was CAPS/LOWR key pressed?
+:	cmp     #key_caps    			; was CAPS/LOWR key pressed?
 	bne     :+				; no, skip to next
 	lda     #$00    			; 
 	beq     :++				; let SHFLOK = lower case
 
-:	cmp     #$7C    			; was SHIFT + CAPS/LOWR pressed?
+:	cmp     #key_caps + mod_shift		; was SHIFT + CAPS/LOWR pressed?
 	bne     LA9DD   			; no, skip
 	lda     #$40    			; 
 :	sta     SHFLOK				; Set SHFLOK to upper case
 
 ;** (n) Ctrl key pressed or OPTION + no matching key ***************************
 LA9CE:  ldx     #$7F    			; for X = 127 to 0 step -1
-LA9D0:  stx     CONSOL				; 
+:	stx     CONSOL				; 
 	stx     WSYNC				; 127 WSYNCs?
 	dex             			; 
-	bpl     LA9D0   			; next X
+	bpl     :-				; next X
 	stx     CH				; Clear key code (X = $FF)
 	rts             			; 
 
@@ -2033,76 +2041,76 @@ LA9DD:  ldy     #LB97E-LB96E			; Prepare CIO call to read keyboard
 	rts             			; and return
 
 ;** (n) If user pressed OPTION + '1' then change baud to 1200 ****************
-:	cmp     #key_1    			; if keyboard press = '1'
-	bne     :++				; then 
+:	cmp     #key_1    			; did user press '1'?
+	bne     :++				; no, skip further ahead
 	lda     #$00    			;   $00 -> baud = 1200
 
 ;** (n) Skip all this if using Microbits 300 *********************************
-:	ldy     IS_MPP				; 1->MPP 0->Modem
-	bne     LAA23   			;
+:	ldy     IS_MPP				; are we using the MPP modem? 1->MPP 0->Modem
+	bne     LAA23   			; yes, skip this part
 
 ;** (n) Force new baud *******************************************************
 	sta     CURRENT_BAUD			; Save new baud (FF=300 00=1200)
 	jmp     sub_user_baud			; sub_user_baud will RTS
 
 ;** (n) If user pressed OPTION + '3' then change baud to 300 *****************
-:	cmp     #key_3    			; if keyboard press = '3'
-	bne     LAA1A   			; then
+:	cmp     #key_3    			; did user press '3'?
+	bne     LAA1A   			; no, skip to next
 	lda     #$FF    			;   $FF -> baud = 300
 	bne     :--				;   Jump back to store baud in $B1
 
-;** (n) If user pressed OPTION + 'c' then adjust backgroun color *************
-LAA1A:  cmp     #key_c    			; if keyboard press = 'c'
-	bne     :+				; AA1C D0 06                    ..
-	lda     #$00    			; AA1E A9 00                    ..
-LAA20:  sta     $1355   			; AA20 8D 55 13                 .U.
-LAA23:  rts             			; AA23 60                       `
+;** (n) If user pressed OPTION + 'c' then SELECT adjusts background color ****
+LAA1A:  cmp     #key_c    			; did user press 'c'?
+	bne     :+				; no, skip to next
+	lda     #$00    			; 
+LAA20:  sta     $1355   			; Change flag in $1355 and RTS
+LAA23:  rts             			; 
 
-;** (n) If user pressed OPTION + 'b' then adjust background brightness *******
-:	cmp     #key_b    			; was OPTION + 'b' pressed?
-	bne     :+				; no, skip ahead
-	lda     #$80    			; AA28 A9 80                    ..
-	bne     LAA20   			; AA2A D0 F4                    ..
+;** (n) If user pressed OPTION + 'b' then SELECT adjusts background brightness
+:	cmp     #key_b    			; did user press 'b'?
+	bne     :+				; no, skip to next
+	lda     #$80    			; 
+	bne     LAA20   			; Change flag in $1355 and RTS
 
-;** (n) If user pressed OPTION + 't' then adjust text brightness *************
-:	cmp     #key_t				; was OPTION + 't' pressed?
-	bne     :+				; no, skip ahead
-	lda     #$C0    			; AA30 A9 C0                    ..
-	bne     LAA20   			; AA32 D0 EC                    ..
+;** (n) If user pressed OPTION + 't' then SELECT adjusts text brightness *****
+:	cmp     #key_t				; did user press 't'?
+	bne     :+				; no, skip to next
+	lda     #$C0    			; 
+	bne     LAA20   			; Change flag in $1355 and RTS
 
 ;** (n) If user pressed OPTION + 'f' enable Function Key mode ****************
-:	cmp     #key_f    			; was OPTION + 'f' pressed?
-	bne     LAA56   			; no, skip out
+:	cmp     #key_f    			; did user press 'f'?
+	bne     :+++				; no, skip out
 	ldx     CURRENT_DL			; is display currently zoomed?
-	beq     LAA56   			; yes, skip out
-	lda     CURRENT_FNKEY			; is joystick function key mode active?
-	beq     :+				; no, skip ahead
-	cmp     #$02    			; is it set to mode $02?
-	bne     LAA23   			; no, skip out
+	beq     :+++				; yes, skip to OPTION + 'z'
+	lda     INPUT_MODE			; is display scaled (no touchscreen)?
+	beq     :+				; yes, skip to OPTION + 'z'
+	cmp     #$02    			; is joystick in function key mode?
+	bne     LAA23   			; no, jump to nearby RTS
 :	eor     #$02    			; toggle current mode
-	sta     CURRENT_FNKEY     		; 
-	tax             			; let x = current mode
-	beq     :+				; 
-	ldx     #$32    			; Configure touchscreen cursor position
-:	stx     HPOSM3				;
+	sta     INPUT_MODE			; 
+	tax             			; if new mode is scaled with no touchscreen
+	beq     :+				; then hide the crosshair cursor (x=0)
+	ldx     #$32    			; else show the crosshair cursor (x=50)
+:	stx     HPOSM3				; Position left half of crosshair
 	inx             			;
 	inx             			;
-	stx     HPOSM2				;
+	stx     HPOSM2				; Position right half of crosshair
 	rts             			;
 
-;** (n) If user pressed OPTION + 'z' enable zoomed display *********************
-LAA56:  cmp     #key_z    			; was OPTION + 'z' pressed?
-	beq     LAAAD   			; yes,
+;** (n) If user pressed OPTION + 'z' swap between zoomed or scaled mode ********
+:	cmp     #key_z    			; did user press 'z'?
+	beq     sub_swap_display 		; yes, swap display mode
 
 ;** (n) If user pressed OPTION + 'm' then force Microbits 300 ******************
-	cmp     #key_m    			; was OPTION + 'm' pressed?
-	beq     LAAA7   			; AA5C F0 49                    .I
+	cmp     #key_m    			; did user press 'm'?
+	beq     jmp_config_mpp  		; call sub_config_mpp and RTS
 
 ;** (n) If user pressed OPTION + 'p' then print screen *************************
-	cmp     #$0A    			; was OPTION + 'p'
-	beq     LAAAA   			; AA60 F0 48                    .H
+	cmp     #key_p  			; was OPTION + 'p'
+	beq     jmp_printscreen 		; call sub_printscreen and RTS
 
-;** (n) If user pressed OPTION + RETURN then print screen *************************
+;** (n) ***************************************************************************
 LAA62:  ldy     #$0C    			; AA62 A0 0C                    ..
 	lda     $D8     			; AA64 A5 D8                    ..
 LAA66:  cmp     LBA45,y 			; AA66 D9 45 BA                 .E.
@@ -2139,50 +2147,68 @@ LAA96:  bit     CURRENT_ECHO   			; AA96 2C 53 13                 ,S.
 	jmp     LAB00   			; AAA4 4C 00 AB                 L..
 
 ; ----------------------------------------------------------------------------
-LAAA7:  jmp     sub_config_mpp
+jmp_config_mpp:					; AAA7  
+	jmp     sub_config_mpp
 
 ; ----------------------------------------------------------------------------
-LAAAA:  jmp     LB28A   			; AAAA 4C 8A B2                 L..
+jmp_printscreen:				; AAAA
+	jmp     sub_printscreen
 
-; ----------------------------------------------------------------------------
-LAAAD:  jsr     sub_a5f6   			; AAAD 20 F6 A5                  ..
-	lda     $C1     			; AAB0 A5 C1                    ..
-	cmp     #$02    			; AAB2 C9 02                    ..
-	bne     LAAB8   			; AAB4 D0 02                    ..
-	lda     #$00    			; AAB6 A9 00                    ..
-LAAB8:  eor     #$FF    			; AAB8 49 FF                    I.
-	sta     $C1     			; AABA 85 C1                    ..
-	bmi     LAADB   			; AABC 30 1D                    0.
-	beq     LAACA   			; AABE F0 0A                    ..
-	ldx     byte_C4 			; AAC0 A6 C4                    ..
-	stx     HPOSM1
-	inx             			; AAC5 E8                       .
-	inx             			; AAC6 E8                       .
-	stx     HPOSM0
-LAACA:  lda     FG_COLOR_DL1    		; AACA A5 D2                    ..
-	sta     COLOR1  			; AACC 8D C5 02                 ...
-	ldy     #$80    			; AACF A0 80                    ..
-	sty     CURRENT_DL
-	ldy     BG_COLOR_DL1    		; AAD3 A4 D3                    ..
+;*******************************************************************************
+;*                                                                             *
+;*                            sub_swap_display                                 *
+;*                                                                             *
+;*       Change display/input mode from scaled to zoomed or vice-versa.        *
+;*                                                                             *
+;*******************************************************************************
+sub_swap_display:				; AAAD  
+	jsr     sub_hide_F   			; Hide "F" displayed in function key mode
+	lda     INPUT_MODE  			; is current display scaled with...
+	cmp     #$02    			; ...joystick-mapped function keys?
+	bne     :+				; no, skip ahead.
+	lda     #$00    			; yes. well not any more. stick now needed for scrolling.
+:	eor     #$FF    			; Toggle current input/display mode
+	sta     INPUT_MODE  			; Store new input/display mode.
+	bmi     @DL_ZOOMED			; INPUT_MODE < 0  -> zoomed mode
+	beq     @DL_SCALED			; INPUT_MODE == 0 -> scaled mode (no cursor)
+						; INPUT_MODE > 0  -> scaled mode (with cursor)
+
+;** (n) Restore touchscreen crosshair position *********************************
+	ldx     CROSS_HPOS 			; Retrieve previous cursor position
+	stx     HPOSM1				; Left half of crosshair cursor
+	inx             			; 
+	inx             			; 
+	stx     HPOSM0				; Right half of crosshair cursor
+
+;** (n) Change to scaled display ***********************************************
+@DL_SCALED:	
+	lda     FG_COLOR_DL1    		; Restore foreground color for...
+	sta     COLOR1  			; ...scaled display mode.
+	ldy     #$80    			; 
+	sty     CURRENT_DL			; $80->scaled mode
+	ldy     BG_COLOR_DL1    		; Get the color for the display mode
 	lda     #<$1000 			; LSB of Display List #1
-	ldx     #>$1000 			; MSB of Display List #2
-	bne     LAAF0   			; Jump to save DLIST pointer
+	ldx     #>$1000 			; MSB of Display List #1
+	bne     LAAF0   			; Jump to DLIST pointer and RTS
 
-LAADB:  ldx     #$00    			; AADB A2 00                    ..
-	stx     HPOSM1
-	stx     HPOSM0
-	stx     CURRENT_DL
-	lda     FG_COLOR_DL2    		; AAE5 A5 D0                    ..
-	sta     COLOR1  			; AAE7 8D C5 02                 ...
-	ldy     BG_COLOR_DL2    		; AAEA A4 D1                    ..
-	lda     #<$10CA
-	ldx     #>$10CA
+;**(n) Change to zoomed display ***********************************************
+@DL_ZOOMED:	
+	ldx     #$00    			; 
+	stx     HPOSM1				; Move cursor off screen
+	stx     HPOSM0				;
+	stx     CURRENT_DL			; $00->zoomed mode
+	lda     FG_COLOR_DL2    		; Change forground color
+	sta     COLOR1  			; 
+	ldy     BG_COLOR_DL2    		; Get the background color
+	lda     #<$10CA				; LSB of Display List #2
+	ldx     #>$10CA				; MSB of Display List #2
 
-LAAF0:  sta	DLIST
-	stx	DLIST+1
-	sty     COLOR2  			; AAF6 8C C6 02                 ...
-	sty     COLOR4  			; AAF9 8C C8 02                 ...
-	rts             			; AAFC 60                       `
+;**(n) Change display list pointers *******************************************
+LAAF0:  sta	DLIST				; Point to new display list
+	stx	DLIST+1				;
+	sty     COLOR2  			; Set colors for background
+	sty     COLOR4  			; and border for the new mode
+	rts             			; 
 
 ; ----------------------------------------------------------------------------
 LAAFD:  jsr     sub_ab5d   			; AAFD 20 5D AB                  ].
@@ -2194,7 +2220,7 @@ LAB05:  dey             			; AB05 88                       .
 	sty     byte_C7 			; AB06 84 C7                    ..
 	txa             			; AB08 8A                       .
 	dex             			; AB09 CA                       .
-	bmi     LAAAD   			; AB0A 30 A1                    0.
+	bmi     sub_swap_display   		; AB0A 30 A1                    0.
 	bne     LAB53   			; AB0C D0 45                    .E
 	jsr     sub_b828
 	lda     #$1B    			; AB11 A9 1B                    ..
@@ -3009,7 +3035,7 @@ LB076:  sta     COLOR2  			; B076 8D C6 02                 ...
 	sta     COLOR4  			; B079 8D C8 02                 ...
 	bcc     LB085   			; B07C 90 07                    ..
 	sta     BG_COLOR_DL1    		; B07E 85 D3                    ..
-	jsr     sub_a324
+	jsr     sub_set_pm_color
 	bmi     LB087   			; B083 30 02                    0.
 LB085:  sta     BG_COLOR_DL2    		; B085 85 D1                    ..
 LB087:  jmp     XITVBV				; Call OS VBI Deferred Exit
@@ -3138,10 +3164,10 @@ LB156:  rts             			; B156 60                       `
 LB157:  lda     $BF     			; B157 A5 BF                    ..
 	beq     LB16D   			; B159 F0 12                    ..
 	dec     $BF     			; B15B C6 BF                    ..
-	lda     byte_C4 			; B15D A5 C4                    ..
+	lda     CROSS_HPOS 			; B15D A5 C4                    ..
 	sec             			; B15F 38                       8
 	sbc     #$0A    			; B160 E9 0A                    ..
-LB162:  sta     byte_C4 			; B162 85 C4                    ..
+LB162:  sta     CROSS_HPOS 			; B162 85 C4                    ..
 	sta     HPOSM1
 	tax             			; B167 AA                       .
 	inx             			; B168 E8                       .
@@ -3154,7 +3180,7 @@ LB16E:  lda     $BF     			; B16E A5 BF                    ..
 	cmp     #$0F    			; B170 C9 0F                    ..
 	beq     LB16D   			; B172 F0 F9                    ..
 	inc     $BF     			; B174 E6 BF                    ..
-	lda     byte_C4 			; B176 A5 C4                    ..
+	lda     CROSS_HPOS 			; B176 A5 C4                    ..
 	clc             			; B178 18                       .
 	adc     #$0A    			; B179 69 0A                    i.
 	bne     LB162   			; B17B D0 E5                    ..
@@ -3210,8 +3236,8 @@ sub_b1df:
 	tay             			; A=00001011($0B) if arrived from HELPFG else 11100111($E7)
 	ldx     #$00    			; Let X = $00
 :	lsr     a       			; If not here from HELPFG then proceed now
-	bcc     :+				; otherwise loop 4 times?
-	inx             			; until 00001011 shifts to left?
+	bcc     :+				; otherwise loop 2 times?
+	inx             			; until 00001011 shifts to right to 0?
 :	bne     :--				; 
 	txa             			; X = 4 or X = 0?
 	lsr     a       			; 
@@ -3374,34 +3400,39 @@ sub_config_mpp:
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                    LB28A                                    *
+;*                              sub_printscreen                                *
 ;*                                                                             *
-;*                            ???????????????????                              *
+;*                       Print whatever's on the screen.	               *
 ;*                                                                             *
 ;*******************************************************************************
-LB28A:  ldx     IS_MPP				; 
+LB28A:  
+sub_printscreen:
+	ldx     IS_MPP				; which comm device: 1->MPP 0->Modem
 	dex             			; 
-	beq     :+				; If modem then close channel #1
-	jsr     close_ch1
+	beq     :+				; is modem a Microbits 300?
+	jsr     close_ch1			; no, close channel #1.
 :	ldy     #LB99E-LB96E			; Open "P:" on channel #3
 	jsr     call_cio			; 
-	bmi     LB2C0   			; B297 30 27                    0'
+	bmi     LB2C0   			; if cio error, goto LB2C0
 
-	lda     #$20    			; B299 A9 20                    . 
-	sta     byte_D9 			; B29B 85 D9                    ..
+	lda     #$20    			; Initialize outer loop = 32
+	sta     byte_D9 			; 
 
-	lda     #<$1800    			; B29D A9 00                    ..
-	sta     off_FA
-	lda     #>$1800    			; B2A1 A9 18                    ..
-	sta     off_FA+1
-:	jsr     sub_b2c6   			; B2A5 20 C6 B2                  ..
+	lda     #<$1800    			; Initialize zero-page pointers
+	sta     off_FA				;
+	lda     #>$1800    			;
+	sta     off_FA+1			;
+
+;**(n) TODO Do something 32 times **********************************************
+:	jsr     sub_b2c6   			; B2A5 20 C6 B2                 ..
 	dec     byte_D9 			; B2A8 C6 D9                    ..
 	bne     :-
+
 LB2AC:  ldx     #$30    			; Set CIO Channel #3 (Printer)
 	jsr     sub_b23a			; Call CIO close channel
 	ldx     IS_MPP
 	dex             			; B2B3 CA                       .
-	beq     LB2F9   			; B2B4 F0 43                    .C
+	beq     LB2F9   			; Jump to nearby RTS
 	bpl     :+
 	jmp     LB71C   			; B2B8 4C 1C B7                 L..
 
@@ -3415,8 +3446,9 @@ LB2C0:  jsr     sub_b828
 
 ; ----------------------------------------------------------------------------
 sub_b2c6:
-	ldy     #$3F    			; B2C6 A0 3F                    .?
-	lda     #$20    			; B2C8 A9 20                    . 
+	ldy     #$3F    			; 63
+	lda     #$20    			; 32
+
 :	cmp     (off_FA),y
 	bne     :+
 	dey             			; B2CE 88                       .
