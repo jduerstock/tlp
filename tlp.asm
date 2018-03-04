@@ -115,8 +115,8 @@ ICAX2		:= $034B
 
 ; GTIA (D000-D01F)
 
-HPOSM0		:= $D004                        ; Position of touchscreen crosshair (right half)
-HPOSM1		:= $D005                        ; Position of touchscreen crosshair (left half)
+HPOSM0		:= $D004                        ; Position of touch panel crosshair (right half)
+HPOSM1		:= $D005                        ; Position of touch panel crosshair (left half)
 HPOSM2		:= $D006                        ; Position of "=" part of "F" in joystick function key mode
 HPOSM3		:= $D007                        ; Position of "|" part of "F" in joystick function key mode
 SIZEM		:= $D00C			; Size for all missiles
@@ -203,9 +203,9 @@ byte_B5		:= $00B5
 byte_B7		:= $00B7
 CURRENT_DL	:= $00B8			; Current Display List (80 or FF = DL #1, 00 = DL #2)
 byte_C0		:= $00C0
-INPUT_MODE	:= $00C1			; Input/display mode ($00->scaled, $FF->zoomed, $01->touchscreen, $FE->zoomed from touchscreen, $02->joystick func keys)
+INPUT_MODE	:= $00C1			; Input/display mode ($00->scaled, $FF->zoomed, $01->touch panel, $FE->zoomed from touch panel, $02->joystick func keys)
 byte_C3		:= $00C3
-CROSS_HPOS	:= $00C4			; Touchscreen crosshair horizontal position
+CROSS_HPOS	:= $00C4			; touch panel crosshair horizontal position
 byte_C7		:= $00C7
 byte_CC		:= $00CC
 byte_CD		:= $00CD
@@ -250,7 +250,7 @@ off_134d	:= $134D
 byte_134f	:= $134F
 byte_1350	:= $1350
 word_1351	:= $1351
-CURRENT_ECHO	:= $1353			; $80->local echo $00->remote echo
+CURRENT_ECHO	:= $1353			; $00->local echo $80->remote echo
 L2000           := $2000
 L3E2E		:= $3E2E
 L3E33           := $3E33
@@ -276,8 +276,15 @@ key_p		= $0A
 key_s		= $3E
 key_t		= $2D
 key_z		= $17
-key_return	= $0A
-key_eq		= $0F					; '>'
+key_apos	= $73					; apostrophe / single-quote
+key_at		= $75					; '@'
+key_hash	= $5A					; '#'
+key_amper	= $5B					; '&'
+key_tab		= $2C
+key_backs	= $34					; backspace
+key_return	= $0C
+key_space	= $21
+key_equal	= $0F					; '='
 key_gt		= $37					; '>'
 key_lt		= $36					; '<'
 key_plus	= $06					; '+'
@@ -286,7 +293,6 @@ key_mult	= $07					; '*'
 key_div		= $26					; '/'
 key_caps	= $3C					; 'CAPS/LOWR'
 key_atari	= $27					; '/|\'
-key_L		= $40
 
 mod_shift	= $40
 mod_ctrl	= $80
@@ -795,18 +801,18 @@ init_graphics:
 	bpl     :-      			; End Loop
 
 ;** (n) *************************************************************************
-	ldx     #$32    			; Set initial touchscreen cursor
-	stx     CROSS_HPOS                      ; horizontal position
+	ldx     #$32    			; Set initial touch panel cursor...
+	stx     CROSS_HPOS                      ; ...horizontal position
 
 	ldx     #$0F    			; TODO
 	stx     byte_C0 			;
 
-	ldx     #$07    			; Copy 7 bytes from ROM to RAM locations
-	stx     byte_B3 			; $058C-$0592
-:       lda     LBA67,x 			; Initial values
-	sta     $058C,x 			; 70 40 70 40 40 06 0F
+	ldx     #$07    			; Load bitmaps for missiles.
+	stx     byte_B3 			; One is a large 'F' and the ...
+:       lda     LBA67,x 			; ...other is a crosshair.
+	sta     $058C,x 			; 
 	dex             			;
-	bpl     :-      			; End loop
+	bpl     :-      			; 
 
 	stx     byte_C7 			; Save FF to RAM
 
@@ -885,8 +891,8 @@ sub_set_pm_color:				; A324
 ;*                   Print program title and copyright notice                  *
 ;*                                                                             *
 ;*******************************************************************************
-sub_a33d:
-display_title:
+
+display_title:					; A33D
 ;** (1) Clear screen ***********************************************************
 	jsr     sub_a367			; Clear screen
 	jsr     sub_a3c8   			; TODO Initialize Screen Variables?
@@ -1806,7 +1812,7 @@ print_string:
 	stx     off_EC+1			; Store LSB string address in ZP
 :	ldy     $EE     			; Iterate through the characters
 	lda     (off_EC),y
-	jsr     sub_ab5d
+	jsr     print_char
 	dec     $EE     			; A8AC C6 EE                    ..
 	bpl     :-
 	jmp     sub_a3b2   			; A8B0 4C B2 A3                 L..
@@ -1932,7 +1938,7 @@ sub_readkey:					; A963
 ;** (n) TODO Jump to HELP key routine? (Undocumented?) *************************
 	stx     HELPFG				; X = HELP (clobbered later?)
 	lda     #$0B    			; A = $0B
-	jmp     sub_b1df			; Called routine will RTS
+	jmp     send_to_plato			; Called routine will RTS
 
 ;** (n) Test if CTRL + key was pressed *****************************************
 :	dex             			; X = key code
@@ -1963,7 +1969,7 @@ sub_readkey:					; A963
 :	iny             			; Y = 0				A98A 
 :	sty     byte_D9 			; 				A98B
 
-;** (n) Search for key code in 17x3 table at LBA12 *****************************
+;** (n) Search for key code match in table #1 **********************************
 	lda     $D8     			; Let A = original key code
 	and     #$3F    			; Strip SHIFT and/or CTRL leaving simple key
 
@@ -1983,7 +1989,6 @@ sub_readkey:					; A963
 :	iny             			; yes, set offset mod = 1
 	lda     LBA12,y 			; Let A = table entry + offset mod
 LA9A8:  jmp     LAA91   			; Let $E7 = offset entry and RTS
-
 
 ;** (n) Test for Atari or CAPS/LOWR key presses ********************************
 LA9AB:  lda     $D8     			; Let A = original keycode
@@ -2083,13 +2088,13 @@ LAA23:  rts             			;
 	bne     :+++				; no, skip out
 	ldx     CURRENT_DL			; is display currently zoomed?
 	beq     :+++				; yes, skip to OPTION + 'z'
-	lda     INPUT_MODE			; is display scaled (no touchscreen)?
+	lda     INPUT_MODE			; is display scaled (no touch panel)?
 	beq     :+				; yes, skip to OPTION + 'z'
 	cmp     #$02    			; is joystick in function key mode?
 	bne     LAA23   			; no, jump to nearby RTS
 :	eor     #$02    			; toggle current mode
 	sta     INPUT_MODE			; 
-	tax             			; if new mode is scaled with no touchscreen
+	tax             			; if new mode is scaled with no touch panel
 	beq     :+				; then hide the crosshair cursor (x=0)
 	ldx     #$32    			; else show the crosshair cursor (x=50)
 :	stx     HPOSM3				; Position left half of crosshair
@@ -2100,7 +2105,7 @@ LAA23:  rts             			;
 
 ;** (n) If user pressed OPTION + 'z' swap between zoomed or scaled mode ********
 :	cmp     #key_z    			; did user press 'z'?
-	beq     sub_swap_display 		; yes, swap display mode
+	beq     sub_swap_display 		; yes, swap display mode and RTS
 
 ;** (n) If user pressed OPTION + 'm' then force Microbits 300 ******************
 	cmp     #key_m    			; did user press 'm'?
@@ -2110,41 +2115,49 @@ LAA23:  rts             			;
 	cmp     #key_p  			; was OPTION + 'p'
 	beq     jmp_printscreen 		; call sub_printscreen and RTS
 
-;** (n) ***************************************************************************
-LAA62:  ldy     #$0C    			; AA62 A0 0C                    ..
-	lda     $D8     			; AA64 A5 D8                    ..
-LAA66:  cmp     LBA45,y 			; AA66 D9 45 BA                 .E.
+;** (n) Search for key code match in table #2 **********************************
+LAA62:  ldy     #$0C    			; Initialize loop counter
+	lda     $D8     			; Load original keypress
+:	cmp     LBA45,y 			; AA66 D9 45 BA                 .E.
 	beq     LAA8A   			; AA69 F0 1F                    ..
 	dey             			; AA6B 88                       .
 	dey             			; AA6C 88                       .
-	bpl     LAA66   			; AA6D 10 F7                    ..
+	bpl     :-				; AA6D 10 F7                    ..
+
+;** (n) Search for key code match in table #3 **********************************
 	ldy     #$0A    			; AA6F A0 0A                    ..
-LAA71:  cmp     LBA53,y 			; AA71 D9 53 BA                 .S.
+:	cmp     LBA53,y 			; AA71 D9 53 BA                 .S.
 	beq     LAA7C   			; AA74 F0 06                    ..
 	dey             			; AA76 88                       .
 	dey             			; AA77 88                       .
-	bpl     LAA71   			; AA78 10 F7                    ..
-	bmi     LAA96   			; AA7A 30 1A                    0.
+	bpl     :-				; AA78 10 F7                    ..
+	bmi     LAA96   			; no match. send orig arg to PLATO
+
+;** (n) Key code match found in table #3 ***************************************
 LAA7C:  sty     $E7     			; AA7C 84 E7                    ..
 	lda     #$00    			; AA7E A9 00                    ..
 	jsr     sub_ab54
 	ldy     $E7     			; AA83 A4 E7                    ..
 	lda     LBA54,y 			; AA85 B9 54 BA                 .T.
 	bne     LAA8D   			; AA88 D0 03                    ..
-LAA8A:  lda     LBA46,y 			; AA8A B9 46 BA                 .F.
-LAA8D:  sta     $E7     			; AA8D 85 E7                    ..
-	bne     LAA96   			; AA8F D0 05                    ..
+
+;** (n) Key code match found in table #2 ***************************************
+LAA8A:  lda     LBA46,y 			; Let $E7 = value that
+LAA8D:  sta     $E7     			; ...corresponds to matched key
+	bne     LAA96   			; ...and send to PLATO.
 
 ;** (n) ************************************************************************
 LAA91:  sta     $E7     			; Let A = value associated with key code
 	jsr     LA9CE   			; Clear CONSOL and wait		AA93 20 CE A9                  ..
-LAA96:  bit     CURRENT_ECHO   			; AA96 2C 53 13                 ,S.
-	bmi     LAB00   			; AA99 30 65                    0e
-	lda     $E7     			; AA9B A5 E7                    ..
-	cmp     #$20    			; AA9D C9 20                    . 
-	bcs     LAAFD   			; AA9F B0 5C                    .\
-	jsr     sub_a0f3   			; AAA1 20 F3 A0                  ..
-	jmp     LAB00   			; AAA4 4C 00 AB                 L..
+
+;** (n) Optionally print char (local echo and printable) and send to PLATO *****
+LAA96:  bit     CURRENT_ECHO   			; is local echo disabled?
+	bmi     LAB00   			; yes, don't print, send $E7, RTS
+	lda     $E7     			; 
+	cmp     #$20    			; is $E7 a printable char? 
+	bcs     LAAFD   			; yes, print char, send $E7, RTS
+	jsr     sub_a0f3   			; AAAD 20 F6 A5
+	jmp     LAB00   			; and send $E7, and RTS
 
 ; ----------------------------------------------------------------------------
 jmp_config_mpp:					; AAA7  
@@ -2173,7 +2186,7 @@ sub_swap_display:				; AAAD
 	beq     @DL_SCALED			; INPUT_MODE == 0 -> scaled mode (no cursor)
 						; INPUT_MODE > 0  -> scaled mode (with cursor)
 
-;** (n) Restore touchscreen crosshair position *********************************
+;** (n) Restore touch panel crosshair position *********************************
 	ldx     CROSS_HPOS 			; Retrieve previous cursor position
 	stx     HPOSM1				; Left half of crosshair cursor
 	inx             			; 
@@ -2211,9 +2224,9 @@ LAAF0:  sta	DLIST				; Point to new display list
 	rts             			; 
 
 ; ----------------------------------------------------------------------------
-LAAFD:  jsr     sub_ab5d   			; AAFD 20 5D AB                  ].
+LAAFD:  jsr     print_char   			; AAFD 20 5D AB                  ].
 LAB00:  lda     $E7     			; AB00 A5 E7                    ..
-LAB02:  jmp     sub_b1df
+LAB02:  jmp     send_to_plato
 
 ; ----------------------------------------------------------------------------
 LAB05:  dey             			; AB05 88                       .
@@ -2265,7 +2278,7 @@ LAB53:  rts             			; AB53 60                       `
 
 ; ----------------------------------------------------------------------------
 sub_ab54:  	
-	jsr     sub_b1df
+	jsr     send_to_plato
 	jmp     sub_b54f
 
 ; ----------------------------------------------------------------------------
@@ -2282,8 +2295,7 @@ sub_ab5a:
 ; DESCRIPTION
 ; Parameters:
 ; A = character to be displayed
-sub_ab5d:
-print_char:
+print_char:					; AB5D
 	sta     $E7     			; Character to be displayed
 	sec             			; Test to see if non-printing character 
 	sbc     #$20    			;
@@ -3231,19 +3243,26 @@ LB1B5:  ldy     #$00    			; B1B5 A0 00                    ..
 	bne     LB1B5   			; B1DC D0 D7                    ..
 	rts             			; B1DE 60                       `
 
-; ----------------------------------------------------------------------------
-sub_b1df:
-	tay             			; A=00001011($0B) if arrived from HELPFG else 11100111($E7)
-	ldx     #$00    			; Let X = $00
-:	lsr     a       			; If not here from HELPFG then proceed now
-	bcc     :+				; otherwise loop 2 times?
-	inx             			; until 00001011 shifts to right to 0?
+;*******************************************************************************
+;*                                                                             *
+;*                               send_to_plato                                 *
+;*                                                                             *
+;*         Set the parity bit (1 if odd) and fall through to CIO call.         *
+;*                                                                             *
+;*******************************************************************************
+send_to_plato:					; B1DF
+	tay             			; 
+	ldx     #$00    			; Count the number of bits
+:	lsr     a       			; set in A (ex: 01110011 = 5)
+	bcc     :+				; 
+	inx             			; 
 :	bne     :--				; 
-	txa             			; X = 4 or X = 0?
-	lsr     a       			; 
-	tya             			; 
-	bcc     :+
-	ora     #$80    			; B1ED 09 80                    ..
+
+	txa             			; Let A = # set bits (1s)
+	lsr     a       			; Carry set if #1s is odd
+	tya             			; Let A = original arg
+	bcc     :+				; if #1s even then skip ahead with orig arg
+	ora     #$80    			; otherwise set parity bit to orig arg
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -3252,7 +3271,7 @@ sub_b1df:
 ;*                      Call CIO put character command                         *
 ;*                                                                             *
 ;*******************************************************************************
-sub_b1ef:
+call_cio_putch:					; B1EF
 :	ldy     #LB986-LB96E			; Prepare CIO put char to channel #1
 						; Fall through to CIO call
 
@@ -3263,8 +3282,7 @@ sub_b1ef:
 ;*                  Call CIOV. Halt if Communications Error.                   *
 ;*                                                                             *
 ;*******************************************************************************
-sub_b1f1:
-call_cio_or_err:
+call_cio_or_err:				; B1F1
 	jsr     call_cio			; Call CIOV using Y as arg
 	bpl     LB252   			; Success. Jump to nearby RTS
 display_comm_error:
@@ -3274,7 +3292,7 @@ display_comm_error:
 	lda     #<LB89B				; Point to string "COMMUNIC..."
 	ldx     #>LB89B				;
 	jsr     print_string			;
-LB203:  jmp     LB203   			; Halt and catch fire
+@HALT:  jmp     @HALT   			; Halt and catch fire
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -3339,10 +3357,10 @@ sub_b242:
 	pha					;
 	lda     #$1B    			; 
 	sta     TSTDAT				; 
-	jsr     sub_b1ef			; Call CIO put char
+	jsr     call_cio_putch			; 
 	pla             			; 
-	jsr     sub_b1ef			;
-	lda     #$00    			; Call CIO put char
+	jsr     call_cio_putch			;
+	lda     #$00    			;
 	sta     TSTDAT				;
 LB252:  rts             			;
 
@@ -4708,7 +4726,7 @@ LBA12:	.byte	key_plus
 	.byte	key_s
 	.byte	$01,$11
 
-	.byte	key_eq
+	.byte	key_equal
 	.byte	$04,$05
 
 	.byte	key_minus
@@ -4745,18 +4763,64 @@ LBA40:  .byte   $02,$0E
 LBA43:  .byte   $0D,$1E
 ; End of Keyboard code lookup
 
-LBA45:  .byte   $61
+; Keyboard code lookup #2
+; TODO cross-reference between keycode and PLATO character set?
+LBA45:  .byte   key_space + mod_shift
+LBA46:  .byte	$1F
 
-LBA46:  .byte	$1F,$74,$19,$34,$08,$73,$7C,$2C
-	.byte	$0A,$4C,$1E,$0C,$0D
+	.byte	key_backs + mod_shift
+	.byte	$19
 
-LBA53:  .byte   $46
+	.byte	key_backs
+	.byte	$08
 
-LBA54:  .byte   $2F,$47,$78,$4F,$49,$5A,$24,$5B
-	.byte	$2B,$75,$35,$02,$BB,$5A,$30,$5F
+	.byte	key_apos
+	.byte	$7C
+
+	.byte	key_tab
+	.byte	$0A
+
+	.byte	key_return + mod_shift
+	.byte	$1E
+
+	.byte	key_return
+	.byte	$0D
+; End of Keyboard code lookup #2
+
+; Keyboard code lookup table #3
+LBA53:  .byte   key_plus + mod_shift
+LBA54:  .byte   $2F
+
+	.byte	key_mult + mod_shift
+	.byte	$78
+
+	.byte	key_equal + mod_shift
+	.byte	$49
+
+	.byte	key_hash
+	.byte	$24
+
+	.byte	key_amper
+	.byte	$2B
+
+	.byte	key_at
+	.byte	$35
+; End of Keyboard code lookup #3
+
+	.byte	$02,$BB,$5A,$30,$5F
 	.byte	$EE,$3D,$A8
 
-LBA67:	.byte	$70,$40,$70,$40,$40,$06,$0F,$06
+; Bitmap for 'F' displayed when in joystick-mapped function key mode
+LBA67:	.byte	%01110000			; .###....
+	.byte	%01000000			; .#......
+	.byte	%01110000			; .###....
+	.byte	%01000000			; .#......
+	.byte	%01000000			; .#......
+
+; Bitmap for touch panel crosshair cursor
+	.byte	%00000110			; .....##.
+	.byte	%00001111			; ....####
+	.byte	%00000110			; .....##.
 
 .macro	jt1	arg1
 	.byte	(arg1-sub_a367)
