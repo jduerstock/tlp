@@ -219,9 +219,9 @@ off_DD		:= $00DD
 off_DF		:= $00DF
 byte_E1		:= $00E1
 byte_E2		:= $00E2
-
 off_E3		:= $00E3
 off_E5		:= $00E5
+plato_char	:= $00E7			; PLATO/ASCII character code to be sent to PLATO
 chset6_base 	:= $00E8			; charset_sm address lo/hi at E8/E9
 off_EC		:= $00EC
 off_F4		:= $00F4
@@ -285,11 +285,14 @@ key_backs	= $34					; backspace
 key_return	= $0C
 key_space	= $21
 key_equal	= $0F					; '='
+key_pipe	= $4F					; '='
 key_gt		= $37					; '>'
 key_lt		= $36					; '<'
 key_plus	= $06					; '+'
+key_bkslash	= $46
 key_minus 	= $0E					; '-'
 key_mult	= $07					; '*'
+key_caret	= $47
 key_div		= $26					; '/'
 key_caps	= $3C					; 'CAPS/LOWR'
 key_atari	= $27					; '/|\'
@@ -1913,18 +1916,49 @@ LA952:  sta     $A6     			; A952 85 A6                    ..
 	adc     byte_D9 			; A95C 65 D9                    e.
 	sta     $9E     			; A95E 85 9E                    ..
 	rol     $9F     			; A960 26 9F                    &.
-LA962:  rts             			; A962 60                       `
+:	rts             			; A962 60                       `
 
 ;*******************************************************************************
 ;*                                                                             *
 ;*                                sub_readkey                                  *
 ;*                                                                             *
-;*                 Check for any key press. Return if nothing.                 *
+;*                           Handle keyboard input                             *
 ;*                                                                             *
 ;*******************************************************************************
+
 ; DESCRIPTION
 ;
+; Handles user input from keyboard.
+;
+; This subroutine processes keyboard events. Some key presses are intended to be 
+; forwarded onto the PLATO service. Some key presses are intended to not be sent 
+; to PLATO and instead alter some aspect of THE LEARNING PHONE program, such as 
+; communication settings or user interface preferences.
+;
+; CH contains the last keyboard scan code observed from an IRQ event. In its raw 
+; form, the Atari's keyboard scan code is meaningless to the PLATO system. It 
+; must be translated to an ASCII code on the Atari side that is in turn mapped 
+; to a PLATO code on the PLATO side. For most keys (A-Z, 0-9, etc) this 
+; transformation is trivial. For special PLATO terminal keys (STOP, NEXT, etc.),
+; cross-reference tables are needed.  TODO
+
+; To convert the raw Atari keyboard scan code to an ASCII code, a CIO call to 
+; the K: device can be used.
+;
+; If the keyboard scan code maps to a PLATO terminal function key, then the 
+; PLATO character code is resolved using one of three cross-reference tables.
+;
+; PLATO terminal function keys are usually mapped to a START + key 
+; combination. Some exceptions exist. For example the PLATO NEXT key can be
+; entered on the Atari by pressing the START + n key combination or pressing
+; just the "RETURN" key. 
 ; 
+; For the START + key combinations, the table at $BA12-$BA44 maps an Atari
+; keyboard scan code to (usually) two ASCII codes. One ASCII code for 
+; unshifted and the other unshifted. These ASCII codes are mapped again
+; on the PLATO side to PLATO's special terminal function keys such as 
+; NEXT, LAB, STOP, and so on.
+; ------------------------------------------------------------------------------
 
 sub_readkey:					; A963
 	ldx     CH				; Get key code ($FF if none)
@@ -1933,7 +1967,7 @@ sub_readkey:					; A963
 
 ;** (n) Test HELP key or RTS ***************************************************
 	lda     HELPFG				; Is HELP pressed?
-	beq     LA962   			; No, jump to nearby RTS.
+	beq     :-				; No, jump to nearby RTS.
 
 ;** (n) TODO Jump to HELP key routine? (Undocumented?) *************************
 	stx     HELPFG				; X = HELP (clobbered later?)
@@ -1943,68 +1977,98 @@ sub_readkey:					; A963
 ;** (n) Test if CTRL + key was pressed *****************************************
 :	dex             			; X = key code
 	bmi     LA9CE   			; Is CTRL pressed? Yes, skip way ahead.
-
-
-;*******************************************************************************
-;* key + SHIFT + START + SELECT =  $D9
-;*         -       X       -      #$FF
-;*         -       X       X      #$00
-;*         X       X       -      #$00
-;*******************************************************************************
-
-;** (n) Test if START + key was pressed *****************************************
 	stx     $D8     			; $D8 = key code
-	lda     CONSOL				; 
-	lsr     a       			; Is START pressed?
-	bcs     LA9AB   			; No, skip way ahead
-	ldy     #$FF    			; Yes, Y = -1
 
-;** (n) Process START + key ****************************************************
-	lsr     a       			; Is (for some reason?) SELECT also pressed?
-	bcc     :+				; Yes, skip ahead (Y = 0).
+; ------------------------------------------------------------------------------
+;                             ATARI FUNCTION KEYS
+;                           ENTERED WITH [START] KEY
+;
+; PLATO was designed to be used with a Control Data keyboard. This keyboard has
+; special function keys which are not on the Atari keyboard. PLATO function 
+; commands can be generated on the Atari by holding down START and the first 
+; letter of the PLATO function key, such as PLATO [BACK] = Atari [START] + [B].
+; An exception is the PLATO [MICRO] and [FONT] keys. These are mapped to the 
+; Atari logo ("/|\") key and are handled as a special case later.
+; ------------------------------------------------------------------------------
+	lda     CONSOL				; Get CONSOL status.
+	lsr     a       			; START pressed?
+	bcs     LA9AB   			; no START, skip way ahead.
 
-	cpx     #$40    			; Is SHIFT pressed?
-	bcc     :++				; No, skip ahead (Y = -1).
+; ------------------------------------------------------------------------------
+; The "SHIFTED" function key commands used in PLATO can be used on the Atari
+; keyboard by pressing [SHIFT] or [SELECT] while pressing the two keys that
+; translate the PLATO function key.
+;
+; If SELECT or SHIFT key was also pressed then skew BA12 table lookup.
+; ------------------------------------------------------------------------------
+	ldy     #$FF    			; Let Y = -1
+	lsr     a       			; is SELECT also pressed?
+	bcc     :+				; yes, skip ahead (Y becomes 0)
 
-:	iny             			; Y = 0				A98A 
-:	sty     byte_D9 			; 				A98B
+	cpx     #$40    			; is SHIFT pressed?
+	bcc     :++				; no, skip ahead (Y remains -1).
+:	iny             			; yes, (Y becomes 0)
 
-;** (n) Search for key code match in table #1 **********************************
+:	sty     byte_D9 			; $00->SHIFTED $FF->NOT SHIFTED
+
+; ------------------------------------------------------------------------------
+; Scan through the $BA12 table looking for a match to the current Atari key code.
+; The $BA12 table contains Atari key codes that correspond to a special 
+; PLATO function key that must be entered using the Atari's [START] console key. 
+; ------------------------------------------------------------------------------
 	lda     $D8     			; Let A = original key code
-	and     #$3F    			; Strip SHIFT and/or CTRL leaving simple key
+	and     #$3F    			; Strip off SHIFT and/or CTRL 
 
-	ldy     #$30    			; 
-:	cmp     LBA12,y 			; Compare key code to lookup table entry LA993 
-	beq     :+				; if key code matches table entry then goto LA99F
-	dey             			; Skip to next table row
+	ldy     #$30    			; Loop through BA12 table
+:	cmp     LBA12,y 			; Compare key code to lookup entry
+	beq     :+				; if match found, skip ahead
+	dey             			; otherwise keep looking
 	dey             			; 
 	dey             			; 
-	bpl     :-				; End loop after 17 iterations
+	bpl     :-				; End loop 
 	bmi     LA9CE   			; Skip ahead and RTS if no match.
 
-;** (n) Found START + key code match ********************************************
-:	ldx     byte_D9 			; 
+; ------------------------------------------------------------------------------
+; An Atari key code match was found. Get the corresponding ASCII code (shifted or
+; unshifted) that will be sent to PLATO. 
+; ------------------------------------------------------------------------------
+:	ldx     byte_D9 			; D9 is the shifted key modifier
 	bmi     :+				; was SHIFT key pressed earlier?
 	iny             			; no,  set offset mod = 2
 :	iny             			; yes, set offset mod = 1
-	lda     LBA12,y 			; Let A = table entry + offset mod
-LA9A8:  jmp     LAA91   			; Let $E7 = offset entry and RTS
+	lda     LBA12,y 			; Let A = translated character
+LA9A8:  jmp     LAA91   			; TODO
 
-;** (n) Test for Atari or CAPS/LOWR key presses ********************************
+; ------------------------------------------------------------------------------
+;                         PLATO [MICRO] and [FONT] keys
+;
+; The mapping for PLATO function keys for MICRO and FONT are a special case for
+; the mapping of terminal function keys.. These two keys are not translated from
+; a [START] key combination. Instead, the ATARI logo "/|\" key (or inverse key on 
+; later models) alone is bound to MICRO and [SHIFT] + "/|\" is bound to FONT.
+
+;                   MICRO
+;   PLATO KEY      PLATO KEY       ASCII CHAR.     ASCII CHAR.
+;                  CODE (HEX)      GENERATED       CODE (HEX)
+;     SYMBOL          SHIFT          SYMBOL          SHIFT
+;   LOWER  UPPER     OFF  ON       LOWER  UPPER     OFF  ON
+; 
+;     MICRO  FONT    14   34          {     DEL     7B   7F
+; ------------------------------------------------------------------------------
 LA9AB:  lda     $D8     			; Let A = original keycode
-
-;** (n) Test for Atari key press ***********************************************
 	cmp     #key_atari			; was Atari key pressed?
 	bne     :+				; no, skip to next
-	lda     #$7B    			; 
-	bne	LA9A8				; let $E7 = $7B and RTS
+	lda     #$7B    			; ASCII code that translates to PLATO MICRO
+	bne	LA9A8				; let plato_char = MICRO and RTS
 
 :	cmp     #key_atari + mod_shift    	; was SHIFT + Atari key pressed?
 	bne     :+				; no, skip to next
-	lda     #$7F    			; 
-	bne     LA9A8   			; let $E7 = $7F and RTS
+	lda     #$7F    			; ASCII code that translates to PLATO FONT
+	bne     LA9A8   			; let plato_char = FONT and RTS
 
-;** (n) Test for CAPS/LOWR press ***********************************************
+; ------------------------------------------------------------------------------
+;                              TOGGLE SHIFT LOCK
+; ------------------------------------------------------------------------------
 :	cmp     #key_caps    			; was CAPS/LOWR key pressed?
 	bne     :+				; no, skip to next
 	lda     #$00    			; 
@@ -2015,7 +2079,9 @@ LA9AB:  lda     $D8     			; Let A = original keycode
 	lda     #$40    			; 
 :	sta     SHFLOK				; Set SHFLOK to upper case
 
-;** (n) Ctrl key pressed or OPTION + no matching key ***************************
+; ------------------------------------------------------------------------------
+;                                WAIT AND RTS
+; ------------------------------------------------------------------------------
 LA9CE:  ldx     #$7F    			; for X = 127 to 0 step -1
 :	stx     CONSOL				; 
 	stx     WSYNC				; 127 WSYNCs?
@@ -2024,20 +2090,42 @@ LA9CE:  ldx     #$7F    			; for X = 127 to 0 step -1
 	stx     CH				; Clear key code (X = $FF)
 	rts             			; 
 
-; ----------------------------------------------------------------------------
+; ------------------------------------------------------------------------------
+;                   TRANSLATE NORMAL KEY PRESSES TO (AT)ASCII
+; ------------------------------------------------------------------------------
 LA9DD:  ldy     #LB97E-LB96E			; Prepare CIO call to read keyboard
 	jsr     call_cio_or_err			; Make CIO call 
-	sta     $E7     			; A9E2 85 E7                    ..
+	sta     plato_char     			; CIO returns with ATASCII from keyboard
 	lda     CONSOL				; check console keys
 	and     #$07				; mask irrelevant bits
 	cmp     #$03				; is OPTION pressed?
-	bne     LAA62				; no, skip out
+	bne     LAA62				; no, skip ahead
 	lda     SRTIMR				; check key repeat timer
 	beq     LAA62   			; A9F0 F0 70                    .p
 	lda     $D8     			; Load original key press
 	and     #$3F    			; Strip off CTRL and SHIFT
 
-;** (n) If user pressed OPTION + '0' then toggle echo **********************
+; ------------------------------------------------------------------------------
+;                                 OPTION KEYS
+;
+; The next set of key presses are not meant to be sent to the PLATO server. 
+; Instead these affect the behavior or appearance of THE LEARNING PHONE program.
+;
+; [OPTION] + 0 - Toggle local echo / remote echo
+; [OPTION] + 1 - Force baud rate to 1200 bps if non-MPP modem is being used
+; [OPTION] + 3 - Force baud rate to 300 bps
+; [OPTION] + c - Pressing SELECT will cycle through background colors
+; [OPTION] + b - Pressing SELECT will cycle through background brightnesses
+; [OPTION] + t - Pressing SELECT will cycle through foreground brightnesses
+; [OPTION] + f - Toggle joystick-mapped function key entry
+; [OPTION] + z - Toggle between full-screen and zoomed displays
+; [OPTION] + m - Force Microbits MPP modem
+; [OPTION] + p - Print screen
+; ------------------------------------------------------------------------------
+
+; ------------------------------------------------------------------------------
+; OPTION + '0'
+; ------------------------------------------------------------------------------
 	cmp     #key_0    			; was OPTION + 0 pressed?
 	bne     :+				; no, skip to next
 	lda     CURRENT_ECHO   			; 
@@ -2045,45 +2133,57 @@ LA9DD:  ldy     #LB97E-LB96E			; Prepare CIO call to read keyboard
 	sta     CURRENT_ECHO   			; toggle echo setting
 	rts             			; and return
 
-;** (n) If user pressed OPTION + '1' then change baud to 1200 ****************
+; ------------------------------------------------------------------------------
+; OPTION + '1'
+; ------------------------------------------------------------------------------
 :	cmp     #key_1    			; did user press '1'?
 	bne     :++				; no, skip further ahead
 	lda     #$00    			;   $00 -> baud = 1200
 
-;** (n) Skip all this if using Microbits 300 *********************************
+;** (1) Ignore key press if using Microbits 300 ********************************
 :	ldy     IS_MPP				; are we using the MPP modem? 1->MPP 0->Modem
 	bne     LAA23   			; yes, skip this part
 
-;** (n) Force new baud *******************************************************
+;** (2) Change baud rate setting  **********************************************
 	sta     CURRENT_BAUD			; Save new baud (FF=300 00=1200)
 	jmp     sub_user_baud			; sub_user_baud will RTS
 
-;** (n) If user pressed OPTION + '3' then change baud to 300 *****************
+; ------------------------------------------------------------------------------
+; OPTION + '3'
+; ------------------------------------------------------------------------------
 :	cmp     #key_3    			; did user press '3'?
-	bne     LAA1A   			; no, skip to next
+	bne     :+				; no, skip to next
 	lda     #$FF    			;   $FF -> baud = 300
 	bne     :--				;   Jump back to store baud in $B1
 
-;** (n) If user pressed OPTION + 'c' then SELECT adjusts background color ****
-LAA1A:  cmp     #key_c    			; did user press 'c'?
+; ------------------------------------------------------------------------------
+; OPTION + 'c'
+; ------------------------------------------------------------------------------
+:	cmp     #key_c    			; did user press 'c'?
 	bne     :+				; no, skip to next
 	lda     #$00    			; 
 LAA20:  sta     $1355   			; Change flag in $1355 and RTS
 LAA23:  rts             			; 
 
-;** (n) If user pressed OPTION + 'b' then SELECT adjusts background brightness
+; ------------------------------------------------------------------------------
+; OPTION + 'b'
+; ------------------------------------------------------------------------------
 :	cmp     #key_b    			; did user press 'b'?
 	bne     :+				; no, skip to next
 	lda     #$80    			; 
 	bne     LAA20   			; Change flag in $1355 and RTS
 
-;** (n) If user pressed OPTION + 't' then SELECT adjusts text brightness *****
+; ------------------------------------------------------------------------------
+; OPTION + 't'
+; ------------------------------------------------------------------------------
 :	cmp     #key_t				; did user press 't'?
 	bne     :+				; no, skip to next
 	lda     #$C0    			; 
 	bne     LAA20   			; Change flag in $1355 and RTS
 
-;** (n) If user pressed OPTION + 'f' enable Function Key mode ****************
+; ------------------------------------------------------------------------------
+; OPTION + 'f'
+; ------------------------------------------------------------------------------
 :	cmp     #key_f    			; did user press 'f'?
 	bne     :+++				; no, skip out
 	ldx     CURRENT_DL			; is display currently zoomed?
@@ -2103,57 +2203,88 @@ LAA23:  rts             			;
 	stx     HPOSM2				; Position right half of crosshair
 	rts             			;
 
-;** (n) If user pressed OPTION + 'z' swap between zoomed or scaled mode ********
+; ------------------------------------------------------------------------------
+; OPTION + 'z'
+; ------------------------------------------------------------------------------
 :	cmp     #key_z    			; did user press 'z'?
 	beq     sub_swap_display 		; yes, swap display mode and RTS
 
-;** (n) If user pressed OPTION + 'm' then force Microbits 300 ******************
+; ------------------------------------------------------------------------------
+; OPTION + 'm'
+; ------------------------------------------------------------------------------
 	cmp     #key_m    			; did user press 'm'?
 	beq     jmp_config_mpp  		; call sub_config_mpp and RTS
 
-;** (n) If user pressed OPTION + 'p' then print screen *************************
-	cmp     #key_p  			; was OPTION + 'p'
-	beq     jmp_printscreen 		; call sub_printscreen and RTS
+; ------------------------------------------------------------------------------
+; OPTION + 'p'
+; ------------------------------------------------------------------------------
+	cmp     #key_p  			; was OPTION + 'p'?
+	beq     jmp_printscreen 		; yes, call sub_printscreen and RTS
 
-;** (n) Search for key code match in table #2 **********************************
-LAA62:  ldy     #$0C    			; Initialize loop counter
-	lda     $D8     			; Load original keypress
-:	cmp     LBA45,y 			; AA66 D9 45 BA                 .E.
-	beq     LAA8A   			; AA69 F0 1F                    ..
-	dey             			; AA6B 88                       .
-	dey             			; AA6C 88                       .
-	bpl     :-				; AA6D 10 F7                    ..
+; ------------------------------------------------------------------------------
+;			      ATARI FUNCTION KEYS 
+;			   ENTERED WITHOUT [START] KEY
+;
+; This set of PLATO terminal keys do not require a [START] + key combination.
+; For example, the PLATO [NEXT] key is mapped to the Atari [RETURN] key and 
+; the PLATO [NEXT1] is mapped to the Atari [SHIFT] + [RETURN] keys.
+; ------------------------------------------------------------------------------
 
-;** (n) Search for key code match in table #3 **********************************
-	ldy     #$0A    			; AA6F A0 0A                    ..
-:	cmp     LBA53,y 			; AA71 D9 53 BA                 .S.
-	beq     LAA7C   			; AA74 F0 06                    ..
-	dey             			; AA76 88                       .
-	dey             			; AA77 88                       .
-	bpl     :-				; AA78 10 F7                    ..
-	bmi     LAA96   			; no match. send orig arg to PLATO
+; Scan through the $BA45 table looking for a match to the current Atari key code.
+LAA62:  ldy     #$0C    			; Loop through $BA45 table
+	lda     $D8     			; Load original key code
+:	cmp     LBA45,y 			; Compare key code to lookup entry
+	beq     LAA8A   			; if match found, skip ahead
+	dey             			; otherwise keep looking.
+	dey             			; 
+	bpl     :-				; 
 
-;** (n) Key code match found in table #3 ***************************************
-LAA7C:  sty     $E7     			; AA7C 84 E7                    ..
-	lda     #$00    			; AA7E A9 00                    ..
-	jsr     sub_ab54
-	ldy     $E7     			; AA83 A4 E7                    ..
-	lda     LBA54,y 			; AA85 B9 54 BA                 .T.
-	bne     LAA8D   			; AA88 D0 03                    ..
+; ------------------------------------------------------------------------------
+;                       PROCESS PLATO 2-BYTE CHARACTERS
+;
+; The original PLATO terminal had no keys defined for the characters: \^|#&@
+; Later PLATO terminals implemented these characters using a two-byte sequence.
+; The first character is byte code $00 (the PLATO character is called ACCESS) 
+; followed by a second byte as defined in the table at $BA53.
+; 
+; Search for the keyboard scan code entered by the user in the table at $BA53.
+; If a match is found, send a $00 (ACCESS) to PLATO, then send the translation 
+; character from the table.
+; ------------------------------------------------------------------------------
+	ldy     #$0A    			; Initialize loop counter
+:	cmp     LBA53,y 			; Does key code match table key?
+	beq     LAA7C   			; yes, send $00 (ACCESS) to PLATO
+	dey             			; no, keep looking
+	dey             			; 
+	bpl     :-				; 
+	bmi     LAA96   			; no match. send original key code to PLATO
 
-;** (n) Key code match found in table #2 ***************************************
-LAA8A:  lda     LBA46,y 			; Let $E7 = value that
-LAA8D:  sta     $E7     			; ...corresponds to matched key
-	bne     LAA96   			; ...and send to PLATO.
+; ------------------------------------------------------------------------------
+; An Atari key code match was found in table #3. Send a two-byte character 
+; sequence. The first character is a PLATO ACCESS character ($00) followed by 
+; the translation character.
+; ------------------------------------------------------------------------------
+LAA7C:  sty     plato_char     			; Temporarily save the table offet
+	lda     #$00    			; Send a PLATO 'ACCESS' character
+	jsr     sub_ab54			; to the PLATO server.
+	ldy     plato_char     			; Restore table offset.
+	lda     LBA54,y 			; Use it to get the translation 
+	bne     LAA8D   			; character and send it to PLATO.
 
-;** (n) ************************************************************************
-LAA91:  sta     $E7     			; Let A = value associated with key code
-	jsr     LA9CE   			; Clear CONSOL and wait		AA93 20 CE A9                  ..
+LAA8A:  lda     LBA46,y 			; Load translation character from table #2
+LAA8D:  sta     plato_char     			; Save character destined for PLATO
+	bne     LAA96   			; and send it to PLATO.
 
-;** (n) Optionally print char (local echo and printable) and send to PLATO *****
+LAA91:  sta     plato_char     			; Let A = value associated with key code
+	jsr     LA9CE   			; 
+
+; ----------------------------------------------------------------------------
+; If local echo is enabled and the character is printable, render a bitmap
+; for the character in video memory
+; ----------------------------------------------------------------------------
 LAA96:  bit     CURRENT_ECHO   			; is local echo disabled?
 	bmi     LAB00   			; yes, don't print, send $E7, RTS
-	lda     $E7     			; 
+	lda     plato_char     			; 
 	cmp     #$20    			; is $E7 a printable char? 
 	bcs     LAAFD   			; yes, print char, send $E7, RTS
 	jsr     sub_a0f3   			; AAAD 20 F6 A5
@@ -2225,7 +2356,7 @@ LAAF0:  sta	DLIST				; Point to new display list
 
 ; ----------------------------------------------------------------------------
 LAAFD:  jsr     print_char   			; AAFD 20 5D AB                  ].
-LAB00:  lda     $E7     			; AB00 A5 E7                    ..
+LAB00:  lda     plato_char     			; AB00 A5 E7                    ..
 LAB02:  jmp     send_to_plato
 
 ; ----------------------------------------------------------------------------
@@ -2296,7 +2427,7 @@ sub_ab5a:
 ; Parameters:
 ; A = character to be displayed
 print_char:					; AB5D
-	sta     $E7     			; Character to be displayed
+	sta     plato_char     			; Character to be displayed
 	sec             			; Test to see if non-printing character 
 	sbc     #$20    			;
 	bcs     :+				;
@@ -4710,102 +4841,189 @@ LB9FA:  .byte   $00,$00,$01,$01,$01,$01,$01,$02
 LBA02:	.byte	$00,$03,$0C,$0F,$30,$33,$3C,$3F
 	.byte	$C0,$C3,$CC,$CF,$F0,$F3,$FC,$FF
 
-; Keyboard code lookup (17x3)
-LBA12:	.byte	key_plus
-	.byte	$23,$7E
+; ------------------------------------------------------------------------------
+;			ATARI TO PLATO KEYMAPPING TABLE #1
+;
+; The lookup table at $BA12 approximates Appendix D of the s0ascers document. 
+;
+; The $BA12 table maps Atari [START] key combinations to the unshifted/shifted 
+; ASCII codes that are, in turn, mapped to PLATO codes on the PLATO side.
+;
+; Provided here is the s0ascers table reduced to strictly the mappings found in 
+; the $BA12 table. The ASCII CHAR. CODE values on the right side of the s0ascers
+; table are the values that correspond to the Atari key code in the $BA12 table.
+; 
+;
+;  8.1  Original PLATO ASCII mapping
+;
+;                   MICRO
+;   PLATO KEY      PLATO KEY       ASCII CHAR.     ASCII CHAR.
+;                  CODE (HEX)      GENERATED       CODE (HEX)
+;     SYMBOL          SHIFT          SYMBOL          SHIFT
+;   LOWER  UPPER     OFF  ON       LOWER  UPPER     OFF  ON
+;  ------- ------    --   --       -----  -----     --   --
+;     +      Σ       0E   2E          +     #       2B   23
+;     ⇦      shift   0D   2D          ^     \       5E   5C
+;     -      Δ       0F   2F          -     ~       2D   7E
+;     ÷      ∩       0B   2B          -     '       60   27
+;     ×      ∪       0A   2A          &     @       26   40
+;     SUPER  SUPER1  10   30          DC3   ETB     13   17
+;     SUB    SUB1    11   31          EOT   ENQ     04   05
+;     ANS    TERM    12   32          BEL   DC4     07   14
+;     COPY   COPY1   1B   3B          ETX   SYN     03   16
+;     HELP   HELP1   15   35          VT    HT      0B   09
+;     SQUARE ACCESS  1C   3C          }     NULL    7D   00
+;     NEXT   NEXT1   16   36          CR    RS      0D   1E
+;     EDIT   EDIT1   17   37          SUB   CAN     1A   18
+;     BACK   BACK1   18   38          STX   SO      02   0E
+;     LAB    LAB1    1D   3D          FF    SI      0C   0F
+;     DATA   DATA1   19   39          DC2   GS      12   1D
+;     STOP   STOP1   1A   3A          SOH   DC1     01   11
+;
+; ------------------------------------------------------------------------------
+LBA12:	.byte	key_plus			; PLATO: Σ,Δ
+	.byte	$23,$7E				; ASCII: #,~
 
-	.byte	key_div
-	.byte	$60,$27
+	.byte	key_div				; PLATO: ÷,∩
+	.byte	$60,$27				; ASCII: -,'
 
-	.byte	key_mult
-	.byte	$26,$40
+	.byte	key_mult			; PLATO: ×,∪
+	.byte	$26,$40				; ASCII: &,@
 
-	.byte	key_lt
-	.byte	$5E,$5C
+	.byte	key_lt				; PLATO: ⇦,shift
+	.byte	$5E,$5C				; ASCII: ^,\
 
-	.byte	key_s
-	.byte	$01,$11
+	.byte	key_s				; PLATO: STOP,STOP1
+	.byte	$01,$11				; ASCII: SOH,DC1
 
-	.byte	key_equal
-	.byte	$04,$05
+	.byte	key_equal			; PLATO: SUB,SUB1
+	.byte	$04,$05				; ASCII: EOT,ENQ
 
-	.byte	key_minus
-	.byte	$13,$17
+	.byte	key_minus			; PLATO: SUPER,SUPER1
+	.byte	$13,$17				; ASCII: DC3,ETB
 
-	.byte	key_gt
-	.byte	$7D,$00
+	.byte	key_gt				; PLATO: SQUARE,ACCESS
+	.byte	$7D,$00				; ASCII: },NUL
 
-	.byte	key_c
-	.byte	$03,$16
+	.byte	key_c				; PLATO: COPY,COPY1
+	.byte	$03,$16				; ASCII: ETX,SYN
 
-	.byte	key_e
-	.byte	$1A,$18
+	.byte	key_e				; PLATO: EDIT,EDIT1
+	.byte	$1A,$18				; ASCII: SUB,CAN
 
-	.byte	key_a
-	.byte	$07,$07
+	.byte	key_a				; PLATO: ANS,ANS
+	.byte	$07,$07				; ASCII: BEL,BEL
 
-	.byte	key_t
-	.byte	$14,$14
+	.byte	key_t				; PLATO: TERM,TERM
+	.byte	$14,$14				; ASCII: DC4,DC4
 
-	.byte	key_h
-	.byte	$0B,$09
+	.byte	key_h				; PLATO: HELP,HELP1
+	.byte	$0B,$09				; ASCII: VT,HT
 
-	.byte	key_d
-LBA3A:  .byte   $12,$1D
+	.byte	key_d				; PLATO: DATA,DATA1
+LBA3A:  .byte   $12,$1D				; ASCII: DC2,GS
 
-	.byte	key_l
-LBA3D:  .byte   $0C,$0F
+	.byte	key_l				; PLATO: LAB,LAB1
+LBA3D:  .byte   $0C,$0F				; ASCII: FF,SI
 
-	.byte	key_b
-LBA40:  .byte   $02,$0E
+	.byte	key_b				; PLATO: BACK,BACK1
+LBA40:  .byte   $02,$0E				; ASCII: STX,SO
 
-	.byte	key_n
-LBA43:  .byte   $0D,$1E
-; End of Keyboard code lookup
+	.byte	key_n				; PLATO: NEXT,NEXT1
+LBA43:  .byte   $0D,$1E				; ASCII: CR,RS
 
-; Keyboard code lookup #2
-; TODO cross-reference between keycode and PLATO character set?
-LBA45:  .byte   key_space + mod_shift
-LBA46:  .byte	$1F
+; ------------------------------------------------------------------------------
+;			ATARI TO PLATO KEYMAPPING TABLE #2
+;
+; The lookup table at $BA45 approximates Appendix D of the s0ascers document. 
+;
+; This table differs slightly from TABLE #1 in that terminal keys are not 
+; generated using a [START] key combination.
+;
+; Provided here is the s0ascers table reduced to strictly the mappings found in 
+; the $BA45 table. The ASCII CHAR. CODE values on the right side of the s0ascers
+; table are the values that correspond to the Atari key code in the $BA45 table.
+; 
+;                   MICRO
+;   PLATO KEY      PLATO KEY       ASCII CHAR.     ASCII CHAR.
+;                  CODE (HEX)      GENERATED       CODE (HEX)
+;     SYMBOL          SHIFT          SYMBOL          SHIFT
+;   LOWER  UPPER     OFF  ON       LOWER  UPPER     OFF  ON
+;  ------- ------    --   --       -----  -----     --   --
+;   ERASE  ERASE1    13   33       BS     EM        08   19
+;   TAB    CR        0C   2C       LF     FS        0A   1C
+;   NEXT   NEXT1     16   36       CR     RS        0D   1E
+;   SPACE  BACKSP    40   60       SPACE  US        20   1F
+;   7      '         07   27       7      |         37   7C
+; ------------------------------------------------------------------------------
+LBA45:  .byte   key_space + mod_shift		; PLATO: BACKSP
+LBA46:  .byte	$1F				; ASCII: US
 
-	.byte	key_backs + mod_shift
-	.byte	$19
+	.byte	key_backs + mod_shift		; PLATO: ERASE1
+	.byte	$19				; ASCII: EM
 
-	.byte	key_backs
-	.byte	$08
+	.byte	key_backs			; PLATO: ERASE
+	.byte	$08				; ASCII: BS
 
-	.byte	key_apos
-	.byte	$7C
+	.byte	key_apos			; PLATO: '
+	.byte	$7C				; ASCII: |
 
-	.byte	key_tab
-	.byte	$0A
+	.byte	key_tab				; PLATO: TAB
+	.byte	$0A				; ASCII: LF
 
-	.byte	key_return + mod_shift
-	.byte	$1E
+	.byte	key_return + mod_shift		; PLATO: NEXT1
+	.byte	$1E				; ASCII: RS
 
-	.byte	key_return
-	.byte	$0D
-; End of Keyboard code lookup #2
+	.byte	key_return			; PLATO: NEXT
+	.byte	$0D				; ASCII: CR
 
-; Keyboard code lookup table #3
-LBA53:  .byte   key_plus + mod_shift
-LBA54:  .byte   $2F
+; ------------------------------------------------------------------------------
+;			ATARI TO PLATO KEYMAPPING TABLE #3
+;
+; From s0ascers 3.2.3.3.1:
+;
+; Some keyboards have keys that are represented by a single
+; character in the ASCII character set, but by a two-character
+; sequence in the PLATO character set.  The two characters
+; are ACCESS (also known as SHIFT-SQUARE, a PLATO key for
+; generating these and other special characters) and another
+; character as specified in the following table.
+; 
+;      Character    Hex value       Resulting sequence
+;                    (ASCII)
+; 
+;           #         23            ACCESS $
+;           &         26            ACCESS +
+;           @         40            ACCESS 5
+;           \         5C            ACCESS /
+;           ^         5E            ACCESS x
+;           `         60            ACCESS q
+;           {         7B            ACCESS [
+;           |         7C            ACCESS I
+;           }         7D            ACCESS ]
+;           ~         7E            ACCESS n
+;
+; The ACCESS character is has the code $00.
+; ------------------------------------------------------------------------------
+LBA53:  .byte   key_bkslash			; ATARI: \
+LBA54:  .byte   $2F				; ASCII: NUL, /
 
-	.byte	key_mult + mod_shift
-	.byte	$78
+	.byte	key_caret			; ATARI: ^
+	.byte	$78				; ASCII: NUL, x
 
-	.byte	key_equal + mod_shift
-	.byte	$49
+	.byte	key_pipe			; ATARI: |
+	.byte	$49				; ASCII: NUL, I
 
-	.byte	key_hash
-	.byte	$24
+	.byte	key_hash			; ATARI: #
+	.byte	$24				; ASCII: NUL, $
 
-	.byte	key_amper
-	.byte	$2B
+	.byte	key_amper			; ATARI: &
+	.byte	$2B				; ASCII: NUL, +
 
-	.byte	key_at
-	.byte	$35
-; End of Keyboard code lookup #3
+	.byte	key_at				; ATARI: @
+	.byte	$35				; ASCII: NUL, %
+
+; ------------------------------------------------------------------------------
 
 	.byte	$02,$BB,$5A,$30,$5F
 	.byte	$EE,$3D,$A8
