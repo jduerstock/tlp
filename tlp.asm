@@ -207,6 +207,8 @@ INPUT_MODE	:= $00C1			; Input/display mode ($00->scaled, $FF->zoomed, $01->touch
 byte_C3		:= $00C3
 CROSS_HPOS	:= $00C4			; touch panel crosshair horizontal position
 byte_C7		:= $00C7
+JSTICK_TRIG	:= $00C7			; State of joystick trigger ($00=pressed, $FF->clear)
+JSTICK_FUNC	:= $00C8			; Direction of joystick-mapped function keys: 0D->U(NEXT),02->D(BACK),0C->L(LAB),$12->R(DATA)
 byte_CC		:= $00CC
 byte_CD		:= $00CD
 off_CE		:= $00CE
@@ -215,7 +217,8 @@ BG_COLOR_DL2	:= $00D1			; Background / border hue/luminance used in Display List
 FG_COLOR_DL1	:= $00D2			; Text luminance used in Display List #1 (small text)
 BG_COLOR_DL1	:= $00D3			; Background / border hue/luminance used in Display List #1
 byte_D9		:= $00D9
-off_DD		:= $00DD
+off_DD		:= $00DD			; Current joystick direction X-axis (-1=left +1=right)
+off_DE		:= $00DE			; Current joystick direction Y-axis (-1=up   +1=down)
 off_DF		:= $00DF
 byte_E1		:= $00E1
 byte_E2		:= $00E2
@@ -375,7 +378,7 @@ LA04F:	lda	#$4C
 ;*                                                                             *
 ;*******************************************************************************
 sub_main:					; A05E
-	jsr     sub_readkey			; Check for key press
+	jsr     sub_readkey			; Process key press if any
 	jsr     sub_ab35
 	jsr     sub_a12c
 	lda     byte_CC
@@ -817,7 +820,7 @@ init_graphics:
 	dex             			;
 	bpl     :-      			; 
 
-	stx     byte_C7 			; Save FF to RAM
+	stx     JSTICK_TRIG 			; Initialize trigger state to -1
 
 ;** (n) Set default background and border color for Display List #1 *************
 	lda     #$01    			;
@@ -2228,9 +2231,9 @@ LAA23:  rts             			;
 ; This set of PLATO terminal keys do not require a [START] + key combination.
 ; For example, the PLATO [NEXT] key is mapped to the Atari [RETURN] key and 
 ; the PLATO [NEXT1] is mapped to the Atari [SHIFT] + [RETURN] keys.
-; ------------------------------------------------------------------------------
-
+;
 ; Scan through the $BA45 table looking for a match to the current Atari key code.
+; ------------------------------------------------------------------------------
 LAA62:  ldy     #$0C    			; Loop through $BA45 table
 	lda     $D8     			; Load original key code
 :	cmp     LBA45,y 			; Compare key code to lookup entry
@@ -2247,9 +2250,9 @@ LAA62:  ldy     #$0C    			; Loop through $BA45 table
 ; The first character is byte code $00 (the PLATO character is called ACCESS) 
 ; followed by a second byte as defined in the table at $BA53.
 ; 
-; Search for the keyboard scan code entered by the user in the table at $BA53.
-; If a match is found, send a $00 (ACCESS) to PLATO, then send the translation 
-; character from the table.
+; Search for the keyboard scan code entered by the user in the table #3 at 
+; $BA53. If a match is found, send a $00 (ACCESS) to PLATO, then send the 
+; translation character from the table.
 ; ------------------------------------------------------------------------------
 	ldy     #$0A    			; Initialize loop counter
 :	cmp     LBA53,y 			; Does key code match table key?
@@ -2359,9 +2362,15 @@ LAAFD:  jsr     print_char   			; AAFD 20 5D AB                  ].
 LAB00:  lda     plato_char     			; AB00 A5 E7                    ..
 LAB02:  jmp     send_to_plato
 
-; ----------------------------------------------------------------------------
-LAB05:  dey             			; AB05 88                       .
-	sty     byte_C7 			; AB06 84 C7                    ..
+;*******************************************************************************
+;*                                                                             *
+;*                           swap_disp_from_jstick                             *
+;*                                                                             *
+;*                        Draw character on the screen                         *
+;*                                                                             *
+;*******************************************************************************
+LAB05:  dey             			; clear trigger state to -1
+	sty     JSTICK_TRIG 			; 
 	txa             			; AB08 8A                       .
 	dex             			; AB09 CA                       .
 	bmi     sub_swap_display   		; AB0A 30 A1                    0.
@@ -2388,24 +2397,32 @@ LAB05:  dey             			; AB05 88                       .
 	ora     #$44    			; AB31 09 44                    .D
 	bne     LAB02   			; always jumps
 
+;*******************************************************************************
+;*                                                                             *
+;*                               proc_joystick                                 *
+;*                                                                             *
+;*       ??????????????????????????????????????????????????????????????        *
+;*                                                                             *
+;*******************************************************************************
 sub_ab35:
-	ldx     $C1     			; AB35 A6 C1                    ..
-	cpx     #$02    			; AB37 E0 02                    ..
-	bne     LAB4F   			; AB39 D0 14                    ..
-	lda     $C8     			; AB3B A5 C8                    ..
-	beq     LAB4F   			; AB3D F0 10                    ..
-	ldx     #$00    			; AB3F A2 00                    ..
-	stx     $C8     			; AB41 86 C8                    ..
-	stx     $4D     			; AB43 86 4D                    .M
-	dex             			; AB45 CA                       .
-	stx     byte_C7 			; AB46 86 C7                    ..
-	pha             			; AB48 48                       H
+proc_joystick:
+	ldx     INPUT_MODE     			; using joystick-mapped ...
+	cpx     #$02    			; ...function keys? 
+	bne     LAB4F   			; no, skip ahead.
+	lda     JSTICK_FUNC			; yes, using joystick. Get char to send to PLATO
+	beq     LAB4F   			; Skip if nothing to send? TODO
+	ldx     #$00    			; Let X   = 0
+	stx     JSTICK_FUNC    			; Clear 
+	stx     $4D     			; Let $4D = 0
+	dex             			; Let X	  = -1
+	stx     byte_C7 			; Let $C7 = -1
+	pha             			; Save A 
 	jsr     sub_b828
-	pla             			; AB4C 68                       h
-	bne     LAB02   			; AB4D D0 B3                    ..
-LAB4F:  ldy     byte_C7 			; AB4F A4 C7                    ..
-	beq     LAB05   			; AB51 F0 B2                    ..
-LAB53:  rts             			; AB53 60                       `
+	pla             			; Restore A
+	bne     LAB02   			; Send A to PLATO
+LAB4F:  ldy     JSTICK_TRIG 			; is trigger pressed? (0=yes)
+	beq     LAB05   			; yes, swap display mode (full-screen vs zoomed)
+LAB53:  rts             			; 
 
 ; ----------------------------------------------------------------------------
 sub_ab54:  	
@@ -3125,29 +3142,29 @@ sub_b004:
 ;*******************************************************************************
 
 sub_b013:
-	sec             			; B013 38                       8
-	lda     $C1     			; B014 A5 C1                    ..
-	sbc     #$02    			; B016 E9 02                    ..
-	bne     LB01E   			; B018 D0 04                    ..
-	ldx     $C6     			; B01A A6 C6                    ..
-	bne     LB02B   			; B01C D0 0D                    ..
-LB01E:  lda     STRIG0
-	bne     LB02D   			; B021 D0 0A                    ..
-	ldx     $C6     			; B023 A6 C6                    ..
-	bne     LB045   			; B025 D0 1E                    ..
+	sec             			; 
+	lda     INPUT_MODE			; using joystick-mapped function keys?
+	sbc     #$02    			; 
+	bne     :+				; no, skip ahead.
+	ldx     $C6     			; yes, let x = $C6
+	bne     :++				; and skip ahead.
+:	lda     STRIG0				; is joystick trigger pressed?
+	bne     LB02D   			; no, skip ahead.
+	ldx     $C6     			; yes, let x = $C6              ..
+	bne     LB045   			; and skip ahead.
 	ldx     #$1E    			; B027 A2 1E                    ..
 	stx     $C6     			; B029 86 C6                    ..
-LB02B:  sta     byte_C7 			; B02B 85 C7                    ..
-LB02D:  ldx     STICK0				; read joystick 0
-	lda     LB87F,x 			; B030 BD 7F B8                 ...
-	sta     off_DD
-	lda     LB86F,x 			; B035 BD 6F B8                 .o.
+:	sta     byte_C7 			; B02B 85 C7                    ..
+LB02D:  ldx     STICK0				; Read joystick 0
+	lda     LB87F,x 			; Get X-axis unit vector
+	sta     off_DD                          ; 
+	lda     LB86F,x 			; Get Y-axis unit vector
 	sta     off_DD+1
-	ora     off_DD
-	bne     :+
-	sta     $C2     			; B03E 85 C2                    ..
-	beq     LB045   			; B040 F0 03                    ..
-:	jsr     sub_b0a8   			; B042 20 A8 B0                  ..
+	ora     off_DD                          ; is joystick pointed in any direction?
+	bne     :+				; yes, skip to jsr
+	sta     $C2     			; no, let $C2 = 0
+	beq     LB045   			; and skip over jsr
+:	jsr     sub_b0a8   			; 
 LB045:  ldx     $C6     			; B045 A6 C6                    ..
 	beq     LB04B   			; B047 F0 02                    ..
 	dec     $C6     			; B049 C6 C6                    ..
@@ -3247,7 +3264,7 @@ LB0E8:  lda     $C1     			; B0E8 A5 C1                    ..
 	bne     LB0FD   			; B0F6 D0 05                    ..
 LB0F8:  bcs     LB16E   			; B0F8 B0 74                    .t
 	lda     LBA3A,x 			; B0FA BD 3A BA                 .:.
-LB0FD:  sta     $C8     			; B0FD 85 C8                    ..
+LB0FD:  sta     JSTICK_FUNC    			; B0FD 85 C8                    ..
 	ldx     #$80    			; B0FF A2 80                    ..
 	stx     $C5     			; B101 86 C5                    ..
 LB103:  rts             			; B103 60                       `
@@ -4660,17 +4677,24 @@ LB822:	.addr	sub_b39c			; GET STATUS vector???
 	.addr	sub_b7da			; SPECIAL vector???
 	.addr	sub_b7da			; 
 
+;*******************************************************************************
+;*                                                                             *
+;*                                   ?????                                     *
+;*                                                                             *
+;*                         ?????????????????????????                           *
+;*                                                                             *
+;*******************************************************************************
 sub_b828:
-	ldx     #$00    			; B828 A2 00                    ..
-	ldy     #$04    			; B82A A0 04                    ..
-:	txa             			; B82C 8A                       .
-	and     #$0F    			; B82D 29 0F                    ).
-	ora     #$10    			; B82F 09 10                    ..
-	sta     WSYNC
+	ldx     #$00    			; Let X = 0
+	ldy     #$04    			; Let Y = 4
+:	txa             			; Let A = 0
+	and     #$0F    			; Clear upper nybble
+	ora     #$10    			; Set bit 5
+	sta     WSYNC				; Halt CPU until end of current scan line
 	sta     AUDC1
 	inx             			; B837 E8                       .
 	inx             			; B838 E8                       .
-	sta     WSYNC
+	sta     WSYNC				; Halt CPU until end of current scan line
 	bne     :-
 	dey             			; B83E 88                       .
 	bne     :-
@@ -4703,11 +4727,31 @@ sub_b84b:
 LB863:	.byte	$65,$AA,$12,$F7,$49,$D5,$25,$A9
 	.byte	$19,$DC,$B2,$CD
 
+; ------------------------------------------------------------------------------
+;                       JOYSTICK DIRECTION LOOKUP TABLE
+; 
+;                                     14
+;                                  10  |  6
+;                                    \ | /
+;                               11 -- 15 --  7
+;                                    / | \
+;                                   9  |  5
+;                                     13
+;
+; Y AXIS VECTOR
+; +1 DOWN {5, 9,13}
+; -1 UP   {6,10,14}
+; ------------------------------------------------------------------------------
 LB86F:	.byte	$00,$00,$00,$00
 	.byte	$00,$01,$FF,$00
 	.byte	$00,$01,$FF,$00
 	.byte	$00,$01,$FF,$00
 
+; ------------------------------------------------------------------------------
+; X AXIS VECTOR
+; +1 LEFT  {5, 6, 7}
+; -1 RIGHT {9,10,11}
+; ------------------------------------------------------------------------------
 LB87F:	.byte	$00,$00,$00,$00
 	.byte	$00,$01,$01,$01
 	.byte	$00,$FF,$FF,$FF
@@ -4865,7 +4909,7 @@ LBA02:	.byte	$00,$03,$0C,$0F,$30,$33,$3C,$3F
 ;     +      Σ       0E   2E          +     #       2B   23
 ;     ⇦      shift   0D   2D          ^     \       5E   5C
 ;     -      Δ       0F   2F          -     ~       2D   7E
-;     ÷      ∩       0B   2B          -     '       60   27
+;     ÷      ∩       0B   2B          `     '       60   27
 ;     ×      ∪       0A   2A          &     @       26   40
 ;     SUPER  SUPER1  10   30          DC3   ETB     13   17
 ;     SUB    SUB1    11   31          EOT   ENQ     04   05
@@ -4882,16 +4926,16 @@ LBA02:	.byte	$00,$03,$0C,$0F,$30,$33,$3C,$3F
 ;
 ; ------------------------------------------------------------------------------
 LBA12:	.byte	key_plus			; PLATO: Σ,Δ
-	.byte	$23,$7E				; ASCII: #,~
+	.byte	'#','~'				; ASCII: #,~
 
 	.byte	key_div				; PLATO: ÷,∩
-	.byte	$60,$27				; ASCII: -,'
+	.byte	'`','''				; ASCII: -,'
 
 	.byte	key_mult			; PLATO: ×,∪
-	.byte	$26,$40				; ASCII: &,@
+	.byte	'&','@'				; ASCII: &,@
 
 	.byte	key_lt				; PLATO: ⇦,shift
-	.byte	$5E,$5C				; ASCII: ^,\
+	.byte	'^','\'				; ASCII: ^,\
 
 	.byte	key_s				; PLATO: STOP,STOP1
 	.byte	$01,$11				; ASCII: SOH,DC1
@@ -4903,7 +4947,7 @@ LBA12:	.byte	key_plus			; PLATO: Σ,Δ
 	.byte	$13,$17				; ASCII: DC3,ETB
 
 	.byte	key_gt				; PLATO: SQUARE,ACCESS
-	.byte	$7D,$00				; ASCII: },NUL
+	.byte	'}',$00				; ASCII: },NUL
 
 	.byte	key_c				; PLATO: COPY,COPY1
 	.byte	$03,$16				; ASCII: ETX,SYN
@@ -4920,6 +4964,7 @@ LBA12:	.byte	key_plus			; PLATO: Σ,Δ
 	.byte	key_h				; PLATO: HELP,HELP1
 	.byte	$0B,$09				; ASCII: VT,HT
 
+; Joystick-mapped function keys
 	.byte	key_d				; PLATO: DATA,DATA1
 LBA3A:  .byte   $12,$1D				; ASCII: DC2,GS
 
@@ -4966,7 +5011,7 @@ LBA46:  .byte	$1F				; ASCII: US
 	.byte	$08				; ASCII: BS
 
 	.byte	key_apos			; PLATO: '
-	.byte	$7C				; ASCII: |
+	.byte	'|'				; ASCII: |
 
 	.byte	key_tab				; PLATO: TAB
 	.byte	$0A				; ASCII: LF
