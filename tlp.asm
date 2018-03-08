@@ -2399,7 +2399,7 @@ LAB05:  dey             			; clear trigger state to -1
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                               proc_joystick                                 *
+;*                             process_joystick                                *
 ;*                                                                             *
 ;*       ??????????????????????????????????????????????????????????????        *
 ;*                                                                             *
@@ -4706,7 +4706,30 @@ sub_b828:
 ; ----------------------------------------------------------------------------
 	rts             			; B84A 60                       `
 
-; ----------------------------------------------------------------------------
+;*******************************************************************************
+;*                                                                             *
+;*                            check_if_pirated                                 *
+;*                                                                             *
+;*         Copy protection routine that jumps to COLDSV if not ROM.            *
+;*                                                                             *
+;*******************************************************************************
+
+; Description:
+
+; This subroutine decrypts 12 bytes of code from ROM at $B863 and copies it to 
+; RAM at $3E33. Then jumps to the decrypted code. The code tries to alter $BFFC 
+; at the tail end of the cartridge's address space. If the program is able to 
+; alter the the contents of the address, it's deemed to be an illegal copy and
+; jumps to COLDSV.
+;
+; Here is the code after decryption:
+;
+; 3E33: CE FC BF          DEC $BFFC		; Try to alter a ROM address.
+; 3E36: AD FC BF          LDA $BFFC		; Is this ROM?
+; 3E39: F0 03             BEQ $3E3E		; Yes, RTS
+; 3E3B: 4C 77 E4          JMP COLDSV		; No, Reboot
+; 3E3E: 60                RTS
+
 sub_b84b:
 	sta     off_EC
 	sty     off_EC+1
@@ -4723,6 +4746,8 @@ sub_b84b:
 	bne     :-
 	jmp     L3E33   			; B860 4C 33 3E                 L3>
 
+; ----------------------------------------------------------------------------
+; Encrypted code that performs copy-protection check.
 ; ----------------------------------------------------------------------------
 LB863:	.byte	$65,$AA,$12,$F7,$49,$D5,$25,$A9
 	.byte	$19,$DC,$B2,$CD
