@@ -69,7 +69,11 @@
 
 TSTDAT		:= $0007
 POKMSK		:= $0010			; POKEY interrupt mask.
+RTCLOK		:= $0012			; RTCLOK+0: increments every 65536 VBLANKS (NTSC 18.2 minutes)
+						; RTCLOK+1: increments every 256 VBLANKS   (NTSC 4.27 seconds)
+						; RTCLOK+2: increments every VBLANK	   (NTSC 1/60 second)
 ICAX1Z		:= $002A
+ATRACT		:= $004D			; Attract mode timer and flag 
 VPRCED		:= $0202			; Vector to serial peripheral proceed line interrupt
 VSERIN		:= $020A			; Vector to serial receive-data-ready interrupt
 VTIMR1		:= $0210			; Vector to POKEY timer 1 interrupt
@@ -204,8 +208,10 @@ byte_B7		:= $00B7
 CURRENT_DL	:= $00B8			; Current Display List (80 or FF = DL #1, 00 = DL #2)
 byte_C0		:= $00C0
 INPUT_MODE	:= $00C1			; Input/display mode ($00->scaled, $FF->zoomed, $01->touch panel, $FE->zoomed from touch panel, $02->joystick func keys)
+byte_C2		:= $00C2
 byte_C3		:= $00C3
 CROSS_HPOS	:= $00C4			; touch panel crosshair horizontal position
+byte_C6		:= $00C6
 byte_C7		:= $00C7
 JSTICK_TRIG	:= $00C7			; State of joystick trigger ($00=pressed, $FF->clear)
 JSTICK_FUNC	:= $00C8			; Direction of joystick-mapped function keys: 0D->U(NEXT),02->D(BACK),0C->L(LAB),$12->R(DATA)
@@ -254,6 +260,7 @@ byte_134f	:= $134F
 byte_1350	:= $1350
 word_1351	:= $1351
 CURRENT_ECHO	:= $1353			; $00->local echo $80->remote echo
+CURRENT_OPTION	:= $1355			; Which color aspect is modified with OPTION ($00->c, $80->b, $C0->t)
 L2000           := $2000
 L3E2E		:= $3E2E
 L3E33           := $3E33
@@ -888,7 +895,7 @@ sub_set_pm_color:				; A324
 :	sta     PCOLR0,x			; Store new hue and luminance
 	dex             			; to PCOLR0-PCOLR3
 	bpl     :-      			; End Loop
-	rts             			;
+	rts             			; Return with N flag set
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -1291,11 +1298,11 @@ LA582:  lda     $9F     			; A582 A5 9F                    ..
 	ror     a       			; A587 6A                       j
 	adc     #$00    			; A588 69 00                    i.
 	sta     $A6     			; A58A 85 A6                    ..
-LA58C:  lda     #<(LB863-1)
-	ldy     #>(LB863-1)
-	ldx     #$0C
-	jsr     sub_b84b
-	rts             			; A595 60                       `
+LA58C:  lda     #<(LB863-1)			; Point to obfuscated code used...
+	ldy     #>(LB863-1)			; ...for copy-protection check.
+	ldx     #$0C				; Init counter for 12 bytes of obfuscated code
+	jsr     check_if_pirated		; 
+	rts             			; 
 
 ; ----------------------------------------------------------------------------
 sub_a596:
@@ -2165,7 +2172,7 @@ LA9DD:  ldy     #LB97E-LB96E			; Prepare CIO call to read keyboard
 :	cmp     #key_c    			; did user press 'c'?
 	bne     :+				; no, skip to next
 	lda     #$00    			; 
-LAA20:  sta     $1355   			; Change flag in $1355 and RTS
+LAA20:  sta     CURRENT_OPTION  		; Change flag in $1355 and RTS
 LAA23:  rts             			; 
 
 ; ------------------------------------------------------------------------------
@@ -2364,9 +2371,9 @@ LAB02:  jmp     send_to_plato
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                           swap_disp_from_jstick                             *
+;*                           ?????????????????????                             *
 ;*                                                                             *
-;*                        Draw character on the screen                         *
+;*                        ????????????????????????????                         *
 ;*                                                                             *
 ;*******************************************************************************
 LAB05:  dey             			; clear trigger state to -1
@@ -2399,28 +2406,28 @@ LAB05:  dey             			; clear trigger state to -1
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                             process_joystick                                *
+;*                             proc_joystick_key                               *
 ;*                                                                             *
 ;*       ??????????????????????????????????????????????????????????????        *
 ;*                                                                             *
 ;*******************************************************************************
 sub_ab35:
-proc_joystick:
+proc_joystick_key:
 	ldx     INPUT_MODE     			; using joystick-mapped ...
 	cpx     #$02    			; ...function keys? 
-	bne     LAB4F   			; no, skip ahead.
+	bne     :+				; no, skip ahead.
 	lda     JSTICK_FUNC			; yes, using joystick. Get char to send to PLATO
-	beq     LAB4F   			; Skip if nothing to send? TODO
-	ldx     #$00    			; Let X   = 0
-	stx     JSTICK_FUNC    			; Clear 
-	stx     $4D     			; Let $4D = 0
-	dex             			; Let X	  = -1
-	stx     byte_C7 			; Let $C7 = -1
-	pha             			; Save A 
+	beq     :+				; Skip if nothing to send.
+	ldx     #$00    			; 
+	stx     JSTICK_FUNC    			; Clear joystick key press
+	stx     ATRACT  			; Clear attract mode
+	dex             			; 
+	stx     JSTICK_TRIG 			; Clear trigger state (-1)
+	pha             			; Stash A 
 	jsr     sub_b828
 	pla             			; Restore A
-	bne     LAB02   			; Send A to PLATO
-LAB4F:  ldy     JSTICK_TRIG 			; is trigger pressed? (0=yes)
+	bne     LAB02   			; Send A to PLATO and RTS
+:	ldy     JSTICK_TRIG 			; is trigger pressed? (0=yes)
 	beq     LAB05   			; yes, swap display mode (full-screen vs zoomed)
 LAB53:  rts             			; 
 
@@ -3141,25 +3148,35 @@ sub_b004:
 ;*                                                                             *
 ;*******************************************************************************
 
+
 sub_b013:
 	sec             			; 
 	lda     INPUT_MODE			; using joystick-mapped function keys?
 	sbc     #$02    			; 
 	bne     :+				; no, skip ahead.
-	ldx     $C6     			; yes, let x = $C6
-	bne     :++				; and skip ahead.
+
+;** Yes joystick mapped function keys
+	ldx     $C6     			; 
+	bne     :++				; Skip if $C6 <> 0
+
+;** Not joystick mapped function keys
 :	lda     STRIG0				; is joystick trigger pressed?
 	bne     LB02D   			; no, skip ahead.
-	ldx     $C6     			; yes, let x = $C6              ..
-	bne     LB045   			; and skip ahead.
+
+;** Fire button pressed, switch to zoomed display? *****************************
+	ldx     $C6     			; 
+	bne     LB045   			; Skip if $C6 <> 0
+
+;** $C6 == 0, change it to #$1E
 	ldx     #$1E    			; B027 A2 1E                    ..
-	stx     $C6     			; B029 86 C6                    ..
-:	sta     byte_C7 			; B02B 85 C7                    ..
+	stx     $C6     			; $C6 = #$1E
+
+:	sta     JSTICK_TRIG 			; Save fact that trigger was pressed.
 LB02D:  ldx     STICK0				; Read joystick 0
-	lda     LB87F,x 			; Get X-axis unit vector
-	sta     off_DD                          ; 
+	lda     tab_stick_x,x 			; Get X-axis unit vector
+	sta     off_DD                          ; Save X vector
 	lda     LB86F,x 			; Get Y-axis unit vector
-	sta     off_DD+1
+	sta     off_DD+1			; Save Y vector
 	ora     off_DD                          ; is joystick pointed in any direction?
 	bne     :+				; yes, skip to jsr
 	sta     $C2     			; no, let $C2 = 0
@@ -3168,61 +3185,70 @@ LB02D:  ldx     STICK0				; Read joystick 0
 LB045:  ldx     $C6     			; B045 A6 C6                    ..
 	beq     LB04B   			; B047 F0 02                    ..
 	dec     $C6     			; B049 C6 C6                    ..
-LB04B:  lda     $14     			; B04B A5 14                    ..
-	and     #$0F    			; B04D 29 0F                    ).
-	bne     LB087   			; B04F D0 36                    .6
-	lda     $D01F   			; B051 AD 1F D0                 ...
-	and     #$03    			; B054 29 03                    ).
-	cmp     #$01    			; B056 C9 01                    ..
-	bne     LB087   			; B058 D0 2D                    .-
-	lda     CURRENT_DL
-	asl     a       			; B05C 0A                       .
-	ldy     COLOR2  			; B05D AC C6 02                 ...
-	bit     $1355   			; B060 2C 55 13                 ,U.
-	bvs     LB08A   			; B063 70 25                    p%
-	bmi     LB09A   			; B065 30 33                    03
-	php             			; B067 08                       .
-	tya             			; B068 98                       .
-	clc             			; B069 18                       .
-	adc     #$10    			; B06A 69 10                    i.
-	and     #$F0    			; B06C 29 F0                    ).
-	sta     off_DD
-	tya             			; B070 98                       .
-	and     #$0F    			; B071 29 0F                    ).
-	ora     off_DD
-	plp             			; B075 28                       (
-LB076:  sta     COLOR2  			; B076 8D C6 02                 ...
-	sta     COLOR4  			; B079 8D C8 02                 ...
-	bcc     LB085   			; B07C 90 07                    ..
-	sta     BG_COLOR_DL1    		; B07E 85 D3                    ..
-	jsr     sub_set_pm_color
-	bmi     LB087   			; B083 30 02                    0.
-LB085:  sta     BG_COLOR_DL2    		; B085 85 D1                    ..
-LB087:  jmp     XITVBV				; Call OS VBI Deferred Exit
 
-; ----------------------------------------------------------------------------
-LB08A:  inc     COLOR1  			; B08A EE C5 02                 ...
-	lda     COLOR1  			; B08D AD C5 02                 ...
-	bcc	:+
-	sta     FG_COLOR_DL1    		; B092 85 D2                    ..
-	bcs     LB087   			; B094 B0 F1                    ..
-:	sta     FG_COLOR_DL2    		; B096 85 D0                    ..
-	bcc     LB087   			; B098 90 ED                    ..
-LB09A:  tya             			; B09A 98                       .
-	and     #$F0    			; B09B 29 F0                    ).
-	sta     off_DD
-	iny             			; B09F C8                       .
-	tya             			; B0A0 98                       .
-	and     #$0F    			; B0A1 29 0F                    ).
-	ora     off_DD
-	jmp     LB076   			; B0A5 4C 76 B0                 Lv.
+;** Check for OPTION press every 16 VBLANKS ************************************
+LB04B:  lda     RTCLOK+2     			; Get current jiffy
+	and     #$0F    			; Skip unless lower nybble...
+	bne     LB087   			; ...of clock is 0
+
+;** Was OPTION pressed? Exit if no *********************************************
+	lda     CONSOL  			; test if OPTION is pressed
+	and     #$03    			; 
+	cmp     #$01    			; 
+	bne     LB087   			; exit if no OPTION pressed
+
+	lda     CURRENT_DL			; what is current display mode? ($80->1, $00->2)
+	asl     a       			; 
+	ldy     COLOR2  			; get current background color 
+	bit     CURRENT_OPTION 			; Which color register to change ($00->bgc $80->bgb $C0->fgb)
+	bvs     LB08A   			; jump if OPTION changes foreground luminance
+	bmi     LB09A   			; jump if OPTION changes background luminance
+
+;** OPTION + 'c' was pressed. Change background hue ****************************
+	php             			; stash processor flags
+	tya             			; let a = move current background hue + luminance
+	clc             			; 
+	adc     #$10    			; increase background hue
+	and     #$F0    			; clear luminance bits
+	sta     off_DD				; save current background hue
+	tya             			; get current background hue + luminance again
+	and     #$0F    			; clear current hue
+	ora     off_DD				; merge with new hue and save in $DD
+	plp             			; restore processor flags
+LB076:  sta     COLOR2  			; save new hue + luminance to...
+	sta     COLOR4  			; ...background and border registers
+	bcc     LB085   			; skip if current display mode is zoomed
+	sta     BG_COLOR_DL1    		; current display is full-screen. save color
+	jsr     sub_set_pm_color		; change missile color, too
+	bmi     LB087   			; returns with N flag set, so skip to exit
+LB085:  sta     BG_COLOR_DL2    		; current display mode is zoomed, save color
+LB087:  jmp     XITVBV				; Call OS VBI Deferred Exit and RTI
+
+;** OPTION + 't' was pressed. Change forground luminance ***********************
+LB08A:  inc     COLOR1  			; increment foreground brightness
+	lda     COLOR1  			; 
+	bcc	:+				; Update full-screen display color
+	sta     FG_COLOR_DL1    		; variable...
+	bcs     LB087   			; or zoomed display color 
+:	sta     FG_COLOR_DL2    		; variable and...
+	bcc     LB087   			; jump to nearby RTI
+
+;** OPTION + 'b' was pressed. Change background luminance **********************
+LB09A:  tya             			; let a = current COLOR2
+	and     #$F0    			; Reserve current hue only...
+	sta     off_DD				; ...and save to temp variable.
+	iny             			; increment luminance.
+	tya             			; 
+	and     #$0F    			; merge new luminance with...
+	ora     off_DD				; ...current hue.
+	jmp     LB076   			; Save new hue + luminance and RTI
 
 ; ----------------------------------------------------------------------------
 sub_b0a8:
-	ldy     $C1     			; B0A8 A4 C1                    ..
-	beq     LB103   			; B0AA F0 57                    .W
-	bpl	:+
-	jmp     LB17D   			; B0AE 4C 7D B1                 L}.
+	ldy     INPUT_MODE     			; 
+	beq     LB103   			; if just full-screen then RTS
+	bpl	:+				; jump if full-screen touch panel or joystick-mapped terminal keys
+	jmp     LB17D   			; jump if zoomed 
 
 ; ----------------------------------------------------------------------------
 :	cpx     $C2     			; B0B1 E4 C2                    ..
@@ -4698,10 +4724,10 @@ sub_b828:
 	bne     :-
 	dey             			; B83E 88                       .
 	bne     :-
-	lda     #<(LB863-1)
-	ldy     #>(LB863-1)
-	ldx     #$0C    			; B845 A2 0C                    ..
-	jmp     sub_b84b
+	lda     #<(LB863-1)			; Point to obfuscated code used for...
+	ldy     #>(LB863-1)			; ...copy-protection check
+	ldx     #$0C    			; Initialize counter to 12
+	jmp     check_if_pirated		; Perform copy-protection check
 
 ; ----------------------------------------------------------------------------
 	rts             			; B84A 60                       `
@@ -4710,7 +4736,7 @@ sub_b828:
 ;*                                                                             *
 ;*                            check_if_pirated                                 *
 ;*                                                                             *
-;*         Copy protection routine that jumps to COLDSV if not ROM.            *
+;*   Copy protection routine that jumps to COLDSV if not running from cart.    *
 ;*                                                                             *
 ;*******************************************************************************
 
@@ -4718,69 +4744,99 @@ sub_b828:
 
 ; This subroutine decrypts 12 bytes of code from ROM at $B863 and copies it to 
 ; RAM at $3E33. Then jumps to the decrypted code. The code tries to alter $BFFC 
-; at the tail end of the cartridge's address space. If the program is able to 
-; alter the the contents of the address, it's deemed to be an illegal copy and
-; jumps to COLDSV.
+; which is at the tail end of the cartridge's address space. Normally this
+; address is read-only. If the program is able to alter the the contents of 
+; the address, it is deemed to be an illegal copy and jumps to COLDSV. On a 
+; 400/800 this would be the memo pad.
 ;
-; Here is the code after decryption:
+; Here is the 12 bytes of code after decryption:
 ;
-; 3E33: CE FC BF          DEC $BFFC		; Try to alter a ROM address.
-; 3E36: AD FC BF          LDA $BFFC		; Is this ROM?
-; 3E39: F0 03             BEQ $3E3E		; Yes, RTS
-; 3E3B: 4C 77 E4          JMP COLDSV		; No, Reboot
-; 3E3E: 60                RTS
+; 3E33: CE FC BF          dec $BFFC		; Try to alter a ROM address.
+; 3E36: AD FC BF          lda $BFFC		; Is this ROM?
+; 3E39: F0 03             beq $3E3E		; Yes? Good. Skip to RTS.
+; 3E3B: 4C 77 E4          jmp COLDSV		; No? Reboot.
+; 3E3E: 60                rts
 
-sub_b84b:
-	sta     off_EC
+check_if_pirated:				; B84B
+;** Create pointer to where obfuscated code will be stored *********************
+	sta     off_EC				; create pointer in zero page
 	sty     off_EC+1
-	ldy     #$00    			; B84F A0 00                    ..
-	lda     #$55    			; B851 A9 55                    .U
-	sec             			; B853 38                       8
-:	iny             			; B854 C8                       .
-	rol     a       			; B855 2A                       *
-	pha             			; B856 48                       H
-	eor     (off_EC),y
-	sta     L3E33-1,y
-	pla             			; B85C 68                       h
-	dex             			; B85D CA                       .
-	bne     :-
-	jmp     L3E33   			; B860 4C 33 3E                 L3>
+	ldy     #$00    			; initialize pointer index
+
+;** Initialize XOR decryption key **********************************************
+	lda     #$55    			; decryption key 01010101
+	sec             			; set carry bit. helps with the ROL later.
+
+;** Decrypt instructions at $B863 and save them in RAM ($3E33) *****************
+@LOOP:	iny             			; increment pointer index
+	rol     a       			; rotate the key with each iteration.
+	pha             			; stash key (to be clobbered soon)
+	eor     (off_EC),y			; decrypt instruction using XOR
+	sta     L3E33-1,y			; save decypted instruction to RAM
+	pla             			; restore key
+	dex             			; decrement counter
+	bne     @LOOP				; loop while counter <> 0
+
+;** Run the decrypted code and RTS (or COLDSV) *********************************
+	jmp     L3E33   			; 
 
 ; ----------------------------------------------------------------------------
-; Encrypted code that performs copy-protection check.
+; Obfuscated code that performs copy-protection check. Decrypted using XOR.
 ; ----------------------------------------------------------------------------
 LB863:	.byte	$65,$AA,$12,$F7,$49,$D5,$25,$A9
 	.byte	$19,$DC,$B2,$CD
 
-; ------------------------------------------------------------------------------
-;                       JOYSTICK DIRECTION LOOKUP TABLE
-; 
-;                                     14
-;                                  10  |  6
-;                                    \ | /
-;                               11 -- 15 --  7
-;                                    / | \
-;                                   9  |  5
-;                                     13
-;
-; Y AXIS VECTOR
-; +1 DOWN {5, 9,13}
-; -1 UP   {6,10,14}
-; ------------------------------------------------------------------------------
-LB86F:	.byte	$00,$00,$00,$00
-	.byte	$00,$01,$FF,$00
-	.byte	$00,$01,$FF,$00
-	.byte	$00,$01,$FF,$00
+;*******************************************************************************
+;*                                                                             *
+;*                                 tab_stick_y                                 *
+;*                                                                             *
+;*                  joystick direction lookup table (y-axis)                   *
+;*                                                                             *
+;*******************************************************************************
+;*                                                                             *
+;*                                   *14*                                      *
+;*                                *10* | *6*                                   *
+;*                                   \ | /                                     *
+;*                              11 -- 15 --  7                                 *
+;*                                   / | \                                     *
+;*                                 *9* | *5*                                   *
+;*                                   *13*                                      *
+;* Y AXIS VECTOR                                                               *
+;* +1 DOWN {5, 9,13}                                                           *
+;* -1 UP   {6,10,14}                                                           *
+;*******************************************************************************
+LB86F:
+tab_stick_y:
+	.byte	$00,$00,$00,$00			; - - - -
+	.byte	$00,$01,$FF,$00			; - D U -
+	.byte	$00,$01,$FF,$00			; - D U -
+	.byte	$00,$01,$FF,$00			; - D U -
 
-; ------------------------------------------------------------------------------
-; X AXIS VECTOR
-; +1 LEFT  {5, 6, 7}
-; -1 RIGHT {9,10,11}
-; ------------------------------------------------------------------------------
-LB87F:	.byte	$00,$00,$00,$00
-	.byte	$00,$01,$01,$01
-	.byte	$00,$FF,$FF,$FF
-	.byte	$00,$00,$00,$00
+;*******************************************************************************
+;*                                                                             *
+;*                                tab_stick_x                                  * 
+;*                                                                             *
+;*                 joystick direction lookup table (x-axis)                    *
+;*                                                                             *
+;*******************************************************************************
+;*                                                                             *
+;*                                    14                                       *
+;*                                *10* | *6*                                   *
+;*                                   \ | /                                     *
+;*                             *11*-- 15 -- *7*                                *
+;*                                   / | \                                     *
+;*                                 *9* | *5*                                   *
+;*                                    13                                       *
+;*  X AXIS VECTOR                                                              *
+;*  +1 RIGHT {5, 6, 7}                                                         *
+;*  -1 LEFT  {9,10,11}                                                         *
+;*******************************************************************************
+LB87F:	
+tab_stick_x:
+	.byte	$00,$00,$00,$00			; - - - -
+	.byte	$00,$01,$01,$01			; - L L L
+	.byte	$00,$FF,$FF,$FF			; - R R R
+	.byte	$00,$00,$00,$00			; - - - -
 
 LB88F:	.byte	"K:",$9B			; B88F
 
