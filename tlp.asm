@@ -1,4 +1,4 @@
-;*******************************************************************************
+;/*******************************************************************************
 ;*                                                                             *
 ;*                    T H E   L E A R N I N G   P H O N E                      *
 ;*                                                                             *
@@ -119,8 +119,8 @@ ICAX2		:= $034B
 
 ; GTIA (D000-D01F)
 
-HPOSM0		:= $D004                        ; Position of touch panel crosshair (right half)
-HPOSM1		:= $D005                        ; Position of touch panel crosshair (left half)
+HPOSM0		:= $D004                        ; Position of touch panel cross-shaped cursor (right half)
+HPOSM1		:= $D005                        ; Position of touch panel cross-shaped cursor (left half)
 HPOSM2		:= $D006                        ; Position of "=" part of "F" in joystick function key mode
 HPOSM3		:= $D007                        ; Position of "|" part of "F" in joystick function key mode
 SIZEM		:= $D00C			; Size for all missiles
@@ -206,12 +206,15 @@ byte_B3		:= $00B3
 byte_B5		:= $00B5
 byte_B7		:= $00B7
 CURRENT_DL	:= $00B8			; Current Display List (80 or FF = DL #1, 00 = DL #2)
-byte_C0		:= $00C0
-INPUT_MODE	:= $00C1			; Input/display mode ($00->scaled, $FF->zoomed, $01->touch panel, $FE->zoomed from touch panel, $02->joystick func keys)
-byte_C2		:= $00C2
-byte_C3		:= $00C3
-CROSS_HPOS	:= $00C4			; touch panel crosshair horizontal position
-byte_C6		:= $00C6
+TOUCH_X		:= $00BF			; Current X position of simulated touch panel - resolution is 16 positions ($00-$0F)
+TOUCH_Y		:= $00C0			; Current Y position of simulated touch panel - resolition is 16 positions ($00-$0F)
+UI_MODE		:= $00C1			; Current user interface mode ($00->full-screen, $FF->zoomed, $01->touch panel, $FE->zoomed from touch panel, $02->joystick func keys)
+byte_C2		:= $00C2			; 
+JSTICK_DIR	:= $00C2			; Direction of joystick (normal 14->up, 7->right, etc, but center = 0)
+CROSS_Y		:= $00C3			; Touch panel cross-shaped cursor vertical position
+CROSS_X		:= $00C4			; Touch panel cross-shaped cursor horizontal position
+byte_C5		:= $00C5			;
+JSTICK_DELAY	:= $00C6			; Counter that restricts trigger presses to no more than 2 times per second.
 byte_C7		:= $00C7
 JSTICK_TRIG	:= $00C7			; State of joystick trigger ($00=pressed, $FF->clear)
 JSTICK_FUNC	:= $00C8			; Direction of joystick-mapped function keys: 0D->U(NEXT),02->D(BACK),0C->L(LAB),$12->R(DATA)
@@ -223,8 +226,10 @@ BG_COLOR_DL2	:= $00D1			; Background / border hue/luminance used in Display List
 FG_COLOR_DL1	:= $00D2			; Text luminance used in Display List #1 (small text)
 BG_COLOR_DL1	:= $00D3			; Background / border hue/luminance used in Display List #1
 byte_D9		:= $00D9
-off_DD		:= $00DD			; Current joystick direction X-axis (-1=left +1=right)
-off_DE		:= $00DE			; Current joystick direction Y-axis (-1=up   +1=down)
+off_DD		:= $00DD			; 
+off_DE		:= $00DE			; 
+JSTICK_X	:= $00DD			; Current joystick direction X-axis (-1=left +1=right)
+JSTICK_Y	:= $00DE			; Current joystick direction Y-axis (-1=up   +1=down)
 off_DF		:= $00DF
 byte_E1		:= $00E1
 byte_E2		:= $00E2
@@ -814,15 +819,15 @@ init_graphics:
 	bpl     :-      			; End Loop
 
 ;** (n) *************************************************************************
-	ldx     #$32    			; Set initial touch panel cursor...
-	stx     CROSS_HPOS                      ; ...horizontal position
+	ldx     #$32    			; Set initial X location for touch panel
+	stx     CROSS_X				; cross-shaped cursor.
 
-	ldx     #$0F    			; TODO
-	stx     byte_C0 			;
+	ldx     #$0F    			; Set initial simulated touch panel
+	stx     TOUCH_Y 			; position to 16
 
 	ldx     #$07    			; Load bitmaps for missiles.
 	stx     byte_B3 			; One is a large 'F' and the ...
-:       lda     LBA67,x 			; ...other is a crosshair.
+:       lda     LBA67,x 			; ...other is a cross-shaped cursor.
 	sta     $058C,x 			; 
 	dex             			;
 	bpl     :-      			; 
@@ -830,8 +835,8 @@ init_graphics:
 	stx     JSTICK_TRIG 			; Initialize trigger state to -1
 
 ;** (n) Set default background and border color for Display List #1 *************
-	lda     #$01    			;
-	sta     byte_C3 			;
+	lda     #$01    			; Set initial Y location for touch panel 
+	sta     CROSS_Y 			; cross-shaped cursor.
 	sta     byte_B5 			; Set priority for screen objects...
 	sta     GPRIOR  			; 0000 0001 = Player 0-3, Playfied 0-3, BAK
 	lda     #$16				; $10 = rust + $06 luminance
@@ -840,7 +845,7 @@ init_graphics:
 	sta     BG_COLOR_DL1    		; Save color value to RAM
 
 ;** (n) Change Player/Missile colors to something different than background *****
-	jsr     sub_set_pm_color
+	jsr     set_pm_colors
 
 ;** (n) Set default background and border color for Display List #2 *************
 	lda     #$94    			; $90 = dark blue + $04 luminance
@@ -874,12 +879,12 @@ init_graphics:
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                             sub_set_pm_color                                *
+;*                              set_pm_colors                                  *
 ;*                                                                             *
 ;*      Set Player/Missile Colors to something different than background.      *
 ;*                                                                             *
 ;*******************************************************************************
-sub_set_pm_color:				; A324
+set_pm_colors:					; A324
 	tay             			; Let Y = current background color
 	clc             			;
 	adc     #$04    			; Increment luminance by 4
@@ -922,7 +927,7 @@ display_title:					; A33D
 
 ;** (3) Print "COPYRIGHT 1984 ATARI" *******************************************
 	lda     #$67    			; Set X coordinate for text
-	sta     word_A4     			; Save X coordinate for scaled display?
+	sta     word_A4     			; Save X coordinate for full-screen display?
 	sta     word_9C
 	ldy     #$13    			; String length - 1
 	lda     #<LB8AE				; "COPYRIGHT..."
@@ -1342,7 +1347,7 @@ sub_a5b5:
 	and     #$20    			; A5BD 29 20                    ) 
 	beq     LA5E4   			; A5BF F0 23                    .#
 	jsr     sub_hide_F   			; A5C1 20 F6 A5                  ..
-	ldx     INPUT_MODE  			; A5C4 A6 C1                    ..
+	ldx     UI_MODE  			; A5C4 A6 C1                    ..
 	beq     :+
 	bmi     LA5D1   			; A5C8 30 07                    0.
 	dex             			; A5CA CA                       .
@@ -1354,16 +1359,16 @@ sub_a5b5:
 LA5D1:  lda     #$FE    			; A5D1 A9 FE                    ..
 	ldx     #$00    			; A5D3 A2 00                    ..
 	beq     LA5D9   			; A5D5 F0 02                    ..
-LA5D7:  ldx     CROSS_HPOS 			; A5D7 A6 C4                    ..
-LA5D9:  sta     INPUT_MODE  			; A5D9 85 C1                    ..
+LA5D7:  ldx     CROSS_X 			; A5D7 A6 C4                    ..
+LA5D9:  sta     UI_MODE  			; A5D9 85 C1                    ..
 	stx     HPOSM1				; Set position for left half...
-	inx             			; ...of crosshair cursor.
-	inx             			; Right half of crosshair cursor...
+	inx             			; ...of cross-shaped cursor.
+	inx             			; Right half of cross-shaped cursor...
 	stx     HPOSM0				; ...is a couple ticks further.
 LA5E3:  rts             			; 
 
 ; ----------------------------------------------------------------------------
-LA5E4:  lda     $C1     			; A5E4 A5 C1                    ..
+LA5E4:  lda     UI_MODE     			; A5E4 A5 C1                    ..
 	beq     LA5E3   			; A5E6 F0 FB                    ..
 	bmi     LA5F0   			; A5E8 30 06                    0.
 	lsr     a       			; A5EA 4A                       J
@@ -2198,19 +2203,19 @@ LAA23:  rts             			;
 	bne     :+++				; no, skip out
 	ldx     CURRENT_DL			; is display currently zoomed?
 	beq     :+++				; yes, skip to OPTION + 'z'
-	lda     INPUT_MODE			; is display scaled (no touch panel)?
+	lda     UI_MODE				; is display full-screen (no touch panel)?
 	beq     :+				; yes, skip to OPTION + 'z'
 	cmp     #$02    			; is joystick in function key mode?
 	bne     LAA23   			; no, jump to nearby RTS
 :	eor     #$02    			; toggle current mode
-	sta     INPUT_MODE			; 
-	tax             			; if new mode is scaled with no touch panel
-	beq     :+				; then hide the crosshair cursor (x=0)
-	ldx     #$32    			; else show the crosshair cursor (x=50)
-:	stx     HPOSM3				; Position left half of crosshair
+	sta     UI_MODE				; 
+	tax             			; if new mode is full-screen with no touch panel
+	beq     :+				; then hide the cross-shaped cursor (x=0)
+	ldx     #$32    			; else show the large "F".
+:	stx     HPOSM3				; Position "|" part of "F"
 	inx             			;
 	inx             			;
-	stx     HPOSM2				; Position right half of crosshair
+	stx     HPOSM2				; Position "=" part of "F"
 	rts             			;
 
 ; ------------------------------------------------------------------------------
@@ -2312,34 +2317,34 @@ jmp_printscreen:				; AAAA
 ;*                                                                             *
 ;*                            sub_swap_display                                 *
 ;*                                                                             *
-;*       Change display/input mode from scaled to zoomed or vice-versa.        *
+;*     Change display/input mode from full-screen to zoomed or vice-versa.     *
 ;*                                                                             *
 ;*******************************************************************************
 sub_swap_display:				; AAAD  
 	jsr     sub_hide_F   			; Hide "F" displayed in function key mode
-	lda     INPUT_MODE  			; is current display scaled with...
+	lda     UI_MODE  			; is current display full-screen with...
 	cmp     #$02    			; ...joystick-mapped function keys?
 	bne     :+				; no, skip ahead.
 	lda     #$00    			; yes. well not any more. stick now needed for scrolling.
 :	eor     #$FF    			; Toggle current input/display mode
-	sta     INPUT_MODE  			; Store new input/display mode.
-	bmi     @DL_ZOOMED			; INPUT_MODE < 0  -> zoomed mode
-	beq     @DL_SCALED			; INPUT_MODE == 0 -> scaled mode (no cursor)
-						; INPUT_MODE > 0  -> scaled mode (with cursor)
+	sta     UI_MODE  			; Store new input/display mode.
+	bmi     @DL_ZOOMED			; UI_MODE < 0 -> zoomed mode
+	beq     @DL_SCALED			; UI_MODE = 0 -> full-screen mode (no cursor)
+						; UI_MODE > 0 -> full-screen mode (with cursor)
 
-;** (n) Restore touch panel crosshair position *********************************
-	ldx     CROSS_HPOS 			; Retrieve previous cursor position
-	stx     HPOSM1				; Left half of crosshair cursor
+;** (n) Restore touch panel cross-shaped cursor position ***********************
+	ldx     CROSS_X 			; Retrieve previous cursor position
+	stx     HPOSM1				; Left half of cross-shaped cursor
 	inx             			; 
 	inx             			; 
-	stx     HPOSM0				; Right half of crosshair cursor
+	stx     HPOSM0				; Right half of cross-shaped cursor
 
-;** (n) Change to scaled display ***********************************************
+;** (n) Change to full-screen display ***********************************************
 @DL_SCALED:	
 	lda     FG_COLOR_DL1    		; Restore foreground color for...
-	sta     COLOR1  			; ...scaled display mode.
+	sta     COLOR1  			; ...full-screen display mode.
 	ldy     #$80    			; 
-	sty     CURRENT_DL			; $80->scaled mode
+	sty     CURRENT_DL			; $80->full-screen mode
 	ldy     BG_COLOR_DL1    		; Get the color for the display mode
 	lda     #<$1000 			; LSB of Display List #1
 	ldx     #>$1000 			; MSB of Display List #1
@@ -2413,7 +2418,7 @@ LAB05:  dey             			; clear trigger state to -1
 ;*******************************************************************************
 sub_ab35:
 proc_joystick_key:
-	ldx     INPUT_MODE     			; using joystick-mapped ...
+	ldx     UI_MODE     			; using joystick-mapped ...
 	cpx     #$02    			; ...function keys? 
 	bne     :+				; no, skip ahead.
 	lda     JSTICK_FUNC			; yes, using joystick. Get char to send to PLATO
@@ -3148,92 +3153,143 @@ sub_b004:
 ;*                                                                             *
 ;*******************************************************************************
 
+; DESCRIPTION
+; This subroutine executes during the Vertical Blank. It processes the inputs 
+; from the joystick trigger and direction switches and from the SELECT console 
+; key. 
+;
+; The joystick direction switches provide three modes of input depending on 
+; the current UI_MODE:
+; 1. When current input mode is joystick-mapped function keys, translate four 
+;    stick directions to eight PLATO keys: NEXT(1), BACK(1), LAB(1), DATA(1).
+; 2. When the PLATO terminal touch panel is being simulated, change the 
+;    location of an on-screen cursor.
+; 3. When the current display mode is "zoomed", pan the view port.
+; 
+; Similarly, the joystick trigger switch has three contexts for input:
+; 1. When current input mode is joystick-mapped function keys, closing the 
+;    trigger simulates the SHIFT key being pressed when combined with a
+;    direction.
+; 2. When the PLATO terminal touch panel is simulated, closing the trigger
+;    simulates the panel being pressed.
+; 3. If the current display mode is "zoomed", closing the trigger switch
+;    changes the display mode to "full-screen". If the current display mode
+;    is "full-screen" (and not in touch panel nor joytick-mapped function key
+;    modes) closing the trigger switch changes the current display mode to 
+;    "zoomed".
+;
+; The polling of the joystick trigger is restricted to once every 30 calls of 
+; this routine. On a 60 Hz NTSC system, this equates to two times per second.
+; Presumably this ensures the trigger-based event has had time to complete 
+; before the next event can be entered. JSTICK_DELAY ($C6) is used to enforce 
+; the restriction. Whenever a new trigger event is initiated, JSTICK_DELAY
+; is set to 30 and is decremented with each vertical blank.
+; 
+; The SELECT console key is used to alter color preferences. The SELECT key
+; provides three color change modes:
+; 1. Background and border hue (color)
+; 2. Background and border luminance (brightness)
+; 3. Text luminance (text brightness)
+; 
+; Which mode is active is determined earlier from the user by pressing the 
+; OPTION + {'c','b','t'}. The initial mode is OPTION + 'c'.
+;
+; The polling of the SELECT console key is restricted to once every 16 calls
+; of this routine (or ~0.27 secs) . This is accomplished by examining the 
+; least significant bits in register RTCLOK+2 which increments with each 
+; vertical blank.
 
 sub_b013:
 	sec             			; 
-	lda     INPUT_MODE			; using joystick-mapped function keys?
-	sbc     #$02    			; 
+	lda     UI_MODE				; 
+	sbc     #$02    			; using joystick-mapped function keys?
 	bne     :+				; no, skip ahead.
 
-;** Yes joystick mapped function keys
-	ldx     $C6     			; 
-	bne     :++				; Skip if $C6 <> 0
+;** In joystick-mapped mode. Skip polling if a delay is active *****************
+	ldx     JSTICK_DELAY   			; is delay active?
+	bne     :++				; yes, skip polling
 
-;** Not joystick mapped function keys
+;** Poll joystick trigger ******************************************************
 :	lda     STRIG0				; is joystick trigger pressed?
 	bne     LB02D   			; no, skip ahead.
 
-;** Fire button pressed, switch to zoomed display? *****************************
-	ldx     $C6     			; 
-	bne     LB045   			; Skip if $C6 <> 0
+;** Trigger pressed and a delay is active, skip joystick direction logic *******
+	ldx     JSTICK_DELAY   			; 
+	bne     LB045   			; 
 
-;** $C6 == 0, change it to #$1E
-	ldx     #$1E    			; B027 A2 1E                    ..
-	stx     $C6     			; $C6 = #$1E
+;** Trigger pressed and a delay is not active. Initialize a new delay. *********
+	ldx     #$1E    			; $1E = 30 (that's 0.5 seconds to run down in 60Hz VBI time)
+	stx     JSTICK_DELAY   			; Start new delay
+:	sta     JSTICK_TRIG 			; $00->{pressed,joystick mapped mode} $FF->not pressed
 
-:	sta     JSTICK_TRIG 			; Save fact that trigger was pressed.
+;** Poll joystick direction ****************************************************
 LB02D:  ldx     STICK0				; Read joystick 0
 	lda     tab_stick_x,x 			; Get X-axis unit vector
-	sta     off_DD                          ; Save X vector
-	lda     LB86F,x 			; Get Y-axis unit vector
-	sta     off_DD+1			; Save Y vector
-	ora     off_DD                          ; is joystick pointed in any direction?
-	bne     :+				; yes, skip to jsr
-	sta     $C2     			; no, let $C2 = 0
-	beq     LB045   			; and skip over jsr
-:	jsr     sub_b0a8   			; 
-LB045:  ldx     $C6     			; B045 A6 C6                    ..
-	beq     LB04B   			; B047 F0 02                    ..
-	dec     $C6     			; B049 C6 C6                    ..
+	sta     JSTICK_X                        ; Save X vector
+	lda     tab_stick_y,x 			; Get Y-axis unit vector
+	sta     JSTICK_Y			; Save Y vector
 
-;** Check for OPTION press every 16 VBLANKS ************************************
+;** If joystick is pointing in any direction then call vbi_joystick ************
+	ora     JSTICK_X			; Any direction?
+	bne     :+				; yes, jump to jsr call.
+	sta     JSTICK_DIR    			; no, let JSTICK_DIR = 0
+	beq     LB045   			; and skip over jsr call.
+:	jsr     vbi_joystick   			; call to stick direction routine.
+
+;** Decrement delay counter if a delay is active *******************************
+LB045:  ldx     JSTICK_DELAY     		; Don't decrement delay counter
+	beq     LB04B   			; if we've reached 0.
+	dec     JSTICK_DELAY   			; otherwise 
+
+;** Check for SELECT press every 16 VBLANKS (0.27 secs) ************************
 LB04B:  lda     RTCLOK+2     			; Get current jiffy
 	and     #$0F    			; Skip unless lower nybble...
 	bne     LB087   			; ...of clock is 0
 
-;** Was OPTION pressed? Exit if no *********************************************
-	lda     CONSOL  			; test if OPTION is pressed
-	and     #$03    			; 
+;** Was SELECT pressed? Exit if no *********************************************
+	lda     CONSOL  			; test if SELECT is pressed
+	and     #$03    			; mask irrelevant bits
 	cmp     #$01    			; 
-	bne     LB087   			; exit if no OPTION pressed
+	bne     LB087   			; XITBV if no SELECT
 
 	lda     CURRENT_DL			; what is current display mode? ($80->1, $00->2)
 	asl     a       			; 
 	ldy     COLOR2  			; get current background color 
 	bit     CURRENT_OPTION 			; Which color register to change ($00->bgc $80->bgb $C0->fgb)
-	bvs     LB08A   			; jump if OPTION changes foreground luminance
-	bmi     LB09A   			; jump if OPTION changes background luminance
+	bvs     LB08A   			; jump if SELECT changes foreground luminance
+	bmi     LB09A   			; jump if SELECT changes background luminance
+						; otherwise fall into background color
 
-;** OPTION + 'c' was pressed. Change background hue ****************************
+;** Change background hue *****************************************************
 	php             			; stash processor flags
-	tya             			; let a = move current background hue + luminance
+	tya             			; get current background hue + luminance
 	clc             			; 
-	adc     #$10    			; increase background hue
+	adc     #$10    			; increment background hue
 	and     #$F0    			; clear luminance bits
-	sta     off_DD				; save current background hue
+	sta     off_DD				; stash current background hue
 	tya             			; get current background hue + luminance again
-	and     #$0F    			; clear current hue
+	and     #$0F    			; clear hue bits
 	ora     off_DD				; merge with new hue and save in $DD
 	plp             			; restore processor flags
 LB076:  sta     COLOR2  			; save new hue + luminance to...
 	sta     COLOR4  			; ...background and border registers
 	bcc     LB085   			; skip if current display mode is zoomed
 	sta     BG_COLOR_DL1    		; current display is full-screen. save color
-	jsr     sub_set_pm_color		; change missile color, too
-	bmi     LB087   			; returns with N flag set, so skip to exit
+	jsr     set_pm_colors			; change missile color, too
+	bmi     LB087   			; returns with N flag set to force jump to XITBV
 LB085:  sta     BG_COLOR_DL2    		; current display mode is zoomed, save color
 LB087:  jmp     XITVBV				; Call OS VBI Deferred Exit and RTI
 
-;** OPTION + 't' was pressed. Change forground luminance ***********************
-LB08A:  inc     COLOR1  			; increment foreground brightness
+;** Change forground luminance *************************************************
+LB08A:  inc     COLOR1  			; increment foreground luminance
 	lda     COLOR1  			; 
-	bcc	:+				; Update full-screen display color
-	sta     FG_COLOR_DL1    		; variable...
+	bcc	:+				; Update full-screen display 
+	sta     FG_COLOR_DL1    		; color variable...
 	bcs     LB087   			; or zoomed display color 
 :	sta     FG_COLOR_DL2    		; variable and...
-	bcc     LB087   			; jump to nearby RTI
+	bcc     LB087   			; jump to XITBV.
 
-;** OPTION + 'b' was pressed. Change background luminance **********************
+;** Change background luminance ************************************************
 LB09A:  tya             			; let a = current COLOR2
 	and     #$F0    			; Reserve current hue only...
 	sta     off_DD				; ...and save to temp variable.
@@ -3243,133 +3299,179 @@ LB09A:  tya             			; let a = current COLOR2
 	ora     off_DD				; ...current hue.
 	jmp     LB076   			; Save new hue + luminance and RTI
 
-; ----------------------------------------------------------------------------
-sub_b0a8:
-	ldy     INPUT_MODE     			; 
-	beq     LB103   			; if just full-screen then RTS
-	bpl	:+				; jump if full-screen touch panel or joystick-mapped terminal keys
+;*******************************************************************************
+;*                                                                             *
+;*                               vbi_joystick                                  *
+;*                                                                             *
+;*            Called during VBI to handle joystick direction switches          *
+;*                                                                             *
+;*******************************************************************************
+; X contains joystick direction
+vbi_joystick:					; B0A8
+	ldy     UI_MODE     			; Check current display/input mode
+	beq     LB103   			; if just full-screen mode ($00) then RTS
+	bpl	:+				; jump if full-screen touch panel or joystick-mapped function keys
 	jmp     LB17D   			; jump if zoomed 
 
-; ----------------------------------------------------------------------------
-:	cpx     $C2     			; B0B1 E4 C2                    ..
-	bne     LB104   			; B0B3 D0 4F                    .O
-	ldx     $C5     			; B0B5 A6 C5                    ..
-	cpx     #$7F    			; B0B7 E0 7F                    ..
-	beq     LB136   			; B0B9 F0 7B                    .{
-	inx             			; B0BB E8                       .
-	stx     $C5     			; B0BC 86 C5                    ..
-	bmi     LB136   			; B0BE 30 76                    0v
-	txa             			; B0C0 8A                       .
-	and     #$03    			; B0C1 29 03                    ).
-	bne     LB136   			; B0C3 D0 71                    .q
-LB0C5:  lda     $C1     			; B0C5 A5 C1                    ..
+;** here if full screen or joystick-mapped function keys
+:	cpx     JSTICK_DIR     			; Has there been a change in STICK0?
+	bne     LB104   			; Yes, jump ahead
+
+;** no change in STICK0 since last check ***************************************
+;** RTS if C5 == $7F or C5 > $80 or C5 like xxxxxx11 ***************************
+	ldx     $C5     			; let X = $C5
+	cpx     #$7F    			; Is $C5 == 127?
+	beq     LB136   			; yes, RTS
+
+	inx             			; increment $C5?
+	stx     $C5     			; Is $C5 > $80?
+	bmi     LB136   			; yes
+
+	txa             			; 
+	and     #$03    			; Is $C5 like xxxxxx11?
+	bne     LB136   			; yes
+
+LB0C5:  lda     UI_MODE     			; 
 	lsr     a       			; B0C7 4A                       J
-	ldx     byte_C7 			; B0C8 A6 C7                    ..
+
+	ldx     JSTICK_TRIG 			; B0C8 A6 C7                    ..
 	inx             			; B0CA E8                       .
-	lda     off_DD+1
-	beq     LB0E8   			; B0CD F0 19                    ..
-	bpl     LB0DE   			; B0CF 10 0D                    ..
-	bcs     LB0D8   			; B0D1 B0 05                    ..
-	lda     LBA43,x 			; B0D3 BD 43 BA                 .C.
-	bne     LB0FD   			; B0D6 D0 25                    .%
-LB0D8:  jsr     sub_b115
+
+	lda     JSTICK_Y
+	beq     LB0E8   			; if no y-axis deflection, skip to x-axis logic.
+	bpl     LB0DE   			; jump if joystick deflected down
+	bcs     LB0D8   			; using touch panel? yes, move touch panel cursor up
+
+	lda     LBA43,x 			; Joystick-mapped function key - get char code for NEXT
+	bne     LB0FD   			; Skip ahead and save function key
+
+LB0D8:  jsr     vbi_move_touch_dn		; Move touch panel cursor down 1 position
 	jmp     LB0E8   			; B0DB 4C E8 B0                 L..
 
 ; ----------------------------------------------------------------------------
-LB0DE:  bcs     :+
-	lda     LBA40,x 			; B0E0 BD 40 BA                 .@.
-	bne     LB0FD   			; B0E3 D0 18                    ..
-:  	jsr     sub_b137
-LB0E8:  lda     $C1     			; B0E8 A5 C1                    ..
+LB0DE:  bcs     :+				; Skip ahead if touch panel is active 
+	lda     LBA40,x 			; Joystick-mapped function key - get char code for BACK
+	bne     LB0FD   			; Skip ahead and save function key
+
+:  	jsr     vbi_move_touch_up		; Touch panel active - move cursor up
+
+LB0E8:  lda     UI_MODE    			; B0E8 A5 C1                    ..
 	lsr     a       			; B0EA 4A                       J
-	lda     off_DD
-	beq     LB136   			; B0ED F0 47                    .G
-	bpl     LB0F8   			; B0EF 10 07                    ..
-	bcs     LB157   			; B0F1 B0 64                    .d
-	lda     LBA3D,x 			; B0F3 BD 3D BA                 .=.
-	bne     LB0FD   			; B0F6 D0 05                    ..
-LB0F8:  bcs     LB16E   			; B0F8 B0 74                    .t
-	lda     LBA3A,x 			; B0FA BD 3A BA                 .:.
-LB0FD:  sta     JSTICK_FUNC    			; B0FD 85 C8                    ..
+
+	lda     JSTICK_X 
+	beq     LB136   			; if no x-axis deflection, jump to RTS
+	bpl     LB0F8   			; joystick deflected to right
+	bcs     LB157   			; using touch panel? yes, move touch panel cursor left
+
+	lda     LBA3D,x 			; joystick deflected to left
+	bne     LB0FD   			; Skip ahead and save function key
+
+LB0F8:  bcs     LB16E   			; using touch panel? yes, move touch panel cursor right
+	lda     LBA3A,x 			; get function key mapping from table
+
+LB0FD:  sta     JSTICK_FUNC    			; 
 	ldx     #$80    			; B0FF A2 80                    ..
 	stx     $C5     			; B101 86 C5                    ..
 LB103:  rts             			; B103 60                       `
 
-; ----------------------------------------------------------------------------
-LB104:  stx     $C2     			; B104 86 C2                    ..
-	ldx     #$80    			; B106 A2 80                    ..
-	ldy     $C1     			; B108 A4 C1                    ..
-	cpy     #$02    			; B10A C0 02                    ..
-	beq     LB110   			; B10C F0 02                    ..
-	ldx     #$E2    			; B10E A2 E2                    ..
-LB110:  stx     $C5     			; B110 86 C5                    ..
-	jmp     LB0C5   			; B112 4C C5 B0                 L..
+;** Change has occurred in joystick direction since last check
+;** If input mode is joystick-mapped function keys, then $C5 = $80, else $C5 = $E2
+LB104:  stx     JSTICK_DIR     			; X contains STICK0, save it to variable
+	ldx     #$80    			; 
+	ldy     UI_MODE     			; 
+	cpy     #$02    			; using joystick-mapped function keys?
+	beq     LB110   			; yes, let $C5 = #$80
+	ldx     #$E2    			; no, let $C5 = #$E2
+LB110:  stx     $C5     			; 
+	jmp     LB0C5   			; 
+
+;*******************************************************************************
+;*                                                                             *
+;*                             vbi_move_touch_dn                               *
+;*                                                                             *
+;*                      Move touch panel cursor down                           *
+;*                                                                             *
+;*******************************************************************************
+vbi_move_touch_dn:				; B115
+	lda     TOUCH_Y 			; Get current touch panel position
+	cmp     #$0F    			; Is position already at upper bound?
+	bcs     LB136   			; Yes, RTS.
+	inc     TOUCH_Y 			; No. Move position down.
+
+;** Move missile graphics for cross-shaped cursor down *************************
+	ldy     #$02    			; Initialize loop counter = 2
+	ldx     CROSS_Y 			; Let X = current location
+	txa             			; 
+	sec             			; 
+	sbc     #$06    			; Move bitmap down by 6 pixels
+	sta     CROSS_Y 			; Save new Y location.
+
+@LOOP:	lda     $0590,x 			; Copy cursor bits from 
+	sta     $058A,x 			; old offset to new offset.
+	lda     #$00    			; Erase cursor bits
+	sta     $0590,x 			; at old offset.
+	inx             			; Point to next row
+	dey             			; Decrement loop counter
+	bpl     @LOOP
+
+LB136:  rts             			; 
+
+;*******************************************************************************
+;*                                                                             *
+;*                             vbi_move_touch_up                               *
+;*                                                                             *
+;*                        Move touch panel cursor up                           *
+;*                                                                             *
+;*******************************************************************************
+vbi_move_touch_up:				; B137
+	lda     TOUCH_Y 			; Get current touch panel position
+	beq     LB156   			; Is position already at lower bound? Yes RTS (0)
+	dec     TOUCH_Y 			; No. Move position up.
+
+;** Move missile graphics for cross-shaped cursor up ***************************
+	ldy     #$02    			; Initialize loop counter = 2
+	ldx     CROSS_Y 			; Let X = current location
+	txa             			; 
+	clc             			; 
+	adc     #$06    			; Move bitmap up by 6 pixels
+	sta     CROSS_Y 			; Save new Y location.
+
+@LOOP:	lda     $0590,x 			; Copy cursor bits from
+	sta     $0596,x 			; old offset to new offset.
+	lda     #$00    			; Erase cursor bits
+	sta     $0590,x 			; at old offset.
+	inx             			; Point to next row.
+	dey             			; Decrement loop counter.
+	bpl     @LOOP
+
+LB156:  rts             			; 
 
 ; ----------------------------------------------------------------------------
-sub_b115:
-	lda     byte_C0 			; B115 A5 C0                    ..
-	cmp     #$0F    			; B117 C9 0F                    ..
-	bcs     LB136   			; B119 B0 1B                    ..
-	inc     byte_C0 			; B11B E6 C0                    ..
-	ldy     #$02    			; B11D A0 02                    ..
-	ldx     byte_C3 			; B11F A6 C3                    ..
-	txa             			; B121 8A                       .
-	sec             			; B122 38                       8
-	sbc     #$06    			; B123 E9 06                    ..
-	sta     byte_C3 			; B125 85 C3                    ..
-:	lda     $0590,x 			; B127 BD 90 05                 ...
-	sta     $058A,x 			; B12A 9D 8A 05                 ...
-	lda     #$00    			; B12D A9 00                    ..
-	sta     $0590,x 			; B12F 9D 90 05                 ...
-	inx             			; B132 E8                       .
-	dey             			; B133 88                       .
-	bpl     :-
-LB136:  rts             			; B136 60                       `
+LB157:  lda     TOUCH_X     			; Move simulated touch panel position 
+	beq     LB16D   			; left unless already at lower bound of 0
+	dec     TOUCH_X				; 
 
-; ----------------------------------------------------------------------------
-sub_b137:
-	lda     byte_C0 			; B137 A5 C0                    ..
-	beq     LB156   			; B139 F0 1B                    ..
-	dec     byte_C0 			; B13B C6 C0                    ..
-	ldy     #$02    			; B13D A0 02                    ..
-	ldx     byte_C3 			; B13F A6 C3                    ..
-	txa             			; B141 8A                       .
-	clc             			; B142 18                       .
-	adc     #$06    			; B143 69 06                    i.
-	sta     byte_C3 			; B145 85 C3                    ..
-:	lda     $0590,x 			; B147 BD 90 05                 ...
-	sta     $0596,x 			; B14A 9D 96 05                 ...
-	lda     #$00    			; B14D A9 00                    ..
-	sta     $0590,x 			; B14F 9D 90 05                 ...
-	inx             			; B152 E8                       .
-	dey             			; B153 88                       .
-	bpl     :-
-LB156:  rts             			; B156 60                       `
-
-; ----------------------------------------------------------------------------
-LB157:  lda     $BF     			; B157 A5 BF                    ..
-	beq     LB16D   			; B159 F0 12                    ..
-	dec     $BF     			; B15B C6 BF                    ..
-	lda     CROSS_HPOS 			; B15D A5 C4                    ..
-	sec             			; B15F 38                       8
-	sbc     #$0A    			; B160 E9 0A                    ..
-LB162:  sta     CROSS_HPOS 			; B162 85 C4                    ..
-	sta     HPOSM1
-	tax             			; B167 AA                       .
-	inx             			; B168 E8                       .
-	inx             			; B169 E8                       .
-	stx     HPOSM0
-LB16D:  rts             			; B16D 60                       `
+	lda     CROSS_X 			; Move cross-shaped cursor left
+	sec             			; 
+	sbc     #$0A    			; 
+LB162:  sta     CROSS_X 			; Save new location of the left
+	sta     HPOSM1				; half of cross-shaped cursor.
+	tax             			; 
+	inx             			; 
+	inx             			; Save new location for the right
+	stx     HPOSM0				; half of the cross-shaped cursor.
+LB16D:  rts             			; 
 
 ; ----------------------------------------------------------------------------
 LB16E:  lda     $BF     			; B16E A5 BF                    ..
 	cmp     #$0F    			; B170 C9 0F                    ..
 	beq     LB16D   			; B172 F0 F9                    ..
 	inc     $BF     			; B174 E6 BF                    ..
-	lda     CROSS_HPOS 			; B176 A5 C4                    ..
+	lda     CROSS_X 			; B176 A5 C4                    ..
 	clc             			; B178 18                       .
 	adc     #$0A    			; B179 69 0A                    i.
 	bne     LB162   			; B17B D0 E5                    ..
+
 LB17D:  lda     off_DD
 	beq     LB18E   			; B17F F0 0D                    ..
 	clc             			; B181 18                       .
@@ -3460,7 +3562,7 @@ call_cio_or_err:				; B1F1
 	jsr     call_cio			; Call CIOV using Y as arg
 	bpl     LB252   			; Success. Jump to nearby RTS
 display_comm_error:
-	ldy     #$18    			; Set cursor X coord in scaled mode
+	ldy     #$18    			; Set cursor X coord in full-screen mode
 	sty     word_9C     			; 
 	ldy     #$12    			; Set string length - 1
 	lda     #<LB89B				; Point to string "COMMUNIC..."
@@ -5161,7 +5263,7 @@ LBA67:	.byte	%01110000			; .###....
 	.byte	%01000000			; .#......
 	.byte	%01000000			; .#......
 
-; Bitmap for touch panel crosshair cursor
+; Bitmap for touch panel cross-shaped cursor
 	.byte	%00000110			; .....##.
 	.byte	%00001111			; ....####
 	.byte	%00000110			; .....##.
