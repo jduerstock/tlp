@@ -23,6 +23,18 @@
 ;*******************************************************************************
 ; Input file: tlp.bin
 
+;*******************************************************************************
+;*                                                                             *
+;*                             M E M O R Y   M A P                             *
+;*                                                                             *
+;*******************************************************************************
+; $1000..$10C9	Display List #1
+; $10C9..$130F	Display List #2
+;
+; $2010..$3DFF	8K frame buffer for Display List #1
+; $4000..$9FFF	24K frame buffer for Display List #2
+; $A000..$BFFF	8K Cart ROM
+
 	.setcpu "6502"
 
 .macro  RString       Arg
@@ -209,10 +221,12 @@ CURRENT_BAUD	:= $00B1			; Current 850 baud rate: $FF->300 $00->1200
 byte_B2		:= $00B2			; Used during init
 IS_MPP		:= $00B2			; If Microbits 300 then 1 else 0
 byte_B3		:= $00B3
+JMP_IDX1	:= $00B3			; 7 = print_char2
 byte_B4		:= $00B4
 byte_B5		:= $00B5
 byte_B6		:= $00B6
-byte_B7		:= $00B7
+SERIN_BUF_IDX	:= $00B6			; Index or count of characters received from PLATO
+byte_B7		:= $00B7			; 02->TODO 03->TODO
 CURRENT_DL	:= $00B8			; Current Display List (80 or FF = DL #1, 00 = DL #2)
 TOUCH_X		:= $00BF			; Current X position of simulated touch screen - resolution is 16 positions ($00-$0F)
 TOUCH_Y		:= $00C0			; Current Y position of simulated touch screen - resolition is 16 positions ($00-$0F)
@@ -224,28 +238,35 @@ JSTICK_FN_DLY	:= $00C5			; Counter that restricts handle events to no
 JSTICK_TR_DLY	:= $00C6			; Counter that restricts trigger events to no more than 2 times per second.
 JSTICK_TR	:= $00C7			; State of joystick trigger ($00=pressed, $FF->clear)
 JSTICK_FN	:= $00C8			; Direction of joystick-mapped function keys: 0D->U(NEXT),02->D(BACK),0C->L(LAB),$12->R(DATA)
+byte_C9		:= $00C9
 byte_CC		:= $00CC
+SERIN_FLG	:= $00CC			; SERIN_FLG
 byte_CD		:= $00CD
 off_CE		:= $00CE
 FG_COLOR_DL2	:= $00D0			; Text luminance used in Display List #2 (zoomed)
 BG_COLOR_DL2	:= $00D1			; Background / border hue/luminance used in Display List #2
 FG_COLOR_DL1	:= $00D2			; Text luminance used in Display List #1 (small text)
 BG_COLOR_DL1	:= $00D3			; Background / border hue/luminance used in Display List #1
+byte_D8		:= $00D8
 byte_D9		:= $00D9
+PLATO_WORD	:= $00DB			; 16-bit PLATO word (See s0ascers 3.1.2.4.2)
 off_DD		:= $00DD			; Temp variable
 JSTICK_X	:= $00DD			; VBI: Current joystick direction X-axis (-1=left +1=right)
 JSTICK_Y	:= $00DE			; VBI: Current joystick direction Y-axis (-1=up   +1=down)
 DL2_TEMP	:= $00DF			; Pointer used while deriving display list #2
 DL2_WIND	:= $00E1			; Pointer into 24K frame buffer for origin (0,0) of zoomed display
-off_E3		:= $00E3
+off_E3		:= $00E3			; 00->TODO, $40->TODO, $80->TODO, $C0->TODO
 off_E5		:= $00E5
+byte_E5		:= $00E5
+byte_E6		:= $00E6
 plato_char	:= $00E7			; PLATO/ASCII character code to be sent to PLATO
 chset6_base 	:= $00E8			; charset_sm address lo/hi at E8/E9
+byte_EB		:= $00EB			; E0 or E1? TODO
 off_EC		:= $00EC
 off_F4		:= $00F4
 word_F6		:= $00F6
 off_FA		:= $00FA
-byte_FF		:= $00FF
+byte_FF		:= $00FF			; Initialized to #$FF at start
 
 byte_1310	:= $1310
 byte_1330	:= $1330
@@ -272,6 +293,7 @@ CURRENT_ECHO	:= $1353			; $00->local echo $80->remote echo
 CURRENT_SELECT	:= $1355			; Which color aspect is modified with SELECT ($00->c, $80->b, $C0->t)
 L2000           := $2000
 L3E2E		:= $3E2E
+SERIN_BUF	:= $3E2E			; Buffer for characters received from PLATO
 L3E33           := $3E33
 L4000           := $4000
 L6000           := $6000
@@ -372,11 +394,11 @@ LA035:  jsr     close_ch1			; Close CIO channel #1
 	ldx     #>LB91C				; 
 	ldy     #$08    			; String length - 1
 	jsr     print_string			; 
-	jmp     sub_main   			; and proceed to main loop
+	jmp     kernel   			; and proceed to main loop
 
 ;** (n) If all else fails assume Microbits 300 ********************************
 :	jsr     sub_config_mpp			; 
-	jmp     sub_main   			; Skip test and goto main loop
+	jmp     kernel   			; Skip test and goto main loop
 
 ;** (n) Test 850 or direct-connect modem **************************************
 LA04F:	lda	#$4C
@@ -388,115 +410,157 @@ LA04F:	lda	#$4C
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                 sub_main                                    *
+;*                                  kernel                                     *
 ;*                                                                             *
-;*          Aside from all the IRQs enabled this might be the main loop        *
+;*                             main program loop                               *
 ;*                                                                             *
 ;*******************************************************************************
-sub_main:					; A05E
+kernel:						; A05E
 	jsr     proc_keyboard			; Process/send keyboard events
 	jsr     proc_joystick			; Process/send joystick events
 	jsr     sub_a12c
-	lda     byte_CC
-	beq     sub_main   			; A069 F0 F3                    ..
-	jsr     sub_a079
-	bcc     sub_main   			; A06E 90 EE                    ..
-	jsr     LA0A3   			; A070 20 A3 A0                  ..
-	lda     #$00    			; A073 A9 00                    ..
-	sta     $B6     			; A075 85 B6                    ..
-	beq     sub_main   			; jump always
 
-; ----------------------------------------------------------------------------
-sub_a079:
-	ldy     #LB98E-LB96E			; Prepare CIO get char
-	jsr     call_cio_or_err			; Call CIO, halt if error
-	and     #$7F    			; A07E 29 7F                    ).
-	bit     byte_B3 			; A080 24 B3                    $.
-	bmi     LA0D2   			; A082 30 4E                    0N
-	cmp     #$20    			; A084 C9 20                    . 
-	bcs     LA08D   			; A086 B0 05                    ..
-	jsr     sub_a0f3   			; A088 20 F3 A0                  ..
-LA08B:  clc             			; A08B 18                       .
+	lda     SERIN_FLG 
+	beq     kernel   			; A069 F0 F3                    ..
+
+	jsr     proc_serial_in
+	bcc     kernel   			; Is input char >= #$20?
+	jsr     LA0A3   			; yes? 
+
+	lda     #$00    			; 
+	sta     SERIN_BUF_IDX  			; Clear counter/index
+	beq     kernel   			; jump always
+
+;*******************************************************************************
+;*                                                                             *
+;*                              proc_serial_in                                 *
+;*                                                                             *
+;*          ???????????????????????????????????????????????????????????        *
+;*                                                                             *
+;*******************************************************************************
+
+; DESCRIPTION
+;
+; This subroutine reads a character the serial port
+;
+; Returns to kernel with carry flag set or unset.
+; If carry is clear then there's nothing left to do in kernel and 
+; the main loop can begin from the top.
+
+; DESCRIPTION
+proc_serial_in:					; A079
+	ldy     #LB98E-LB96E			; Prepare CIO for get char
+	jsr     call_cio_or_err			; A = char read from CIO
+	and     #$7F    			; strip off parity bit
+
+	bit     JMP_IDX1 			; 
+	bmi     LA0D2   			; is B3 bit 7 set? yes? jump.
+
+	cmp     #$20    			; 
+	bcs     :++				; is char >= space (printable)? Yes. jump.
+
+	jsr     sub_a0f3   			; 
+
+:	clc             			; A08B 18                       .
 	rts             			; A08C 60                       `
 
-; ----------------------------------------------------------------------------
-LA08D:  ldx     $B6     			; A08D A6 B6                    ..
-	sta     L3E2E,x 			; A08F 9D 2E 3E                 ..>
-	inx             			; A092 E8                       .
-	stx     $B6     			; A093 86 B6                    ..
-	ldy     byte_B5 			; A095 A4 B5                    ..
-	bpl     LA0A0   			; A097 10 07                    ..
+:	ldx     SERIN_BUF_IDX			; Get PLATO input buffer index
+	sta     SERIN_BUF,x 			; Store char (A) to buffer
+	inx             			; 
+	stx     SERIN_BUF_IDX  			; Increment index
+
+	ldy     byte_B5 			; 
+	bpl     :+				; Is $B5 > 0? yes? skip?
+
 	cmp     #$60    			; A099 C9 60                    .`
-	bcs     LA08B   			; A09B B0 EE                    ..
+	bcs     :--				; A >= #$60? yes? goto CLC,RTS
+
 	cmp     #$40    			; A09D C9 40                    .@
 	rts             			; A09F 60                       `
 
-; ----------------------------------------------------------------------------
-LA0A0:  cpx     byte_B5 			; A0A0 E4 B5                    ..
-	rts             			; A0A2 60                       `
+:	cpx     byte_B5 			; Return with Z of B6 - B5
+	rts             			; and C of CMP #$20
 
-; ----------------------------------------------------------------------------
-LA0A3:  ldy     #$00    			; A0A3 A0 00                    ..
-	sty     $B6     			; A0A5 84 B6                    ..
-	bvc     LA0C5   			; A0A7 50 1C                    P.
+;*******************************************************************************
+;*                                                                             *
+;*                              ??????????????                                 *
+;*                                                                             *
+;*          ???????????????????????????????????????????????????????????        *
+;*                                                                             *
+;*******************************************************************************
+LA0A3:  
+	ldy     #$00    			; 
+	sty     SERIN_BUF_IDX    		; Clear 
+	bvc     :+++				; A0A7 50 1C                    P.
+
 	ldy     $B4     			; A0A9 A4 B4                    ..
 	cpy     #$05    			; A0AB C0 05                    ..
-	beq     LA0B6   			; A0AD F0 07                    ..
+	beq     :+				; A0AD F0 07                    ..
+
 	jsr     sub_a120   			; A0AF 20 20 A1                   .
 	tya             			; A0B2 98                       .
-	bne     LA0B6   			; A0B3 D0 01                    ..
+	bne     :+				; A0B3 D0 01                    ..
 	rts             			; A0B5 60                       `
 
-; ----------------------------------------------------------------------------
-LA0B6:  dey             			; A0B6 88                       .
-	beq     LA0BC   			; A0B7 F0 03                    ..
-	jsr     sub_a7fe
-LA0BC:  lda     LBAE2,y 			; A0BC B9 E2 BA                 ...
-	pha             			; A0BF 48                       H
-	lda     LBAE7,y 			; A0C0 B9 E7 BA                 ...
-	pha             			; A0C3 48                       H
-	rts             			; A0C4 60                       `
+:	dey             			; A0B6 88                       .
+	beq     :+				; A0B7 F0 03                    ..
+	jsr     unpack_word
+
+;** Trick RTS to jump to vector by pushing the MSB/LSB to the stack ***********
+:	lda     LBAE2,y 			; Get MSB of subroutine
+	pha             			; 
+
+	lda     LBAE7,y 			; Get LSB of subroutine
+	pha             			; 
+	rts             			; Goto vector
+
+:	ldx     JMP_IDX1 			; Get jump table offset (7 = print_char2)
+	lda     LBACA,x 			; Get MSB of subroutine
+	beq     :+				; RTS to main loop if subroutine is undefined
+
+	pha             			; Otherwise trick RTS to return to 
+	lda     LBAD2,x 			; jump table subroutine
+	pha             			; 
+:	rts             			; 
 
 ; ----------------------------------------------------------------------------
-LA0C5:  ldx     byte_B3 			; A0C5 A6 B3                    ..
-	lda     LBACA,x 			; A0C7 BD CA BA                 ...
-	beq     LA0D1   			; A0CA F0 05                    ..
-	pha             			; A0CC 48                       H
-	lda     LBAD2,x 			; A0CD BD D2 BA                 ...
-	pha             			; A0D0 48                       H
-LA0D1:  rts             			; A0D1 60                       `
+LA0D2:  asl     JMP_IDX1 			; Strip off bit 7
+	lsr     JMP_IDX1 			; 
+	jsr     sub_a0db			; 
 
-; ----------------------------------------------------------------------------
-LA0D2:  asl     byte_B3 			; A0D2 06 B3                    ..
-	lsr     byte_B3 			; A0D4 46 B3                    F.
-	jsr     sub_a0db
-	clc             			; A0D9 18                       .
-LA0DA:  rts             			; A0DA 60                       `
+	clc             			; 
+LA0DA:  rts             			; RTS to kernel with C=0
 
 ; ----------------------------------------------------------------------------
 sub_a0db:
-	cmp     #$5B    			; A0DB C9 5B                    .[
-	bcs     LA0DA   			; A0DD B0 FB                    ..
-	cmp     #$3D    			; A0DF C9 3D                    .=
-	beq     LA105   			; A0E1 F0 22                    ."
-	cmp     #$20    			; A0E3 C9 20                    . 
-	bcs     LA0EB   			; A0E5 B0 04                    ..
-	adc     #$20    			; A0E7 69 20                    i 
-	bcc     LA0F3   			; A0E9 90 08                    ..
-LA0EB:  cmp     #$32    			; A0EB C9 32                    .2
-	beq     LA10B   			; A0ED F0 1C                    ..
-	cmp     #$40    			; A0EF C9 40                    .@
-	bcc     LA0DA   			; A0F1 90 E7                    ..
-LA0F3:
+	cmp     #$5B    			; is $B3 >= "["
+	bcs     LA0DA   			; yes? RTS.
 
+	cmp     #$3D    			; is $B3 == "="?
+	beq     LA105   			; yes? Jump.
+
+	cmp     #$20    			; is $B3 >= SPC
+	bcs     LA0EB   			; yes? Jump.
+
+	adc     #$20    			; is ??? 
+	bcc     LA0F3   			; yes? Jump.
+
+LA0EB:  cmp     #$32    			; is  $B3 == DC2? or "R" or "2" 
+	beq     LA10B   			; A0ED F0 1C                    ..
+
+	cmp     #$40    			; is $B3 == "@"
+	bcc     LA0DA   			; yes? RTS.
+
+LA0F3:
 sub_a0f3:
 	tax             			; A0F3 AA                       .
+
 	clc             			; A0F4 18                       .
 	lda     #<(sub_a367-1) 			; A0F5 A9 66                    .f
 	adc     LBA6F,x 			; A0F7 7D 6F BA                 }o.
 	tay             			; A0FA A8                       .
 	lda     #$00    			; A0FB A9 00                    ..
-	sta     $B6     			; A0FD 85 B6                    ..
+	sta     SERIN_BUF_IDX  			; A0FD 85 B6                    ..
 	adc     #>(sub_a367-1) 			; A0FF 69 A3                    i.
 	pha             			; A101 48                       H
 	tya             			; A102 98                       .
@@ -504,98 +568,106 @@ sub_a0f3:
 	rts             			; A104 60                       `
 
 ; ----------------------------------------------------------------------------
-LA105:  ldx     #$02    			; A105 A2 02                    ..
-	lda     #$00    			; A107 A9 00                    ..
-	beq     LA111   			; A109 F0 06                    ..
-LA10B:  ror     byte_B5 			; A10B 66 B5                    f.
-	lda     #$01    			; A10D A9 01                    ..
-	bne     LA118   			; A10F D0 07                    ..
-LA111:  ldy     byte_B5 			; A111 A4 B5                    ..
-	sty     $1354   			; A113 8C 54 13                 .T.
-	stx     byte_B5 			; A116 86 B5                    ..
-LA118:  sta     $B4     			; A118 85 B4                    ..
-	lda     byte_B3 			; A11A A5 B3                    ..
-	ora     #$40    			; A11C 09 40                    .@
-	bne     LA129   			; A11E D0 09                    ..
+LA105:  ldx     #$02    			; Let X = 2
+	lda     #$00    			; Let A = 0
+	beq     LA111   			; Save A to B4
+
+LA10B:  ror     byte_B5 			; Let $B5 = $B5 / 2
+	lda     #$01    			; Let A = 1
+	bne     :+				; Save A to B4
+
+LA111:  ldy     byte_B5 			; Let Y = $B5
+	sty     $1354   			; Let $1354 = $B5
+	stx     byte_B5 			; Let $B5 = #$02
+
+:	sta     $B4     			; Let $B4 = 0 or 1
+	lda     byte_B3 			; Let A = $B3
+	ora     #$40    			; Set bit 4 in A
+	bne     :+				; Let $B3 = A and RTS
 
 ; ----------------------------------------------------------------------------
 sub_a120:  
-	lda     $1354   			; A120 AD 54 13                 .T.
-	sta     byte_B5 			; A123 85 B5                    ..
-	lda     byte_B3 			; A125 A5 B3                    ..
-	and     #$BF    			; A127 29 BF                    ).
-LA129:  sta     byte_B3 			; A129 85 B3                    ..
-LA12B:  rts             			; A12B 60                       `
+	lda     $1354   			; Let A = $1354
+	sta     byte_B5 			; Let $B5 = A
+
+	lda     byte_B3 			; Unset bit 6 of A and save in B3
+	and     #$BF    			; Let $B3 = A && 1011 1111
+:	sta     byte_B3 			; Let $B3 = A
+:	rts             			; 
 
 ; ----------------------------------------------------------------------------
 sub_a12c:
-	lda     $B9     			; A12C A5 B9                    ..
-	beq     LA12B   			; A12E F0 FB                    ..
-	jmp     (off_134d)
+	lda     $B9     			; let A = $B9
+	beq     :-				; RTS if $B9 == 0
+	jmp     (off_134d)			; 
 
-; ----------------------------------------------------------------------------
-
+;*******************************************************************************
+;*                                                                             *
+;*                                ?????????????                                *
+;*                                                                             *
+;*                 ??????????????????????????????????????????                  *
+;*                                                                             *
+;*******************************************************************************
 sub_a133:
-	ldy     $DC     			; A133 A4 DC                    ..
-	lda     $DB     			; A135 A5 DB                    ..
+	ldy     PLATO_WORD+1  			; A133 A4 DC                    ..
+	lda     PLATO_WORD     			; A135 A5 DB                    ..
 	ldx     byte_FF 			; A137 A6 FF                    ..
-	bpl     LA14B   			; A139 10 10                    ..
-	iny             			; A13B C8                       .
-	bne     LA143   			; A13C D0 05                    ..
-	tax             			; A13E AA                       .
-	bmi     LA144   			; A13F 30 03                    0.
-	sta     byte_FF 			; A141 85 FF                    ..
-LA143:  rts             			; A143 60                       `
+	bpl     :+++				; A139 10 10                    ..
 
-; ----------------------------------------------------------------------------
-LA144:  inx             			; A144 E8                       .
+	iny             			; A13B C8                       .
+	bne     :+				; A13C D0 05                    ..
+
+	tax             			; A13E AA                       .
+	bmi     :++				; A13F 30 03                    0.
+
+	sta     byte_FF 			; A141 85 FF                    ..
+:	rts             			; A143 60                       `
+
+:	inx             			; A144 E8                       .
 	stx     byte_134f
 	jmp     sub_a1fe
 
-; ----------------------------------------------------------------------------
-LA14B:  bit     byte_134f
+:	bit     byte_134f
 	bpl     :+
 	rts             			; A150 60                       `
 
-; ----------------------------------------------------------------------------
 :	ldx     byte_FF 			; A151 A6 FF                    ..
 	beq     :+
+
 	dex             			; A155 CA                       .
-	beq     LA16D   			; A156 F0 15                    ..
+	beq     :++				; A156 F0 15                    ..
+
 	dex             			; A158 CA                       .
 	beq     LA18C   			; A159 F0 31                    .1
+
 	dex             			; A15B CA                       .
-	beq     LA174   			; A15C F0 16                    ..
+	beq     :+++				; A15C F0 16                    ..
+
 	dex             			; A15E CA                       .
 	beq     LA180   			; A15F F0 1F                    ..
 	rts             			; A161 60                       `
 
-; ----------------------------------------------------------------------------
 :	sty     off_CE+1
 	sta     off_CE
 	ldy     #$00    			; A166 A0 00                    ..
 	lda     (off_CE),y
 	jmp     LA1DD   			; A16A 4C DD A1                 L..
 
-; ----------------------------------------------------------------------------
-LA16D:  sty     off_CE+1
+:	sty     off_CE+1
 	sta     off_CE
 	jmp     sub_a1fe
 
-; ----------------------------------------------------------------------------
-LA174:  sty     off_134d+1
+:	sty     off_134d+1
 	sta     off_134d
 	dex             			; A17A CA                       .
 	stx     $B9     			; A17B 86 B9                    ..
 	jmp     sub_a1fe
 
-; ----------------------------------------------------------------------------
 LA180:  sty     off_134d+1
 	sta     off_134d
 	jsr     sub_a1fe
 	jmp     (off_134d)
 
-; ----------------------------------------------------------------------------
 LA18C:  bit     byte_1350
 	bmi     :+
 	sta     word_1351
@@ -604,70 +676,78 @@ LA18C:  bit     byte_1350
 	stx     byte_1350
 	rts             			; A19B 60                       `
 
-; ----------------------------------------------------------------------------
 :	tya             			; A19C 98                       .
 	ldy     #$00    			; A19D A0 00                    ..
 	sta     (off_CE),y
 	iny             			; A1A1 C8                       .
 	dec     word_1351   			; A1A2 CE 51 13                 .Q.
-	bne     LA1B0   			; A1A5 D0 09                    ..
+	bne     :+				; A1A5 D0 09                    ..
 	tya             			; A1A7 98                       .
 	ldx     word_1351+1
 	beq     LA1C8   			; A1AB F0 1B                    ..
 	dec     word_1351+1
-LA1B0:  lda     $DB     			; A1B0 A5 DB                    ..
+:	lda     $DB     			; A1B0 A5 DB                    ..
 	sta     (off_CE),y
 	dec     word_1351
-	bne     LA1C4   			; A1B7 D0 0B                    ..
+	bne     :++				; A1B7 D0 0B                    ..
 	ldx     word_1351+1
 	beq     :+
 	dec     word_1351+1
-	bvs     LA1C4   			; A1C1 70 01                    p.
+	bvs     :++				; A1C1 70 01                    p.
 :	clv             			; A1C3 B8                       .
-LA1C4:  lda     #$02    			; A1C4 A9 02                    ..
-	bne     LA1C9   			; A1C6 D0 01                    ..
+:	lda     #$02    			; A1C4 A9 02                    ..
+	bne     :+				; A1C6 D0 01                    ..
 LA1C8:  clv             			; A1C8 B8                       .
-LA1C9:  php             			; A1C9 08                       .
+:	php             			; A1C9 08                       .
 	clc             			; A1CA 18                       .
 	adc     off_CE
 	sta     off_CE
 	bcc     :+
 	inc     off_CE+1
 :	plp             			; A1D3 28                       (
-	bvs     LA1DC   			; A1D4 70 06                    p.
+	bvs     :+				; A1D4 70 06                    p.
 	jsr     sub_a1fe
 	inc     byte_1350
-LA1DC:  rts             			; A1DC 60                       `
+:	rts             			; A1DC 60                       `
 
 ; ----------------------------------------------------------------------------
-LA1DD:  lda     #$1B    			; A1DD A9 1B                    ..
-	jsr     sub_ab54
+LA1DD:  lda     #$1B    			; Send ESC
+	jsr     send_to_plato2			;
+
 	ldy     #$00    			; A1E2 A0 00                    ..
 	sty     $E7     			; A1E4 84 E7                    ..
+
 	lda     (off_CE),y
-	tay             			; A1E8 A8                       .
+	tay             			; Stash A
+
 	asl     a       			; A1E9 0A                       .
 	rol     $E7     			; A1EA 26 E7                    &.
 	asl     a       			; A1EC 0A                       .
 	rol     $E7     			; A1ED 26 E7                    &.
-	tya             			; A1EF 98                       .
-	and     #$3F    			; A1F0 29 3F                    )?
-	ora     #$40    			; A1F2 09 40                    .@
-	jsr     sub_ab54
+
+	tya             			; Restore A
+	and     #$3F    			; Clear bits 7,6
+	ora     #$40    			; Force bit 6
+	jsr     send_to_plato2
+
 	lda     $E7     			; A1F7 A5 E7                    ..
 	ora     #$68    			; A1F9 09 68                    .h
-	jsr     sub_ab54
+	jsr     send_to_plato2
 
 sub_a1fe:
 	jsr     sub_a120   			; A1FE 20 20 A1                   .
+
 	lda     #$FF    			; A201 A9 FF                    ..
 	sta     byte_FF 			; A203 85 FF                    ..
+
 	lda     #$1B    			; A205 A9 1B                    ..
-	jsr     sub_ab54
+	jsr     send_to_plato2
+
 	lda     #$46    			; A20A A9 46                    .F
-	jsr     sub_ab54
+	jsr     send_to_plato2
+
 	lda     #$68    			; A20F A9 68                    .h
-	jmp     sub_ab54
+	jmp     send_to_plato2
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -720,7 +800,7 @@ init_graphics:
 	bpl     :-      			; End Loop
 
 ;** (n) TODO Why storing FF in these two locations??? **************************
-	stx     CURRENT_DL			; byte_B8 maybe which DL is active
+	stx     CURRENT_DL			; display list for full-screen
 	stx     byte_FF 			; Store FF in byte_FF TODO
 
 ;** (n) Prepare values for head of display lists *******************************
@@ -822,16 +902,16 @@ init_graphics:
 	bpl     :-      			; End Loop
 
 ;** (n) *************************************************************************
-	ldx     #$32    			; Set initial X location for touch screen
-	stx     CROSS_X				; cross-shaped cursor.
+	ldx     #$32    			; Set initial graphic coordinate...
+	stx     CROSS_X				; ...for touch screen cross-shaped cursor.
 
 	ldx     #$0F    			; Set initial simulated touch screen
 	stx     TOUCH_Y 			; position to 16
 
 	ldx     #$07    			; Load bitmaps for missiles.
-	stx     byte_B3 			; One is a large 'F' and the ...
-:       lda     LBA67,x 			; ...other is a cross-shaped cursor.
-	sta     $058C,x 			; 
+	stx     byte_B3 			; 
+:       lda     LBA67,x 			; One is a large 'F' and the ...
+	sta     $058C,x 			; ...other is a cross-shaped cursor.
 	dex             			;
 	bpl     :-      			; 
 
@@ -1000,12 +1080,16 @@ sub_a39a:
 sub_a39e:
 	lda     word_9C
 	sta     word_AC
+
 	lda     word_9C+1
 	sta     word_AC+1
+
 	lda     word_A4
 	sta     word_AE
+
 	lda     word_A4+1
 	sta     word_AE+1
+
 	rts
 
 ; ----------------------------------------------------------------------------
@@ -1066,9 +1150,9 @@ LA3EE:  lda     word_9C
 	sec             			; A3F0 38                       8
 	sbc     $D8     			; A3F1 E5 D8                    ..
 	sta     word_9C
-	bcs     sub_a3dd   			; A3F5 B0 E6                    ..
+	bcs     sub_a3dd   			; RTS
 	dec     word_9C+1
-	bpl     sub_a3dd   			; A3F9 10 E2                    ..
+	bpl     sub_a3dd   			; RTS
 	lda     #$40    			; A3FB A9 40                    .@
 	clc             			; A3FD 18                       .
 	adc     word_A4     			; A3FE 65 A4                    e.
@@ -1076,7 +1160,7 @@ LA3EE:  lda     word_9C
 	lda     #$01    			; A402 A9 01                    ..
 	sta     word_A4+1     			; A404 85 A5                    ..
 	sta     word_9C+1     			; A406 85 9D                    ..
-	bne     sub_a3dd   			; A408 D0 D3                    ..
+	bne     sub_a3dd   			; RTS
 
 ; ----------------------------------------------------------------------------
 sub_a40a:
@@ -1136,95 +1220,113 @@ sub_a444:
 sub_a448:
 	jsr     sub_a8b3
 	ldx     $DA     			; A44B A6 DA                    ..
-	bne     LA45F   			; A44D D0 10                    ..
+	bne     :+				; A44D D0 10                    ..
+
 	ldx     #$03    			; A44F A2 03                    ..
-LA451:  lda     word_A4,x   			; A451 B5 A4                    ..
+@LOOP:	lda     word_A4,x   			; A451 B5 A4                    ..
 	sta     $A8,x   			; A453 95 A8                    ..
 	lda     word_9C,x   			; A455 B5 9C                    ..
 	sta     $F0,x   			; A457 95 F0                    ..
 	dex             			; A459 CA                       .
-	bpl     LA451   			; A45A 10 F5                    ..
+	bpl     @LOOP				; A45A 10 F5                    ..
+
 	stx     $DA     			; A45C 86 DA                    ..
 	rts             			; A45E 60                       `
 
-; ----------------------------------------------------------------------------
-LA45F:  lda     $BA     			; A45F A5 BA                    ..
+:	lda     $BA     			; A45F A5 BA                    ..
 	sta     $C9     			; A461 85 C9                    ..
-	bne     LA474   			; A463 D0 0F                    ..
+	bne     :+				; A463 D0 0F                    ..
+
 	lda     $9F     			; A465 A5 9F                    ..
 	sta     $FB     			; A467 85 FB                    ..
+
 	lda     word_9C     			; A469 A5 9C                    ..
 	ldx     word_9C+1     			; A46B A6 9D                    ..
 	ldy     $9E     			; A46D A4 9E                    ..
-	jsr     LA489   			; A46F 20 89 A4                  ..
+	jsr     :++				; A46F 20 89 A4                  ..
+
 	dec     $C9     			; A472 C6 C9                    ..
-LA474:  ldx     #$04    			; A474 A2 04                    ..
-LA476:  lda     $A7,x   			; A476 B5 A7                    ..
+
+:	ldx     #$04    			; A474 A2 04                    ..
+@LOOP2: lda     $A7,x   			; A476 B5 A7                    ..
 	sta     $EF,x   			; A478 95 EF                    ..
 	dex             			; A47A CA                       .
-	bne     LA476   			; A47B D0 F9                    ..
+	bne     @LOOP2  			; A47B D0 F9                    ..
+
 	stx     $FB     			; A47D 86 FB                    ..
 	stx     $F3     			; A47F 86 F3                    ..
 	stx     $DA     			; A481 86 DA                    ..
+
 	lda     word_A4     			; A483 A5 A4                    ..
 	ldx     word_A4+1     			; A485 A6 A5                    ..
 	ldy     $A6     			; A487 A4 A6                    ..
-LA489:  sta     $F8     			; A489 85 F8                    ..
+
+:	sta     $F8     			; A489 85 F8                    ..
 	stx     $F9     			; A48B 86 F9                    ..
 	sty     $FA     			; A48D 84 FA                    ..
+
 	cpx     $F1     			; A48F E4 F1                    ..
-	bcc     LA4A5   			; A491 90 12                    ..
-	bne     LA499   			; A493 D0 04                    ..
+	bcc     :++				; A491 90 12                    ..
+	bne     :+				; A493 D0 04                    ..
+
 	cmp     $F0     			; A495 C5 F0                    ..
-	bcc     LA4A5   			; A497 90 0C                    ..
-LA499:  ldy     $F1     			; A499 A4 F1                    ..
+	bcc     :++				; A497 90 0C                    ..
+
+:	ldy     $F1     			; A499 A4 F1                    ..
 	stx     $F1     			; A49B 86 F1                    ..
 	sty     $F9     			; A49D 84 F9                    ..
+
 	ldy     $F0     			; A49F A4 F0                    ..
 	sta     $F0     			; A4A1 85 F0                    ..
 	sty     $F8     			; A4A3 84 F8                    ..
-LA4A5:  lda     $FA     			; A4A5 A5 FA                    ..
+
+:	lda     $FA     			; A4A5 A5 FA                    ..
 	ldx     $F3     			; A4A7 A6 F3                    ..
 	cpx     $FB     			; A4A9 E4 FB                    ..
-	bcc     LA4BF   			; A4AB 90 12                    ..
-	bne     LA4B3   			; A4AD D0 04                    ..
+	bcc     :++				; A4AB 90 12                    ..
+	bne     :+				; A4AD D0 04                    ..
+
 	cmp     $F2     			; A4AF C5 F2                    ..
-	bcs     LA4BF   			; A4B1 B0 0C                    ..
-LA4B3:  ldy     $FB     			; A4B3 A4 FB                    ..
+	bcs     :++				; A4B1 B0 0C                    ..
+
+:	ldy     $FB     			; A4B3 A4 FB                    ..
 	stx     $FB     			; A4B5 86 FB                    ..
 	sty     $F3     			; A4B7 84 F3                    ..
+
 	ldy     $F2     			; A4B9 A4 F2                    ..
 	sta     $F2     			; A4BB 85 F2                    ..
 	sty     $FA     			; A4BD 84 FA                    ..
-LA4BF:  ldx     #$03    			; A4BF A2 03                    ..
+
+:	ldx     #$03    			; A4BF A2 03                    ..
 	bit     $C9     			; A4C1 24 C9                    $.
-LA4C3:  lda     $F8,x   			; A4C3 B5 F8                    ..
-	bvs     LA4CD   			; A4C5 70 06                    p.
+
+@LOOP3:	lda     $F8,x   			; A4C3 B5 F8                    ..
+	bvs     :+				; A4C5 70 06                    p.
 	sta     word_9C,x   			; A4C7 95 9C                    ..
 	ldy     #$40    			; A4C9 A0 40                    .@
-	bvc     LA4D1   			; A4CB 50 04                    P.
-LA4CD:  sta     word_A4,x   			; A4CD 95 A4                    ..
+	bvc     :++				; A4CB 50 04                    P.
+:	sta     word_A4,x   			; A4CD 95 A4                    ..
 	ldy     #$28    			; A4CF A0 28                    .(
-LA4D1:  dex             			; A4D1 CA                       .
-	bpl     LA4C3   			; A4D2 10 EF                    ..
+:	dex             			; A4D1 CA                       .
+	bpl     @LOOP3				; A4D2 10 EF                    ..
+
 	sty     byte_D9 			; A4D4 84 D9                    ..
-	bvs     LA4DD   			; A4D6 70 05                    p.
+	bvs     :+				; A4D6 70 05                    p.
 	bit     $BA     			; A4D8 24 BA                    $.
-	bpl     LA4DD   			; A4DA 10 01                    ..
+	bpl     :+				; A4DA 10 01                    ..
 	rts             			; A4DC 60                       `
 
-; ----------------------------------------------------------------------------
-LA4DD:  jsr     sub_ad8e
+:	jsr     sub_ad8e
 	bit     $B0     			; A4E0 24 B0                    $.
 	lda     $F8     			; A4E2 A5 F8                    ..
 	and     #$07    			; A4E4 29 07                    ).
 	tax             			; A4E6 AA                       .
 	lda     LB94E,x 			; A4E7 BD 4E B9                 .N.
-	beq     LA4F2   			; A4EA F0 06                    ..
-	bvc     LA4F0   			; A4EC 50 02                    P.
+	beq     :++				; A4EA F0 06                    ..
+	bvc     :+				; A4EC 50 02                    P.
 	eor     #$FF    			; A4EE 49 FF                    I.
-LA4F0:  inc     off_F4
-LA4F2:  sta     $AB     			; A4F2 85 AB                    ..
+:	inc     off_F4
+:	sta     $AB     			; A4F2 85 AB                    ..
 	lda     $F1     			; A4F4 A5 F1                    ..
 	lsr     a       			; A4F6 4A                       J
 	lda     $F0     			; A4F7 A5 F0                    ..
@@ -1263,22 +1365,22 @@ LA4F2:  sta     $AB     			; A4F2 85 AB                    ..
 LA532:  bit     $B0     			; A532 24 B0                    $.
 	ldy     #$00    			; A534 A0 00                    ..
 	lda     $AB     			; A536 A5 AB                    ..
-	beq     LA53D   			; A538 F0 03                    ..
+	beq     :+				; A538 F0 03                    ..
 	jsr     sub_a596
-LA53D:  ldx     off_F4
-	beq     LA549   			; A53F F0 08                    ..
+:	ldx     off_F4
+	beq     :++				; A53F F0 08                    ..
 	lda     $E7     			; A541 A5 E7                    ..
-LA543:  jsr     sub_a596
+:	jsr     sub_a596
 	dex             			; A546 CA                       .
-	bne     LA543   			; A547 D0 FA                    ..
-LA549:  lda     $A7     			; A549 A5 A7                    ..
-	beq     LA550   			; A54B F0 03                    ..
+	bne     :-				; A547 D0 FA                    ..
+:	lda     $A7     			; A549 A5 A7                    ..
+	beq     :+				; A54B F0 03                    ..
 	jsr     sub_a596
-LA550:  inc     word_F6     			; A550 E6 F6                    ..
-	bne     LA558   			; A552 D0 04                    ..
+:	inc     word_F6     			; A550 E6 F6                    ..
+	bne     :+				; A552 D0 04                    ..
 	inc     word_F6+1    			; A554 E6 F7                    ..
-	beq     LA573   			; A556 F0 1B                    ..
-LA558:  lda     byte_D9 			; A558 A5 D9                    ..
+	beq     :++				; A556 F0 1B                    ..
+:	lda     byte_D9 			; A558 A5 D9                    ..
 	clc             			; A55A 18                       .
 	adc     off_E3
 	sta     off_E3
@@ -1292,21 +1394,21 @@ LA565:  lda     $AB     			; A565 A5 AB                    ..
 	sta     $A7     			; A56D 85 A7                    ..
 	sta     off_F4
 	beq     LA532   			; A571 F0 BF                    ..
-LA573:  bit     $C9     			; A573 24 C9                    $.
-	bvc     LA58C   			; A575 50 15                    P.
+:	bit     $C9     			; A573 24 C9                    $.
+	bvc     :++				; A575 50 15                    P.
 	lda     $9E     			; A577 A5 9E                    ..
 	sec             			; A579 38                       8
 	sbc     #$0B    			; A57A E9 0B                    ..
 	sta     $9E     			; A57C 85 9E                    ..
-	bcs     LA582   			; A57E B0 02                    ..
+	bcs     :+	   			; A57E B0 02                    ..
 	dec     $9F     			; A580 C6 9F                    ..
-LA582:  lda     $9F     			; A582 A5 9F                    ..
+:	lda     $9F     			; A582 A5 9F                    ..
 	lsr     a       			; A584 4A                       J
 	lda     $9E     			; A585 A5 9E                    ..
 	ror     a       			; A587 6A                       j
 	adc     #$00    			; A588 69 00                    i.
 	sta     $A6     			; A58A 85 A6                    ..
-LA58C:  lda     #<(LB863-1)			; Point to obfuscated code used...
+:	lda     #<(LB863-1)			; Point to obfuscated code used...
 	ldy     #>(LB863-1)			; ...for copy-protection check.
 	ldx     #$0C				; Init counter for 12 bytes of obfuscated code
 	jsr     check_if_pirated		; 
@@ -1345,25 +1447,28 @@ LA5AF:  ror     a       			; A5AF 6A                       j
 sub_a5b5:
 	lda     $DC     			; A5B5 A5 DC                    ..
 	and     #$04    			; A5B7 29 04                    ).
-	beq     LA5E3   			; A5B9 F0 28                    .(
+	beq     LA5E3   			; RTS
+
 	lda     $DB     			; A5BB A5 DB                    ..
 	and     #$20    			; A5BD 29 20                    ) 
 	beq     LA5E4   			; A5BF F0 23                    .#
-	jsr     sub_hide_F   			; A5C1 20 F6 A5                  ..
-	ldx     UI_MODE  			; A5C4 A6 C1                    ..
-	beq     :+
-	bmi     LA5D1   			; A5C8 30 07                    0.
-	dex             			; A5CA CA                       .
-	beq     LA5E3   			; A5CB F0 16                    ..
-:	lda     #$01    			; A5CD A9 01                    ..
-	bne     LA5D7   			; A5CF D0 06                    ..
+
+	jsr     hide_big_f   			; A5C1 20 F6 A5                  ..
+	ldx     UI_MODE  			; A5C4 A6 C1                    ..bb
+	beq     :+				; full-screen? jump.
+	bmi     LA5D1   			; zoomed? jump.
+	dex             			; 
+	beq     LA5E3   			; touch-screen? RTS
+
+:	lda     #$01    			; here if joystick-mapped
+	bne     LA5D7   			; Set UI_MODE = $01->touch screen
 
 ; ----------------------------------------------------------------------------
-LA5D1:  lda     #$FE    			; A5D1 A9 FE                    ..
-	ldx     #$00    			; A5D3 A2 00                    ..
+LA5D1:  lda     #$FE    			; 
+	ldx     #$00    			; Set UI_MODE = $FE->zoomed from touch screen
 	beq     LA5D9   			; A5D5 F0 02                    ..
 LA5D7:  ldx     CROSS_X 			; A5D7 A6 C4                    ..
-LA5D9:  sta     UI_MODE  			; A5D9 85 C1                    ..
+LA5D9:  sta     UI_MODE  			; 
 	stx     HPOSM1				; Set position for left half...
 	inx             			; ...of cross-shaped cursor.
 	inx             			; Right half of cross-shaped cursor...
@@ -1384,74 +1489,141 @@ LA5F0:  ldx     #$00    			; A5F0 A2 00                    ..
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                sub_hide_F                                   *
+;*                                  hide_big_f                                 *
 ;*                                                                             *
-;*      Hide letter "F" left over from joystick-mapped function key mode       *
+;*                              Hide big letter "F"                            *
 ;*                                                                             *
 ;*******************************************************************************
-sub_hide_F:					; A5F6
+
+; DESCRIPTION
+;
+; Hide the big letter "F" that is displayed when UI_MODE is using the
+; joystick-mapped function key mode. The "F" is composed using two missiles.
+; By setting the missiles locations to 0, the letter is outside the boundary
+; of the video display.
+
+hide_big_f:					; A5F6
 	ldx     #$00    			; 
 	stx     HPOSM3				; Hide "|" part of large "F"
 	stx     HPOSM2				; Hide "=" part of large "F"
 	rts             			; 
 
-; ----------------------------------------------------------------------------
+;*******************************************************************************
+;*                                                                             *
+;*                                 proc_echo                                   *
+;*                                                                             *
+;*                     Respond to PLATO server echo codes                      *
+;*                                                                             *
+;*******************************************************************************
 
-sub_a5ff:
-	lda     L3E2E   			; A5FF AD 2E 3E                 ..>
-	cmp     #$50    			; A602 C9 50                    .P
-	bne     :+
-	lda     #$1B    			; A606 A9 1B                    ..
-	jsr     sub_ab54
-	lda     #$50    			; A60B A9 50                    .P
-	jsr     sub_ab54
-	lda     #$43    			; A610 A9 43                    .C
-	bne     LA63D   			; A612 D0 29                    .)
+; DESCRIPTION
+;
+;-------------------------------------------------------------------------------
+; (excerpt from s0ascers 3.2.3.1.4)
+;
+; The Echo command asks the terminal for information or requests a function.  
+; This command is used to query the terminal for its type, subtype, load file, 
+; configuration, terminal ID and memory contents.  Seven bits of data (encoded 
+; in a three-byte response whose format is detailed in section 3.2.3.3.2) are 
+; sent up to the host. The Echo command is also used to sound the terminal's 
+; alarm.
+;-------------------------------------------------------------------------------
+;
+; This subroutine processes PLATO Echo commands. If a response is required, a
+; 2-byte escape sequence is sent to PLATO of which the 7-lowest bits contain
+; the response.
+;
+; Bit 7 of each byte will be assigned a parity value during "send_to_plato". 
+; Bit 6 of each byte must be 1 so the character is the normal-ish range of 
+; printable characters.
+;
+; P1..,...X P1XX,XXXX (7 bit response)
+; <-- #2--> <-- #1-->
+;
+; Echo 50: (Unknown)
+; P100,0011 P101,0000 (Protocol suggests responding an unknown code with same)
+;    4 3       5 0  -> 7 bits = 101 0000 = $50
+;
+; Echo 71: Terminal subtype response:
+; P100,0010 P100,1110
+;    4 0       4 E  -> 7 bits = 000 1110 = $0E (14. Atari terminal subtype)
+;
+; Echo 72: Terminal resident load file (applies only to CDC terminals)
+; P100,0010 P100,0000
+;    4 2       4 0  -> 7 bits = 000 0000 = $00
+;
+; Echo 73: Terminal configuration
+; P100,0010 P100,0000
+;    4 2       4 0  -> 7 bits = 000 0000 = $00
+; 
 
-; ----------------------------------------------------------------------------
-:	cmp     #$71    			; A614 C9 71                    .q
-	bne     :+
-	lda     #$1B    			; A618 A9 1B                    ..
-	jsr     sub_ab54
-	lda     #$4E    			; A61D A9 4E                    .N
-	bne     LA638   			; A61F D0 17                    ..
+proc_echo:					; A5FF
+	lda     SERIN_BUF   			; Get char received from PLATO
 
-; ----------------------------------------------------------------------------
-:	cmp     #$72    			; A621 C9 72                    .r
-	beq     :++
-	cmp     #$73    			; A625 C9 73                    .s
-	beq     :++
-	cmp     #$7B    			; A629 C9 7B                    .{
-	bne     :+
-	jsr     play_beep
-:	rts             			; A630 60                       `
+;** Echo code 50 hex: (Unknown) ************************************************
+	cmp     #$50    			; Couldn't find code in s0ascers
+	bne     :+				; #$50? no? skip to next.
 
-; ----------------------------------------------------------------------------
-:	lda     #$1B    			; A631 A9 1B                    ..
-	jsr     sub_ab54
-	lda     #$40    			; A636 A9 40                    .@
-LA638:  jsr     sub_ab54
-	lda     #$42    			; A63B A9 42                    .B
-LA63D:  jmp     sub_ab54
+	lda     #$1B    			; Send escape
+	jsr     send_to_plato2
+
+	lda     #$50    			; Respond with same echo code
+	jsr     send_to_plato2
+
+	lda     #$43    			; Unsure why #$43. Others are
+	bne     @SEND1				; #$42. Maybe #$42 is affirmative.
+
+;** Echo code 71 hex: Terminal subtype ****************************************
+:	cmp     #$71    			; is termainl subtype?
+	bne     :+				; no? skip to next.
+
+	lda     #$1B    			; else send $1B $4E $42
+	jsr     send_to_plato2			; 
+
+	lda     #$4E    			; $0E->Atari terminal
+	bne     @SEND2				; 
+
+;** Echo code 72 hex: Resident load file ***************************************
+:	cmp     #$72    			; is resident load file?
+	beq     @SEND3				; yes? send $1B $40 $42
+
+;** Echo code 73 hex: Terminal configuration ***********************************
+	cmp     #$73    			; is terminal configuration?
+	beq     @SEND3				; yes? send $1B $40 $42
+
+;** Echo code 7B hex: Sound alarm **********************************************
+	cmp     #$7B    			; is sound alarm?
+	bne     :+				; no? RTS
+
+	jsr     play_beep			; else play sound
+:	rts             			; and RTS
+
+;** Depending on entry point Send 1 to 3 bytes. *******************************
+@SEND3:	lda     #$1B    			; Send escape
+	jsr     send_to_plato2			;
+	lda     #$40    			; 
+@SEND2: jsr     send_to_plato2			;
+	lda     #$42    			; 
+@SEND1: jmp     send_to_plato2			; 
 
 ; ----------------------------------------------------------------------------
 
 sub_a640:
-	lda     $DC     			; A640 A5 DC                    ..
-	ldx     $DB     			; A642 A6 DB                    ..
+	lda     PLATO_WORD+1   			; A640 A5 DC                    ..
+	ldx     PLATO_WORD     			; A642 A6 DB                    ..
 	and     #$07    			; A644 29 07                    ).
 	lsr     a       			; A646 4A                       J
 	sta     off_E3+1
-	sta     $DC     			; A649 85 DC                    ..
+	sta     PLATO_WORD+1   			; A649 85 DC                    ..
 	txa             			; A64B 8A                       .
 	ror     a       			; A64C 6A                       j
 	sta     off_E3
-	lsr     $DC     			; A64F 46 DC                    F.
+	lsr     PLATO_WORD+1  			; A64F 46 DC                    F.
 	ror     a       			; A651 6A                       j
 	sta     byte_D9 			; A652 85 D9                    ..
-	ldx     $DC     			; A654 A6 DC                    ..
+	ldx     PLATO_WORD+1   			; A654 A6 DC                    ..
 	stx     $D8     			; A656 86 D8                    ..
-	lsr     $DC     			; A658 46 DC                    F.
+	lsr     PLATO_WORD+1   			; A658 46 DC                    F.
 	ror     a       			; A65A 6A                       j
 	adc     byte_D9 			; A65B 65 D9                    e.
 	sta     off_F4
@@ -1565,11 +1737,11 @@ LA6EC:  .byte	$18         			; to $0082
 ; ----------------------------------------------------------------------------
 
 sub_a6f6:
-	jsr     sub_a7fe
+	jsr     unpack_word
 	ldx     $D8     			; A6F9 A6 D8                    ..
 	ldy     #$0F    			; A6FB A0 0F                    ..
-LA6FD:  lsr     $DC     			; A6FD 46 DC                    F.
-	ror     $DB     			; A6FF 66 DB                    f.
+LA6FD:  lsr     PLATO_WORD+1   			; A6FD 46 DC                    F.
+	ror     PLATO_WORD     			; A6FF 66 DB                    f.
 	lda     LB93A,x 			; A701 BD 3A B9                 .:.
 	and     (off_E3),y
 	bcc     LA726   			; A706 90 1E                    ..
@@ -1701,36 +1873,92 @@ LA7E8:  clc             			; A7E8 18                       .
 	inc     off_F4+1
 :	jmp     LA673   			; A7F3 4C 73 A6                 Ls.
 
-; ----------------------------------------------------------------------------
-sub_a7f6:
-	ldx     $B6     			; A7F6 A6 B6                    ..
-	lda     $3E2E,x 			; A7F8 BD 2E 3E                 ..>
-	inc     $B6     			; A7FB E6 B6                    ..
+;*******************************************************************************
+;*                                                                             *
+;*                             fetch_serin_ch                                  *
+;*                                                                             *
+;*               Fetch char recvd from PLATO and advance index                 *
+;*                                                                             *
+;*******************************************************************************
+fetch_serin_ch:					; A7F6
+	ldx     SERIN_BUF_IDX  			; A7F6 A6 B6                    ..
+	lda     SERIN_BUF,x 			; A7F8 BD 2E 3E                 ..>
+	inc     SERIN_BUF_IDX  			; A7FB E6 B6                    ..
 	rts             			; A7FD 60                       `
 
-; ----------------------------------------------------------------------------
-sub_a7fe:
-	jsr     sub_a7f6
-	and     #$3F    			; A801 29 3F                    )?
-	sta     $DB     			; A803 85 DB                    ..
-	jsr     sub_a7f6
-	and     #$3F    			; A808 29 3F                    )?
-	sta     $DC     			; A80A 85 DC                    ..
-	lda     #$00    			; A80C A9 00                    ..
-	lsr     $DC     			; A80E 46 DC                    F.
-	ror     a       			; A810 6A                       j
-	lsr     $DC     			; A811 46 DC                    F.
-	ror     a       			; A813 6A                       j
-	ora     $DB     			; A814 05 DB                    ..
-	sta     $DB     			; A816 85 DB                    ..
-	jsr     sub_a7f6
-	asl     a       			; A81B 0A                       .
-	asl     a       			; A81C 0A                       .
-	asl     a       			; A81D 0A                       .
-	asl     a       			; A81E 0A                       .
-	ora     $DC     			; A81F 05 DC                    ..
-	sta     $DC     			; A821 85 DC                    ..
-	rts             			; A823 60                       `
+;*******************************************************************************
+;*                                                                             *
+;*                               unpack_word                                   *
+;*                                                                             *
+;*                  Unpack 16 bit word from 3 byte packet                      *
+;*                                                                             *
+;*******************************************************************************
+
+; DESCRIPTION
+
+; This subroutine unpacks a 16 bits of a Plato Word. The s0ascers describes
+; a PLATO word as being up to 18 bits however this routine only unpacks
+; 16 and stores them in addresses $DB and $DC. 
+;
+; Bits 1..0 of byte #2 + bits 5..0 of byte #1 -> PLATO_WORD
+; Bits 3..0 of byte #3 + bits 5..2 of byte #2 -> PLATO_WORD+1
+;
+;-------------------------------------------------------------------------------
+; Excerpt from s0ascers - 3.1.2.4.2  Words:
+;-------------------------------------------------------------------------------
+; Words are used to transmit logical quantities greater than eight bits in 
+; length.  For example, when loading character sets, sixteen bits at a time are
+; transmitted in character set load mode.  Each word is encoded in three eight 
+; bit bytes.  The format of these three bytes is:
+; 
+; 
+;      3rd Character      2nd Character      1st character
+;        received           received           received
+;      P 1 X X X X X X    P 1 X X X X X X    P 1 X X X X X X
+;          b18-----b13        b12------b7        b6-------b1
+; 
+; 
+; Each byte contains six bits of data in the lower part of the byte.  The next 
+; bit of the byte is always a 1.  This ensures that data will not be interpreted
+; as a command.
+; 
+; The high bit is the parity bit, and is not relevant at this point.
+;-------------------------------------------------------------------------------
+
+unpack_word:					; A7FE
+;** Get first 6 bits of word from byte #1 and store it in $DB ******************
+	jsr     fetch_serin_ch			; Get byte #1
+	and     #$3F    			; Keep only lower 6 bits
+	sta     PLATO_WORD     			; Save
+
+;** Get second 6 bits of word from byte #2 and store it in $DC *****************
+	jsr     fetch_serin_ch			; Get byte #2
+	and     #$3F    			; Keep only lower 6 bits
+	sta     PLATO_WORD+1   			; Save
+
+;** Concatonate the 2 lowest bits of byte #2 to the 6 bits from byte #1 ********
+	lda     #$00    			; Clear A
+
+	lsr     PLATO_WORD+1   			; Shift lowest bit from char #2
+	ror     a       			; ...to highest bit in A
+
+	lsr     PLATO_WORD+1   			; Shift lowest bit from char #2
+	ror     a       			; ...to highest bit in A 
+
+	ora     PLATO_WORD     			; Merge 6 bits from byte #1 with 
+	sta     PLATO_WORD     			; ...these 2 bits and save
+
+;** Concatontate 4 lowest bits of byte #3 to the 4 remaining bits of byte #2 ***
+	jsr     fetch_serin_ch			; Get byte #3
+
+	asl     a       			; Move the 4 lowest bits to 
+	asl     a       			; ...the upper nybble,
+	asl     a       			; ...leaving lower nybble
+	asl     a       			; ...clear.
+
+	ora     PLATO_WORD+1   			; And merge with nybble 
+	sta     PLATO_WORD+1   			; ...left over from byte #2
+	rts             			; 
 
 ; ----------------------------------------------------------------------------
 LA824:  lda     #$02    			; A824 A9 02                    ..
@@ -1790,26 +2018,28 @@ LA881:  rts             			; A881 60                       `
 ; ----------------------------------------------------------------------------
 ; Called from end of print string
 sub_a882:
-	lda     #$06    			; A882 A9 06                    ..
-	ldy     #$0C    			; A884 A0 0C                    ..
+	lda     #$06    			; Let A = 0000 0110
+	ldy     #$0C    			; Let Y = 0000 1100
 
 sub_a886:  
-	bit     $CA     			; A886 24 CA                    $.
-	sty     $D8     			; A888 84 D8                    ..
-	bvs     :+
-	rts             			; TODO Return immediately if something
-:	asl     a       			; A88D 0A                       .
-	bvs     LA89C   			; A88E 70 0C                    p.
+	bit     $CA     			; Test bits 7,6 in $CA
+	sty     $D8     			; Let $D8 = #$0C
+	bvs     :+				; Is bit 6 of $CA set?
+	rts             			; no. RTS
+:	asl     a       			; Yes. Let A = 0000 1100
+	bvs     :+				; 
 
 sub_a890:  
-	bit     $CA     			; A890 24 CA                    $.
-	lda     #$05    			; A892 A9 05                    ..
-	ldy     #$08    			; A894 A0 08                    ..
-	sty     $D8     			; A896 84 D8                    ..
-	bvc     LA89E   			; A898 50 04                    P.
-	lda     #$09    			; A89A A9 09                    ..
-LA89C:  asl     $D8     			; A89C 06 D8                    ..
-LA89E:  rts             			; A89E 60                       `
+	bit     $CA     			; Test bits 7,6 in $CA
+
+	lda     #$05    			; Let A = 0000 0101
+	ldy     #$08    			; Let Y = 0000 1000
+	sty     $D8     			; Let $D8 = #$08
+
+	bvc     :++				; Is bit 6 of $CA set? no?
+	lda     #$09    			; Let A = 0000 1001
+:	asl     $D8     			; Let $D8 = 
+:	rts             			; 
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -1826,8 +2056,7 @@ LA89E:  rts             			; A89E 60                       `
 ; A = MSB of address to text string
 ; X = LSB of address to text string
 ; Y = String length - 1
-sub_a89f:					; print string
-print_string:
+print_string:					; A89F
 	sty     $EE     			; String length - 1
 	sta     off_EC				; Store MSB string address in ZP
 	stx     off_EC+1			; Store LSB string address in ZP
@@ -1840,77 +2069,112 @@ print_string:
 
 ; ----------------------------------------------------------------------------
 sub_a8b3:
-	jsr     sub_a7f6
+	jsr     fetch_serin_ch			; Returns with A
+
 	cmp     #$40    			; A8B6 C9 40                    .@
 	bcs     LA901   			; A8B8 B0 47                    .G
 	jsr     LA8DC   			; A8BA 20 DC A8                  ..
+
 	lda     $BD     			; A8BD A5 BD                    ..
-	and     #$1F    			; A8BF 29 1F                    ).
-	ora     $DB     			; A8C1 05 DB                    ..
+	and     #$1F    			; Clear bits 7,6,5
+
+	ora     PLATO_WORD     			; A8C1 05 DB                    ..
 	sta     $BD     			; A8C3 85 BD                    ..
-	lda     $DC     			; A8C5 A5 DC                    ..
+
+	lda     PLATO_WORD+1   			; A8C5 A5 DC                    ..
 	sta     $BE     			; A8C7 85 BE                    ..
-	bcc     sub_a8b3
+
+	bcc     sub_a8b3			; 
+
 LA8CB:  jsr     LA8DC   			; A8CB 20 DC A8                  ..
+
 	lda     $BB     			; A8CE A5 BB                    ..
 	and     #$1F    			; A8D0 29 1F                    ).
-	ora     $DB     			; A8D2 05 DB                    ..
+	ora     PLATO_WORD     			; A8D2 05 DB                    ..
 	sta     $BB     			; A8D4 85 BB                    ..
-	lda     $DC     			; A8D6 A5 DC                    ..
+	lda     PLATO_WORD+1   			; A8D6 A5 DC                    ..
 	sta     $BC     			; A8D8 85 BC                    ..
 	bcc     sub_a8b3
-LA8DC:  and     #$1F    			; A8DC 29 1F                    ).
-	sta     $DC     			; A8DE 85 DC                    ..
-	lda     #$00    			; A8E0 A9 00                    ..
-	lsr     $DC     			; A8E2 46 DC                    F.
+
+;*******************************************************************************
+;*                                                                             *
+;*                               ?????????????                                 *
+;*                                                                             *
+;*                           ?????????????????????                             *
+;*                                                                             *
+;*******************************************************************************
+; DESCRIPTION
+;
+LA8DC:  and     #$1F    			; Clear bits 7..5 
+	sta     PLATO_WORD+1   			; 
+
+;** Shift bits 2..0 from PLATO_WORD+1 to bits 7..5 of A ************************
+	lda     #$00    			; Clear
+	lsr     PLATO_WORD+1   			; Shift bit to A using C
 	ror     a       			; A8E4 6A                       j
-	lsr     $DC     			; A8E5 46 DC                    F.
+
+	lsr     PLATO_WORD+1   			; A8E5 46 DC                    F.
 	ror     a       			; A8E7 6A                       j
-	lsr     $DC     			; A8E8 46 DC                    F.
+
+	lsr     PLATO_WORD+1   			; A8E8 46 DC                    F.
 	ror     a       			; A8EA 6A                       j
-	sta     $DB     			; A8EB 85 DB                    ..
+
+;** Save 
+	sta     PLATO_WORD     			; A8EB 85 DB                    ..
 	rts             			; A8ED 60                       `
 
 ; ----------------------------------------------------------------------------
-LA8EE:  and     #$1F    			; A8EE 29 1F                    ).
-	sta     $DB     			; A8F0 85 DB                    ..
+:	and     #$1F    			; A8EE 29 1F                    ).
+	sta     PLATO_WORD     			; A8F0 85 DB                    ..
+
 	lda     $BD     			; A8F2 A5 BD                    ..
 	and     #$E0    			; A8F4 29 E0                    ).
-	ora     $DB     			; A8F6 05 DB                    ..
+	ora     PLATO_WORD     			; A8F6 05 DB                    ..
 	sta     $BD     			; A8F8 85 BD                    ..
-	jsr     sub_a7f6
+
+	jsr     fetch_serin_ch
 	cmp     #$40    			; A8FD C9 40                    .@
 	bcc     LA8CB   			; A8FF 90 CA                    ..
+
 LA901:  cmp     #$60    			; A901 C9 60                    .`
-	bcs     LA8EE   			; A903 B0 E9                    ..
+	bcs     :-				; A903 B0 E9                    ..
 	and     #$1F    			; A905 29 1F                    ).
-	sta     $DB     			; A907 85 DB                    ..
+	sta     PLATO_WORD     			; A907 85 DB                    ..
+
 	lda     $BB     			; A909 A5 BB                    ..
 	and     #$E0    			; A90B 29 E0                    ).
-	ora     $DB     			; A90D 05 DB                    ..
+	ora     PLATO_WORD     			; A90D 05 DB                    ..
 	sta     $BB     			; A90F 85 BB                    ..
+
 	ldx     #$03    			; A911 A2 03                    ..
-LA913:  lda     $BB,x   			; A913 B5 BB                    ..
+@LOOP:  lda     $BB,x   			; A913 B5 BB                    ..
 	sta     word_9C,x   			; A915 95 9C                    ..
 	dex             			; A917 CA                       .
-	bpl     LA913   			; A918 10 F9                    ..
+	bpl     @LOOP   			; A918 10 F9                    ..
+
 	lda     word_9C+1
 	lsr     a       			; A91C 4A                       J
+
 	lda     word_9C
 	sta     $D8     			; A91F 85 D8                    ..
+
 	ror     a       			; A921 6A                       j
 	sta     byte_D9 			; A922 85 D9                    ..
+
 	lsr     a       			; A924 4A                       J
 	lsr     a       			; A925 4A                       J
-	bcs     LA92A   			; A926 B0 02                    ..
+	bcs     :+				; A926 B0 02                    ..
+
 	lsr     $D8     			; A928 46 D8                    F.
-LA92A:  adc     byte_D9 			; A92A 65 D9                    e.
+
+:	adc     byte_D9 			; A92A 65 D9                    e.
 	sta     word_A4     			; A92C 85 A4                    ..
+
 	ldx     #$00    			; A92E A2 00                    ..
 	stx     word_A4+1     			; A930 86 A5                    ..
-	bcc     LA936   			; A932 90 02                    ..
+	bcc     :+				; A932 90 02                    ..
 	inc     word_A4+1     			; A934 E6 A5                    ..
-LA936:  lda     $9E     			; A936 A5 9E                    ..
+:	lda     $9E     			; A936 A5 9E                    ..
 	and     #$07    			; A938 29 07                    ).
 	tax             			; A93A AA                       .
 	lsr     $9F     			; A93B 46 9F                    F.
@@ -1924,9 +2188,9 @@ LA936:  lda     $9E     			; A936 A5 9E                    ..
 	adc     LB9FA,x 			; A947 7D FA B9                 }..
 	adc     byte_D9 			; A94A 65 D9                    e.
 	cmp     #$C0    			; A94C C9 C0                    ..
-	bcc     LA952   			; A94E 90 02                    ..
+	bcc     :+				; A94E 90 02                    ..
 	lda     #$BF    			; A950 A9 BF                    ..
-LA952:  sta     $A6     			; A952 85 A6                    ..
+:	sta     $A6     			; A952 85 A6                    ..
 	lda     $9E     			; A954 A5 9E                    ..
 	and     #$03    			; A956 29 03                    ).
 	cmp     #$01    			; A958 C9 01                    ..
@@ -2284,7 +2548,7 @@ LAA62:  ldy     #$0C    			; Loop through $BA45 table
 ; ------------------------------------------------------------------------------
 LAA7C:  sty     plato_char     			; Temporarily save the table offet
 	lda     #$00    			; Send a PLATO 'ACCESS' character
-	jsr     sub_ab54			; to the PLATO server.
+	jsr     send_to_plato2		; to the PLATO server.
 	ldy     plato_char     			; Restore table offset.
 	lda     LBA54,y 			; Use it to get the translation 
 	bne     LAA8D   			; character and send it to PLATO.
@@ -2300,7 +2564,7 @@ LAA91:  sta     plato_char     			; Let A = value associated with key code
 ; If local echo is enabled and the character is printable, render a bitmap
 ; for the character in video memory
 ; ----------------------------------------------------------------------------
-LAA96:  bit     CURRENT_ECHO   			; is local echo disabled?
+LAA96:  bit     CURRENT_ECHO   			; is remote echo enabled?
 	bmi     LAB00   			; yes, don't print, send $E7, RTS
 	lda     plato_char     			; 
 	cmp     #$20    			; is $E7 a printable char? 
@@ -2324,7 +2588,7 @@ jmp_printscreen:				; AAAA
 ;*                                                                             *
 ;*******************************************************************************
 swap_display:					; AAAD  
-	jsr     sub_hide_F   			; Hide "F" displayed in function key mode
+	jsr     hide_big_f   			; Hide "F" displayed in function key mode
 	lda     UI_MODE  			; is current display full-screen with...
 	cmp     #$02    			; ...joystick-mapped function keys?
 	bne     :+				; no, skip ahead.
@@ -2392,7 +2656,7 @@ LAB05:  dey             			; clear trigger state to -1
 	bne     LAB53   			; AB0C D0 45                    .E
 	jsr     play_beep
 	lda     #$1B    			; AB11 A9 1B                    ..
-	jsr     sub_ab54
+	jsr     send_to_plato2
 	lda     #$00    			; AB16 A9 00                    ..
 	sta     $E7     			; AB18 85 E7                    ..
 	sta     $4D     			; AB1A 85 4D                    .M
@@ -2407,7 +2671,7 @@ LAB05:  dey             			; clear trigger state to -1
 	lsr     a       			; AB28 4A                       J
 	ora     #$40    			; AB29 09 40                    .@
 	ora     $C0     			; AB2B 05 C0                    ..
-	jsr     sub_ab54
+	jsr     send_to_plato2
 	pla             			; AB30 68                       h
 	ora     #$44    			; AB31 09 44                    .D
 	bne     LAB02   			; always jumps
@@ -2469,14 +2733,28 @@ proc_joystick:					; AB35
 	beq     LAB05   			; yes, swap display mode (full-screen vs zoomed)
 LAB53:  rts             			; 
 
-; ----------------------------------------------------------------------------
-sub_ab54:  	
+;*******************************************************************************
+;*                                                                             *
+;*                                send_to_plato2                               *
+;*                                                                             *
+;*            Send character to PLATO, reset system timer, and RTS             *
+;*                                                                             *
+;*******************************************************************************
+send_to_plato2:					; AB54
 	jsr     send_to_plato
-	jmp     sub_b54f
+	jmp     set_sys_tm1
 
-; ----------------------------------------------------------------------------
-sub_ab5a:
-	lda     $3E2E   			; AB5A AD 2E 3E                 ..>
+;*******************************************************************************
+;*                                                                             *
+;*                                print_char2                                  *
+;*                                                                             *
+;*                 Entry point #2 for draw character on the screen             *
+;*                                                                             *
+;*******************************************************************************
+; DESCRIPTION
+; Same as print_char except char is what was received from PLATO
+print_char2:					; AB5A
+	lda     SERIN_BUF   			; Char from PLATO
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -2487,22 +2765,26 @@ sub_ab5a:
 ;*******************************************************************************
 ; DESCRIPTION
 ; Parameters:
-; A = character to be displayed
+; A = character to be printed
 print_char:					; AB5D
 	sta     plato_char     			; Character to be displayed
 	sec             			; Test to see if non-printing character 
 	sbc     #$20    			;
 	bcs     :+				;
 	rts             			; RTS now if non-printing character
-:	pha             			; Save character-to-be-displayed
-	ldx     $BA     			; AB66 A6 BA                    ..
-	stx     $C9     			; AB68 86 C9                    ..
+
+:	pha             			; Stash character-#$20
+	ldx     $BA     			; 
+	stx     $C9     			; Let $C9 = $BA TODO
 	bne     :+
-	stx     $E6     			; AB6C 86 E6                    ..
-	stx     $D8     			; AB6E 86 D8                    ..
+
+	stx     $E6     			; Let $E6 = 0 TODO
+	stx     $D8     			; Let $D8 = 0 TODO
 	jsr	sub_abff
+
 	dec     $C9     			; AB73 C6 C9                    ..
 	ldx     $C9     			; AB75 A6 C9                    ..
+
 :	pla             			; AB77 68                       h
 	inx             			; AB78 E8                       .
 	stx     $E6     			; AB79 86 E6                    ..
@@ -2586,25 +2868,33 @@ LABFE:  rts             			; ABFE 60                       `
 sub_abff:
 	ldx     byte_B7
 	cpx     #$02    			; AC01 E0 02                    ..
-	bcc     LAC24   			; AC03 90 1F                    ..
-	bne     LAC11   			; AC05 D0 0A                    ..
+	bcc     LAC24   			; Carry set back in print_char SBC #$20
+	bne     :+				; AC05 D0 0A                    ..
+
 	cmp     #$40    			; AC07 C9 40                    .@
 	tax             			; AC09 AA                       .
 	lda     #$E0    			; AC0A A9 E0                    ..
-	adc     #$00    			; AC0C 69 00                    i.
-	sta     $EB     			; AC0E 85 EB                    ..
-	txa             			; AC10 8A                       .
-LAC11:  asl     a       			; AC11 0A                       .
-	rol     off_E5+1
-	asl     a       			; AC14 0A                       .
-	rol     off_E5+1
-	asl     a       			; AC17 0A                       .
-	rol     off_E5+1
-	sta     off_E5
+	adc     #$00    			; Copy Carry to bit 0 (E0 or E1) TODO
+	sta     $EB     			; 
+
+;** Rotate bits 7,6,5 from A into E6 *******************************************
+;** If A = 41 in the end E6 = 02 and A = 08
+	txa             			; Fetch serin char - #$20
+:	asl     a       			; 
+	rol     byte_E6				; Xfer A's bit 7 into E6
+
+	asl     a       			; 
+	rol     byte_E6				; Xfer A's bit 6 into E6
+
+	asl     a       			; 
+	rol     byte_E6				; Xfer A's bit 5 into E6
+	sta     byte_E5				; Save what's left of A
+
 	ldx     byte_B7
 	cpx     #$03    			; AC1E E0 03                    ..
 	bcs     LAC37   			; AC20 B0 15                    ..
 	bcc     LAC3C   			; AC22 90 18                    ..
+
 LAC24:  asl     a       			; AC24 0A                       .
 	asl     a       			; AC25 0A                       .
 	rol     $E6     			; AC26 26 E6                    &.
@@ -2624,8 +2914,10 @@ LAC3C:  lda     $D8     			; AC3C A5 D8                    ..
 	adc     $EB     			; AC40 65 EB                    e.
 	sta     $E6     			; AC42 85 E6                    ..
 	jsr     sub_ad8e
+
 	lda     $CA     			; AC47 A5 CA                    ..
 	cmp     #$7F    			; AC49 C9 7F                    ..
+
 	bne     LAC56   			; AC4B D0 09                    ..
 	lda     #$00    			; AC4D A9 00                    ..
 	sta     $C9     			; AC4F 85 C9                    ..
@@ -2669,26 +2961,33 @@ LAC7C:  ldy     $CA     			; AC7C A4 CA                    ..
 	tay             			; AC90 A8                       .
 	lda     LBA02,y 			; AC91 B9 02 BA                 ...
 	sta     off_FA
+
 	lda     #$80    			; AC96 A9 80                    ..
 	sta     $CA     			; AC98 85 CA                    ..
+
 LAC9A:  ldy     #$00    			; AC9A A0 00                    ..
 	lda     off_FA+1
 	jsr     sub_ad3a   			; AC9E 20 3A AD                  :.
 	lda     $FA     			; ACA1 A5 FA                    ..
 	jsr     sub_ad3a
+
 	bit     $CA     			; ACA6 24 CA                    $.
 	bvs     LACB8   			; ACA8 70 0E                    p.
 	jsr     sub_accd
+
 	lda     #$FF    			; ACAD A9 FF                    ..
 	sta     $CA     			; ACAF 85 CA                    ..
+
 	bne     LAC9A   			; ACB1 D0 E7                    ..
 LACB3:  ldy     #$00    			; ACB3 A0 00                    ..
 	jsr     sub_ad3a
 LACB8:  dex             			; ACB8 CA                       .
 	bmi     LACE2   			; ACB9 30 27                    0'
+
 	lda     $CA     			; ACBB A5 CA                    ..
 	cmp     #$7F    			; ACBD C9 7F                    ..
 	bne     LACC7   			; ACBF D0 06                    ..
+
 	jsr	sub_ace3
 	jmp     LAC5D   			; ACC4 4C 5D AC                 L].
 
@@ -2821,7 +3120,8 @@ LAD8D:  rts             			; AD8D 60                       `
 ; ----------------------------------------------------------------------------
 sub_ad8e:
 	bit     $C9     			; AD8E 24 C9                    $.
-	bvs     :+
+	bvs     :+				; Is bit 6 set? Yes? Jump.
+
 	lda     #$7F    			; AD92 A9 7F                    ..
 	sec             			; AD94 38                       8
 	sbc     $9E     			; AD95 E5 9E                    ..
@@ -2839,7 +3139,7 @@ sub_ad8e:
 	sta     off_E3+1
 	jsr     sub_a5aa
 	clc             			; ADAB 18                       .
-	adc     LB936,y 			; ADAC 79 36 B9                 y6.
+	adc     LB936,y 			; Y is set from the "and #$03" above.
 	sta     off_E3
 	rts             			; ADB1 60                       `
 
@@ -2860,7 +3160,7 @@ sub_ad8e:
 
 ; ----------------------------------------------------------------------------
 sub_adcb:
-	and     #$07    			; ADCB 29 07                    ).
+	and     #$07    			; Strip of 5 bits
 	sta     off_F4
 	bit     $C9     			; ADCF 24 C9                    $.
 	bvs     :+
@@ -3693,10 +3993,10 @@ create_DL2_body:				; B1AB
 send_to_plato:					; B1DF
 	tay             			; 
 	ldx     #$00    			; Count the number of bits
-:	lsr     a       			; set in A (ex: 01110011 = 5)
-	bcc     :+				; 
+@LOOP:	lsr     a       			; set in A (ex: 01110011 = 5)
+	bcc     @SKIP				; 
 	inx             			; 
-:	bne     :--				; 
+@SKIP:	bne     @LOOP				; 
 
 	txa             			; Let A = # set bits (1s)
 	lsr     a       			; Carry set if #1s is odd
@@ -4390,8 +4690,17 @@ sub_irqen:
 	sta     IRQEN  			; and to the hardware register, too.
 	rts
 
-; ----------------------------------------------------------------------------
-sub_b54f:
+;*******************************************************************************
+;*                                                                             *
+;*                                 set_sys_tm1                                *
+;*                                                                             *
+;*                       Set system timer 1 IRQ and BV                         *
+;*                                                                             *
+;*******************************************************************************
+
+; DESCRIPTION
+;
+set_sys_tm1:					; B54F
 	ldx     #>$0003				; Arg for SETVBV??
 	ldy     #<$0003   			; Arg for SETVBV??
 	jsr     sub_b51f			; Set System Timer 1 IRQ and run SETVBV
@@ -4417,8 +4726,8 @@ sub_b561:
 	lda     #$00    			; B56A A9 00                    ..
 	sta     TSTDAT
 	jsr     sub_b47d
-	jsr     sub_b54f
-	lda     #$59    			; 'Y'
+	jsr     set_sys_tm1
+	lda     #$59    			; 'Y' (echo ?)
 	sta     character                       ; byte_1347
 	ldx     #$01    			; B579 A2 01                    ..
 	jsr     sub_b422
@@ -4797,19 +5106,19 @@ LB71C:  ldy     #$00    			; Prepare CIO open R: on channel #1
 
 ;** (n) Copy 8 bytes from $1330-$1337 to AUDF1/C1-AUDF4/C4 *******************
 	ldy     #$07    			; B762 A0 07                    ..
-:	lda     byte_1330,y 			; B764 B9 30 13                 .0.
+@LOOP1:	lda     byte_1330,y 			; B764 B9 30 13                 .0.
 	sta     AUDF1,y 			; B767 99 00 D2                 ...
 	dey             			; B76A 88                       .
-	bpl     :-      			; B76B 10 F7                    ..
+	bpl     @LOOP1      			; B76B 10 F7                    ..
 
 ;** (n) Save/replace VSERIN VSEROR VSEROC interrupt vectors ******************
 	ldx     #$06    			; 
-:	lda     VSERIN-1,x 			; Save currect serial vector...
+@LOOP2:	lda     VSERIN-1,x 			; Save currect serial vector...
 	sta     byte_1330-1,x 			; ...addresses to RAM
 	lda     LB822-2+1,x                       ; Load new vector...
 	sta     VSERIN-1,x 			; ...addresses to IRQ registers
 	dex             			; 
-	bne     :-      			; End loop
+	bne     @LOOP2     			; End loop
 
 	stx     byte_CC			        ; Let byte_CC = 0
 	stx     byte_CD 			; Let byte_CD = 0
@@ -5520,25 +5829,25 @@ LBACA:	.byte	>(sub_a6f6-1)
 	.byte	>(sub_a448-1),0,0
 	.byte	>(sub_a682-1)
 	.byte	>(sub_adf1-1),0
-	.byte   >(sub_ab5a-1)
+	.byte   >(print_char2-1)		; sub_ab5a
 
 LBAD2:	.byte	<(sub_a6f6-1)
 	.byte	<(sub_a448-1),0,0
 	.byte	<(sub_a682-1)
 	.byte	<(sub_adf1-1),0
-	.byte	<(sub_ab5a-1)
+	.byte	<(print_char2-1)		; sub_ab5a
 
 LBADA:	.byte	$03,$80,$00,$00,$80,$80,$00,$01
 
 LBAE2:	.byte	>(sub_a8b3-1)
 	.byte	>(sub_a5b5-1)
-	.byte	>(sub_a5ff-1)
+	.byte	>(proc_echo-1)
 	.byte	>(sub_a640-1)
 	.byte	>(sub_a133-1)
 
 LBAE7:	.byte   <(sub_a8b3-1)
 	.byte	<(sub_a5b5-1)
-	.byte	<(sub_a5ff-1)
+	.byte	<(proc_echo-1)
 	.byte	<(sub_a640-1)
 	.byte	<(sub_a133-1)
 
