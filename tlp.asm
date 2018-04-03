@@ -208,15 +208,18 @@ L0070           := $0070
 L0080           := $0080
 
 word_9C		:= $009C
-byte_9E		:= $009E
+CURSOR2_X	:= $009C			; 2-byte X coordinate for cursor (zoomed display)
+CURSOR2_Y	:= $009E			; 2-byte Y coordinate for cursor (zoomed display)
 byte_9F		:= $009F
 byte_A0		:= $00A0
 byte_A1		:= $00A1
 byte_A2		:= $00A2
 byte_A3		:= $00A3
-word_A4		:= $00A4
-word_AC		:= $00AC
-word_AE		:= $00AE
+CURSOR1_X	:= $00A4			; 2-byte X coordinate for cursor (full screen display)
+CURSOR1_Y	:= $00A6			; 1-byte Y coordinate for cursor (full screen display)
+MARGIN2		:= $00AC			; 2-byte Left margin (zoomed display)
+MARGIN1		:= $00AE			; 2-byte Left margin (full screen)
+VIDEO_MODE	:= $00B0			; $40->inverse video screen mode,$80->mode write,$C0->mode erase,$00->mode rewrite
 CURRENT_BAUD	:= $00B1			; Current 850 baud rate: $FF->300 $00->1200
 byte_B2		:= $00B2			; Used during init
 IS_MPP		:= $00B2			; If Microbits 300 then 1 else 0
@@ -226,7 +229,7 @@ byte_B4		:= $00B4
 byte_B5		:= $00B5
 byte_B6		:= $00B6
 SERIN_BUF_IDX	:= $00B6			; Index or count of characters received from PLATO
-byte_B7		:= $00B7			; 02->TODO 03->TODO
+CURRENT_CHSET	:= $00B7			; $00->M2 $01->M3 $02->M0 $03->M1
 CURRENT_DL	:= $00B8			; Current Display List (80 or FF = DL #1, 00 = DL #2)
 TOUCH_X		:= $00BF			; Current X position of simulated touch screen - resolution is 16 positions ($00-$0F)
 TOUCH_Y		:= $00C0			; Current Y position of simulated touch screen - resolition is 16 positions ($00-$0F)
@@ -260,7 +263,7 @@ off_E5		:= $00E5
 byte_E5		:= $00E5
 byte_E6		:= $00E6
 plato_char	:= $00E7			; PLATO/ASCII character code to be sent to PLATO
-chset6_base 	:= $00E8			; charset_sm address lo/hi at E8/E9
+CHSET_BASE 	:= $00E8			; current charset address lo/hi at E8/E9
 byte_EB		:= $00EB			; E0 or E1? TODO
 off_EC		:= $00EC
 off_F4		:= $00F4
@@ -298,6 +301,9 @@ L3E33           := $3E33
 L4000           := $4000
 L6000           := $6000
 L8000           := $8000
+
+ch_mem_m2_DL1	= $0C00				; Base address for programmable font M2
+ch_mem_m3_DL1	= $0D80				; Base address for programmable font M3
 
 ; Keyboard scan codes
 key_0		= $32
@@ -368,7 +374,7 @@ cart_start:
 
 ;**(n) Atari direct-connect modem detected *************************************
 	lda     #$1A    			;
-	sta     word_9C
+	sta     CURSOR2_X
 	ldy     #$33    			; String length - 1
 	lda     #<LB8DF				; "After the phone has a high..."
 	ldx     #>LB8DF				;
@@ -441,29 +447,30 @@ kernel:						; A05E
 
 ; DESCRIPTION
 ;
-; This subroutine reads a character the serial port
+; This subroutine reads a character from the serial port.
 ;
 ; Returns to kernel with carry flag set or unset.
 ; If carry is clear then there's nothing left to do in kernel and 
 ; the main loop can begin from the top.
 
-; DESCRIPTION
 proc_serial_in:					; A079
 	ldy     #LB98E-LB96E			; Prepare CIO for get char
 	jsr     call_cio_or_err			; A = char read from CIO
 	and     #$7F    			; strip off parity bit
 
+;** Check if prevous char was start of an escape sequence (set in set_esc) *****
 	bit     JMP_IDX1 			; 
-	bmi     LA0D2   			; is B3 bit 7 set? yes? jump.
+	bmi     proc_esc_seq   			; if prev char was ESC then N=1
 
-	cmp     #$20    			; 
-	bcs     :++				; is char >= space (printable)? Yes. jump.
+;** Check if current char is a control codes ***********************************
+	cmp     #$20    			; is it a control code?
+	bcs     :++				; no? skip.
 
-	jsr     sub_a0f3   			; 
+	jsr     proc_control_ch 		; yes. process control code.
+:	clc             			; All done. Tell kernel...
+	rts             			; ...to go to next iteration.
 
-:	clc             			; A08B 18                       .
-	rts             			; A08C 60                       `
-
+;** 
 :	ldx     SERIN_BUF_IDX			; Get PLATO input buffer index
 	sta     SERIN_BUF,x 			; Store char (A) to buffer
 	inx             			; 
@@ -493,7 +500,7 @@ LA0A3:
 	sty     SERIN_BUF_IDX    		; Clear 
 	bvc     :+++				; A0A7 50 1C                    P.
 
-	ldy     $B4     			; A0A9 A4 B4                    ..
+	ldy     byte_B4    			; A0A9 A4 B4                    ..
 	cpy     #$05    			; A0AB C0 05                    ..
 	beq     :+				; A0AD F0 07                    ..
 
@@ -523,56 +530,123 @@ LA0A3:
 	pha             			; 
 :	rts             			; 
 
-; ----------------------------------------------------------------------------
-LA0D2:  asl     JMP_IDX1 			; Strip off bit 7
-	lsr     JMP_IDX1 			; 
-	jsr     sub_a0db			; 
+;*******************************************************************************
+;*                                                                             *
+;*                               proc_esc_seq                                  *
+;*                                                                             *
+;*                  ???????????????????????????????????????                    *
+;*                                                                             *
+;*******************************************************************************
+proc_esc_seq:					; A0D2
+	asl     JMP_IDX1 			; Strip bit 7 from set_esc()
+	lsr     JMP_IDX1 			; leaving bit 7 in carry
+	jsr     proc_esc_seq2			; 
+	clc             			; Clear carry to tell kernel
+LA0DA:  rts             			; ...all pending work is done.
 
-	clc             			; 
-LA0DA:  rts             			; RTS to kernel with C=0
+;*******************************************************************************
+;*                                                                             *
+;*                               proc_esc_seq2                                 *
+;*                                                                             *
+;*                  ???????????????????????????????????????                    *
+;*                                                                             *
+;*******************************************************************************
 
-; ----------------------------------------------------------------------------
-sub_a0db:
-	cmp     #$5B    			; is $B3 >= "["
-	bcs     LA0DA   			; yes? RTS.
+; DESCRIPTION
 
-	cmp     #$3D    			; is $B3 == "="?
+proc_esc_seq2:					; A0DB
+	cmp     #'Z'+1    			; is escape sequence > "Z"?
+	bcs     LA0DA   			; yes? undefined. RTS
+
+	cmp     #'='    			; is sequence = ESC '='
 	beq     LA105   			; yes? Jump.
 
-	cmp     #$20    			; is $B3 >= SPC
-	bcs     LA0EB   			; yes? Jump.
+	cmp     #'!'-1    			; 
+	bcs     :+				; yes? Jump.
 
-	adc     #$20    			; is ??? 
-	bcc     LA0F3   			; yes? Jump.
+	adc     #$20    			; Change offset into jump
+	bcc     proc_control_ch 		; ...table and process
 
-LA0EB:  cmp     #$32    			; is  $B3 == DC2? or "R" or "2" 
-	beq     LA10B   			; A0ED F0 1C                    ..
+:	cmp     #'2'    			; if ESC 2 then process 
+	beq     load_coord   			; ..."Load Coordinate".
 
-	cmp     #$40    			; is $B3 == "@"
-	bcc     LA0DA   			; yes? RTS.
+	cmp     #'@'    			; Anything else less than 
+	bcc     LA0DA   			; ...ESC @ is undefined. RTS
 
-LA0F3:
-sub_a0f3:
-	tax             			; A0F3 AA                       .
+;*******************************************************************************
+;*                                                                             *
+;*                              proc_control_ch                                *
+;*                                                                             *
+;*              Jumps to a subroutine for a received control code.             *
+;*                                                                             *
+;*******************************************************************************
 
-	clc             			; A0F4 18                       .
-	lda     #<(sub_a367-1) 			; A0F5 A9 66                    .f
-	adc     LBA6F,x 			; A0F7 7D 6F BA                 }o.
-	tay             			; A0FA A8                       .
-	lda     #$00    			; A0FB A9 00                    ..
-	sta     SERIN_BUF_IDX  			; A0FD 85 B6                    ..
-	adc     #>(sub_a367-1) 			; A0FF 69 A3                    i.
-	pha             			; A101 48                       H
-	tya             			; A102 98                       .
-	pha             			; A103 48                       H
-	rts             			; A104 60                       `
+; DESCRIPTION
+; Control codes are those less than $20 (space). This subroutine derives
+; an address to a subroutine that will handle the details of the control code. 
+; Any unexpected control codes should result in an RTS.
+;
+; (excerpt from s0ascers 3.2.3.1)
+;-------------------------------------------------------------------------------
+; Control codes and escape sequences are used to control the terminal's 
+; mode (text, point, line, etc.) and to issue commands (such as erase screen, 
+; set writing mode, and so forth).  
+;-------------------------------------------------------------------------------
+; (excerpt from s0ascers 6.1)
+;-------------------------------------------------------------------------------
+;  CONTROL    HEX
+;  CHARACTER  CODE
+;    BS       08      Backspace.  Moves one character width back.
+;    HT       09      Tab.  Moves one character width.
+;    LF       0A      Linefeed.  Moves one character height down.
+;    VT       0B      Vertical tab.  Moves one character height up.
+;    FF       0C      Form feed.  Set (X,Y) position to top of page.
+;    CR       0D      Carriage return.  Set (X,Y) to margin on next line.
+;    EM       19      Selects block write/erase mode (mode 4).
+;    ESC      1B      Causes terminal to examine the next character to 
+;		      determine if it is a valid escape sequence.
+;    FS       1C      Selects point-plot mode (mode 0).
+;    GS       1D      Selects draw line mode (mode 1).
+;    US       1F      Selects alpha mode (mode 3).
+; 
+;   Note: control codes received not included here should be ignored.
+;-------------------------------------------------------------------------------
+proc_control_ch:				; A0F3
+	tax             			; Save control code into X
+
+;** Lookup address for control char's subroutine from table ********************
+	clc             			; 
+	lda     #<(esc_seq_ff-1) 		; Lookup LSB for subroutine using
+	adc     LBA6F,x 			; ...control code as offset into table.
+	tay             			; Stash into Y
+
+	lda     #$00    			; 
+	sta     SERIN_BUF_IDX  			; 
+	adc     #>(esc_seq_ff-1) 		; Set MSB for subroutine (all are page A3)
+
+;** Trick RTS to jump to the derived address using address found on stack ******
+	pha             			; Push subroutine's MSB
+	tya             			; 
+	pha             			; Push subroutine's LSB
+	rts             			; Jump to control code routine
 
 ; ----------------------------------------------------------------------------
 LA105:  ldx     #$02    			; Let X = 2
 	lda     #$00    			; Let A = 0
 	beq     LA111   			; Save A to B4
 
-LA10B:  ror     byte_B5 			; Let $B5 = $B5 / 2
+;*******************************************************************************
+;*                                                                             *
+;*                                load_coord                                   *
+;*                                                                             *
+;*                    ESC 2 - Load Coordinate command                          *
+;*                                                                             *
+;*******************************************************************************
+
+; DESCRIPTION
+
+load_coord:					; A10B
+	ror     byte_B5 			; Let $B5 = $B5 / 2
 	lda     #$01    			; Let A = 1
 	bne     :+				; Save A to B4
 
@@ -580,7 +654,7 @@ LA111:  ldy     byte_B5 			; Let Y = $B5
 	sty     $1354   			; Let $1354 = $B5
 	stx     byte_B5 			; Let $B5 = #$02
 
-:	sta     $B4     			; Let $B4 = 0 or 1
+:	sta     byte_B4     			; Let $B4 = 0 or 1
 	lda     byte_B3 			; Let A = $B3
 	ora     #$40    			; Set bit 4 in A
 	bne     :+				; Let $B3 = A and RTS
@@ -759,15 +833,17 @@ sub_a1fe:
 
 ; DESCRIPTION
 ;
-; This subroutine initializes 2 display lists, colors, player missiles
+; This subroutine initializes 2 display lists, colors, player missiles.
 ;
-; Display List 1 is a mostly straightforward ANTIC mode F screen. Except 
-; that screen RAM shifts from a range beginning at $2010 to a 2nd range 
-; beginning at $3000 a little after midway down the screen.
-
-; Display List 2 is an ANTIC mode F screen with horizontal and vertical scrolling
+; Display List 1 is a mostly straightforward ANTIC mode F screen. Except that 
+; screen RAM shifts from a range beginning at $2010 to a 2nd range beginning 
+; at $3000 a little after midway down the screen.
+;
+; Display List 2 is an ANTIC mode F screen with horizontal and vertical 
+; scrolling.
 ;
 ; Display List 1         Display List 2
+; --------------         --------------
 ; $1000: $70 8 SCANS     $10CA: $70
 ; $1001: $70 8 SCANS     $10CB: $70
 ; $1002: $70 8 SCANS     $10CC: $70
@@ -806,7 +882,7 @@ init_graphics:
 ;** (n) Prepare values for head of display lists *******************************
 	lda     #$70                            ;
 	ldx     #$02    			; 
-	stx     byte_B7				; Let byte_B7 = 2 TODO
+	stx     CURRENT_CHSET			; Select character set M0 ($02->M0)
 	stx     byte_B2				; Let byte_B2 = 2 TODO
 
 ;** (n) Write head of display list # 1 *****************************************
@@ -943,11 +1019,11 @@ init_graphics:
 	sta     FG_COLOR_DL2    		; Save color value to RAM
 
 ;** (n) Store base address of 6x6 charset in Zero Page RAM **********************
-	lda     #>charset_sm
-	sta     chset6_base+1   		; Save MSB of charset_sm to RAM
+	lda     #>ch_mem_m0_DL1
+	sta     CHSET_BASE+1			; Save MSB of ch_mem_m0_DL1 to RAM
 
-	lda     #<charset_sm
-	sta     chset6_base     		; Save LSB of charset_sm to RAM
+	lda     #<ch_mem_m0_DL1
+	sta     CHSET_BASE			; Save LSB of ch_mem_m0_DL1 to RAM
 
 ;** (n) Disable break key interrupt *********************************************
 	lda     POKMSK				; 1100 000 is the default on power up
@@ -955,8 +1031,8 @@ init_graphics:
 	jsr     sub_irqen			; Enable new set of interrupts
 
 ;** (n) Set system timer for vector #7  ******************************************
-	ldy     #<sub_b013      		; MSB of new vector routine
-	ldx     #>sub_b013      		; LSB of new vector routine
+	ldy     #<sub_b013      		; LSB of new vector routine
+	ldx     #>sub_b013      		; MSB of new vector routine
 	lda     #$07    			; Number of the vector to change
 	jmp     SETVBV  			; Set system timers (SETVBV will rts)
 
@@ -995,54 +1071,118 @@ set_pm_colors:					; A324
 
 display_title:					; A33D
 ;** (1) Clear screen ***********************************************************
-	jsr     sub_a367			; Clear screen
-	jsr     sub_a3c8   			; TODO Initialize Screen Variables?
+	jsr     esc_seq_ff			; Clear screen
+	jsr     proc_ff   			; Set X,Y to top of page.
 
 ;** (2) Print "WELCOME TO THE LEARNING PHONE" **********************************
 	lda     #$50    			; Set X coordinate for text
-	sta     word_A4     			; TODO Save X coordinate for zoomed display?
-	sta     word_9C
+	sta     CURSOR1_X     			; Save X coordinate for full-screen display
+	sta     CURSOR2_X     			; Save X coordinate for zoomed display
 	ldy     #$1C    			; String length - 1
 	lda     #<LB8C2				; "WELCOME..."
 	ldx     #>LB8C2
 	jsr     print_string
-	jsr     sub_a3c2   			; A352 20 C2 A3                  ..
+	jsr     proc_lf   			; A352 20 C2 A3                  ..
 
 ;** (3) Print "COPYRIGHT 1984 ATARI" *******************************************
 	lda     #$67    			; Set X coordinate for text
-	sta     word_A4     			; Save X coordinate for full-screen display?
-	sta     word_9C
+	sta     CURSOR1_X     			; Save X coordinate for full-screen display
+	sta     CURSOR2_X     			; Save X coordinate for zoomed display
 	ldy     #$13    			; String length - 1
 	lda     #<LB8AE				; "COPYRIGHT..."
 	ldx     #>LB8AE
 	jsr     print_string
-	jmp     sub_a3c2   			; A364 4C C2 A3                 L..
+	jmp     proc_lf   			; A364 4C C2 A3                 L..
 
-; ----------------------------------------------------------------------------
-sub_a367:
+;*******************************************************************************
+;*                                                                             *
+;*                                esc_seq_ff                                   *
+;*                                                                             *
+;*                    Clear screen without resetting (X,Y)                     *
+;*                                                                             *
+;*******************************************************************************
+esc_seq_ff:					; A367
 	jmp     clear_screen
 
-; ----------------------------------------------------------------------------
-sub_a36a:
-	txa             			; A36A 8A                       .
-	and     #$07    			; A36B 29 07                    ).
-	sta     byte_B3 			; A36D 85 B3                    ..
-	tax             			; A36F AA                       .
-	lda     LBADA,x 			; A370 BD DA BA                 ...
-	sta     byte_B5 			; A373 85 B5                    ..
-	ldx     #$00    			; A375 A2 00                    ..
-	stx     $DA     			; A377 86 DA                    ..
+;*******************************************************************************
+;*                                                                             *
+;*                                change_mode                                  *
+;*                                                                             *
+;*                   ????????????????????????????????????????                  *
+;*                                                                             *
+;*******************************************************************************
+
+; DESCRIPTION
+; This subroutine is called when one of the following control codes have
+; been received from PLATO: ($19, $1C, $1D, $1F). See s0ascers Appendix B.
+;
+; Parameters:
+; X: control code received from PLATO
+; 
+; The original control code is stripped of all but the lowest 3 bits leaving
+; a simpler value. 
+;
+; control        AND 111 = x -> lookup value
+; $19 = 0001 1001 -> 001 = 1 -> $80 -> (PLATO mode 4) block write/erase mode 
+; $1C = 0001 1100 -> 100 = 4 -> $80 -> (PLATO mode 0) point-plot mode
+; $1D = 0001 1101 -> 101 = 5 -> $80 -> (PLATO mode 1) draw line mode 
+; $1F = 0001 1111 -> 111 = 7 -> $01 -> (PLATO mode 3) alpha mode
+;
+;-------------------------------------------------------------------------------
+; (excerpt from s0ascers 3.2.3.1)
+;-------------------------------------------------------------------------------
+; Control codes and escape sequences are used to control the terminal's mode 
+; (text, point, line, etc.) and to issue commands (such as erase screen, set 
+; writing mode, and so forth).
+;-------------------------------------------------------------------------------
+change_mode:					; A36A
+;** Convert control codes to mode value ***************************************
+	txa             			; Let A = original control code
+	and     #$07    			; Strip all but 3 lowest bits
+	sta     JMP_IDX1 			; Save current mode value
+
+;** Use mode value as index into table ****************************************
+	tax             			; Use mode value as index
+	lda     LBADA,x 			; 
+	sta     byte_B5 			; Save lookup value to B5
+
+;** Clear TODO ****************************************************************
+	ldx     #$00    			; 
+	stx     $DA     			; Clear $DA
+
 	rts             			; A379 60                       `
 
-; ----------------------------------------------------------------------------
-sub_a37a:
-	txa             			; A37A 8A                       .
-	and     #$03    			; A37B 29 03                    ).
-	lsr     a       			; A37D 4A                       J
-	ror     a       			; A37E 6A                       j
-	ror     a       			; A37F 6A                       j
-	sta     $B0     			; A380 85 B0                    ..
-	rts             			; A382 60                       `
+;*******************************************************************************
+;*                                                                             *
+;*                               set_vid_mode                                  *
+;*                                                                             *
+;*          Select inverse or write or erase or rewrite video mode             *
+;*                                                                             *
+;*******************************************************************************
+
+; DESCRIPTION
+; This subroutine is called when one of the following escape sequences have
+; been received from PLATO: ($11, $12, $13, $14). See s0ascers Appendix B.
+;
+; Parameters:
+; X: escape sequence received from PLATO
+; 
+; The original escape sequence is stripped of all but the lowest 2 bits leaving
+; a simpler value. 
+;
+; esc sequence   AND 11 = x -> VIDEO_MODE
+; $11 = 0001 0001 -> 01 = 1 -> $40 -> Select inverse video screen mode.
+; $12 = 0001 0010 -> 10 = 2 -> $80 -> Select mode write.
+; $13 = 0001 0011 -> 11 = 3 -> $C0 -> Select mode erase.
+; $14 = 0001 0100 -> 00 = 0 -> $00 -> Select mode rewrite.
+set_vid_mode:					; A37A
+	txa             			; Let A = original escape code
+	and     #$03    			; Strip all but 2 lowest bits
+	lsr     a       			; Rotate so bits are on left.
+	ror     a       			; This will be helpful when 
+	ror     a       			; ...used with BIT later.
+	sta     VIDEO_MODE     			; Save video mode
+	rts             			; 
 
 ; ----------------------------------------------------------------------------
 sub_a383:
@@ -1067,128 +1207,224 @@ sub_a391:
 	rts             			; A395 60                       `
 
 ; ----------------------------------------------------------------------------
-sub_a396:
+set_super:					; A396
 	clc             			; A396 18                       .
-	jmp     LA824   			; A397 4C 24 A8                 L$.
+	jmp     move_cur_vert  			; A397 4C 24 A8                 L$.
 
 ; ----------------------------------------------------------------------------
-sub_a39a:
+set_sub:					; A39A
 	sec             			; A39A 38                       8
-	jmp     LA824   			; A39B 4C 24 A8                 L$.
+	jmp     move_cur_vert  			; A39B 4C 24 A8                 L$.
 
-; ----------------------------------------------------------------------------
-sub_a39e:
-	lda     word_9C
-	sta     word_AC
+;*******************************************************************************
+;*                                                                             *
+;*                                set_margin                                   *
+;*                                                                             *
+;*                 Set margin using current cursor position.                   *
+;*                                                                             *
+;*******************************************************************************
+set_margin:					; A38E
+	lda     CURSOR2_X			; Zoomed display
+	sta     MARGIN2
 
-	lda     word_9C+1
-	sta     word_AC+1
+	lda     CURSOR2_X+1
+	sta     MARGIN2+1
 
-	lda     word_A4
-	sta     word_AE
+	lda     CURSOR1_X			; Full screen display
+	sta     MARGIN1
 
-	lda     word_A4+1
-	sta     word_AE+1
+	lda     CURSOR1_X+1
+	sta     MARGIN1+1
 
 	rts
 
-; ----------------------------------------------------------------------------
-sub_a3af:
+;*******************************************************************************
+;*                                                                             *
+;*                                  proc_ht                                    *
+;*                                                                             *
+;*                     Tab. Moves one character width.                         *
+;*                                                                             *
+;*******************************************************************************
+proc_ht:					; A3AF
 	jmp     LABD3   			; A3AF 4C D3 AB                 L..
 
-; ----------------------------------------------------------------------------
-sub_a3b2:
-	lda     word_AC     			; TODO Set cursor X = $AC (172)?
-	sta     word_9C
+;*******************************************************************************
+;*                                                                             *
+;*                                  proc_cr                                    *
+;*                                                                             *
+;*             Carriage return. Set (X,Y) to margin on next line.              *
+;*                                                                             *
+;*******************************************************************************
+proc_cr:					; A3B2
+	lda     MARGIN2				; Zoomed display
+	sta     CURSOR2_X
 
-	lda     word_AC+1     			; TODO Set cursor Y = $AD (173)?
-	sta     word_9C+1
+	lda     MARGIN2+1
+	sta     CURSOR2_X+1
 
-	lda     word_AE     			; TODO Set cursor X = $AE (174)?
-	sta     word_A4     			; TODO Save cursor X for zoomed display?
+	lda     MARGIN1				; Full screen display
+	sta     CURSOR1_X
 
-	lda     word_AE+1     			; TODO Set cursor Y = $AE (174)? 
-	sta     word_A4+1     			; TODO Save cursor Y for zoomed display?
+	lda     MARGIN1+1
+	sta     CURSOR1_X+1			; Fall into linefeed (CRLF)
 
-sub_a3c2:
-	jsr     sub_a882   			; A3C2 20 82 A8                  ..
-	jmp     LA857   			; A3C5 4C 57 A8                 LW.
+;*******************************************************************************
+;*                                                                             *
+;*                                  proc_lf                                    *
+;*                                                                             *
+;*                  Linefeed. Moves one character height down.                 *
+;*                                                                             *
+;*******************************************************************************
+proc_lf:					; A3C2
+	jsr     get_font_hgt2			; A3C2 20 82 A8                  ..
+	jmp     move_cur_dn   			; A3C5 4C 57 A8                 LW.
 
-; ----------------------------------------------------------------------------
-; TODO Initialize screen cursor variables?
-; ----------------------------------------------------------------------------
-sub_a3c8:
+;*******************************************************************************
+;*                                                                             *
+;*                                  proc_ff                                    *
+;*                                                                             *
+;*               Form feed. Set (X,Y) position to top of page.                 *
+;*                                                                             *
+;*******************************************************************************
+proc_ff:					; A3C8
 	lda     #$BA    			; A3C8 A9 BA                    ..
-	sta     $A6     			; A3CA 85 A6                    ..
+	sta     CURSOR1_Y     			; A3CA 85 A6                    ..
 
 	lda     #$74    			; A3CC A9 74                    .t
-	sta     $9E     			; A3CE 85 9E                    ..
+	sta     CURSOR2_Y     			; A3CE 85 9E                    ..
 
 	ldx     #$01    			; A3D0 A2 01                    ..
-	stx     $9F     			; A3D2 86 9F                    ..
+	stx     CURSOR2_Y+1			; A3D2 86 9F                    ..
 
-	dex             			; Reset cursor coodinates to 0
-	stx     word_9C
-	stx     word_9C+1
-	stx     word_A4     			; TODO Cursor x coordinate in zoomed mode?
-	stx     word_A4+1     			; TODO Cursor y coordinate in zoomed mode?
+;** Set cursor X coordinates to 0 for full and zoomed displays *****************
+	dex             			; X is now 0
+	stx     CURSOR2_X
+	stx     CURSOR2_X+1
+	stx     CURSOR1_X
+	stx     CURSOR1_X+1			; Fall through to gen_rts
 
-sub_a3dd:  
-	rts             			; 
+;*******************************************************************************
+;*                                                                             *
+;*                                  gen_rts                                    *
+;*                                                                             *
+;*                    Generic RTS called from jump tables                      *
+;*                                                                             *
+;*******************************************************************************
+gen_rts:					; A3DD
+	rts
 
-; ----------------------------------------------------------------------------
-sub_a3de:
-	jsr     sub_a890
-	sta     byte_D9 			; A3E1 85 D9                    ..
-	sec             			; A3E3 38                       8
-	lda     word_A4     			; A3E4 A5 A4                    ..
-	sbc     byte_D9 			; A3E6 E5 D9                    ..
-	sta     word_A4     			; A3E8 85 A4                    ..
-	bcs     LA3EE   			; A3EA B0 02                    ..
-	dec     word_A4+1     			; A3EC C6 A5                    ..
-LA3EE:  lda     word_9C
-	sec             			; A3F0 38                       8
-	sbc     $D8     			; A3F1 E5 D8                    ..
-	sta     word_9C
-	bcs     sub_a3dd   			; RTS
-	dec     word_9C+1
-	bpl     sub_a3dd   			; RTS
-	lda     #$40    			; A3FB A9 40                    .@
-	clc             			; A3FD 18                       .
-	adc     word_A4     			; A3FE 65 A4                    e.
-	sta     word_A4     			; A400 85 A4                    ..
-	lda     #$01    			; A402 A9 01                    ..
-	sta     word_A4+1     			; A404 85 A5                    ..
-	sta     word_9C+1     			; A406 85 9D                    ..
-	bne     sub_a3dd   			; RTS
+;*******************************************************************************
+;*                                                                             *
+;*                                  proc_bs                                    *
+;*                                                                             *
+;*                      Move one character width back.                         *
+;*                                                                             *
+;*******************************************************************************
 
-; ----------------------------------------------------------------------------
+; DESCRIPTION
+; This subroutine is called when a control code $08 (BS) is received.
+
+proc_bs:					; A3DE
+	jsr     get_font_width
+
+;** Decrement full-screen cursor X by current font's character width ***********
+	sta     byte_D9 			; A is 5 or 9 depending on $CA
+	sec             			; 
+	lda     CURSOR1_X     			; Get current cursor X (lo)
+	sbc     byte_D9 			; Decrement by char width
+	sta     CURSOR1_X     			; Save new cursor X
+	bcs     :+				; is hi byte affected? no? skip
+	dec     CURSOR1_X+1    			; Decrement cursor X (hi) by char width
+
+;** Decrement zoomed display cursor X by current font's character width ********
+:	lda     CURSOR2_X			; Get current cursor X (lo)
+	sec             			; 
+	sbc     $D8     			; D8 is 8 or 16 depending on $CA
+	sta     CURSOR2_X			; Save new zoomed cursor X (lo)
+	bcs     gen_rts   			; is hi byte affected? no? RTS 
+	dec     CURSOR2_X+1			; Decrement zoomed cursor X (hi)
+
+	bpl     gen_rts   			; Backspace too far left? no? rts
+
+;** Backspaced too far left. Adjust cursor locations ***************************
+	lda     #$40    			; 
+	clc             			; 
+	adc     CURSOR1_X     			; 
+	sta     CURSOR1_X     			; 
+	lda     #$01    			; 
+	sta     CURSOR1_X+1    			; 
+	sta     CURSOR2_X+1    			; 
+	bne     gen_rts   			; Always jump. RTS
+
+;*******************************************************************************
+;*                                                                             *
+;*                                  proc_vt                                    *
+;*                                                                             *
+;*                       Move one character height up.                         *
+;*                                                                             *
+;*******************************************************************************
 sub_a40a:
-	jsr     sub_a882   			; A40A 20 82 A8                  ..
-	jmp     LA82D   			; A40D 4C 2D A8                 L-.
+proc_vt:
+	jsr     get_font_hgt2			; A40A 20 82 A8                  ..
+	jmp     move_cur_up   			; A40D 4C 2D A8                 L-.
 
-; ----------------------------------------------------------------------------
-sub_a410:
-	txa             			; A410 8A                       .
-	and     #$03    			; A411 29 03                    ).
-	tay             			; A413 A8                       .
-	lda     LB9AE,y 			; A414 B9 AE B9                 ...
-	sta     chset6_base     		; A417 85 E8                    ..
-	lda     LB9B2,y 			; A419 B9 B2 B9                 ...
-	sta     chset6_base+1   		; A41C 85 E9                    ..
-	lda     LB9A6,y 			; A41E B9 A6 B9                 ...
-	sta     $EB     			; A421 85 EB                    ..
-	sty     byte_B7
-	lda     LB9AA,y 			; A425 B9 AA B9                 ...
-	sta     $EA     			; A428 85 EA                    ..
+;*******************************************************************************
+;*                                                                             *
+;*                               sel_char_set                                  *
+;*                                                                             *
+;*                        Select Character set M0-M3.                          *
+;*                                                                             *
+;*******************************************************************************
+
+; DESCRIPTION
+; This subroutine is called when one of the following escape sequences have
+; been received from PLATO: ($42, $43, $44, $45). See s0ascers Appendix B.
+;
+; Parameters:
+; X: escape sequence received from PLATO
+; 
+; The original escape sequence is stripped of all but the lowest 2 bits leaving
+; a simpler value used for indexing into a table. 
+;
+; esc sequence   AND 11 = x -> character set
+; $42 = 0100 0010 -> 10 = 2 -> Character set M0
+; $43 = 0100 0011 -> 11 = 3 -> Character set M1
+; $44 = 0100 0100 -> 00 = 0 -> Character set M2
+; $45 = 0100 0101 -> 01 = 1 -> Character set M3
+
+sel_char_set:					; A410
+	txa             			; Let A = orig escape sequence
+	and     #$03    			; Strip all but 2 lowest bits
+	tay             			; ...and use it for indexing
+
+;** Point to 4x6 character set for full screen display *************************
+	lda     tab_ch_mem_DL1,y			; Get LSB from table
+	sta     CHSET_BASE			; ...and save it to variable.
+
+	lda     tab_ch_mem_DL1+4,y 		; Get MSB from table
+	sta     CHSET_BASE+1			; ...and save it to variable.
+
+;** Point to 8x8 character set for zoomed display ******************************
+	lda     tab_ch_mem_DL2,y			; Get LSB from table
+	sta     $EB     			; ...and save it to variable.
+
+	sty     CURRENT_CHSET			; Remember which set is active
+	lda     tab_ch_mem_DL2+4,y 		; Get MSB from table
+	sta     $EA     			; ...and save it to variable.
 	rts             			; A42A 60                       `
 
-; ----------------------------------------------------------------------------
-sub_a42b:
-	asl     byte_B3 			; A42B 06 B3                    ..
-	sec             			; A42D 38                       8
-	ror     byte_B3 			; A42E 66 B3                    f.
-	rts             			; A430 60                       `
+;*******************************************************************************
+;*                                                                             *
+;*                                  set_esc                                    *
+;*                                                                             *
+;*       Set bit to inform proc_serial_in start of an escape sequence.         *
+;*                                                                             *
+;*******************************************************************************
+set_esc:					; A42B
+	asl     JMP_IDX1 			; Shift bits left
+	sec             			; Set carry
+	ror     JMP_IDX1 			; Rotate carry onto value
+	rts             			; and return.
 
 ; ----------------------------------------------------------------------------
 sub_a431:
@@ -1208,6 +1444,7 @@ sub_a43c:
 
 ; ----------------------------------------------------------------------------
 sub_a440:
+load_echo:
 	lda     #$03    			; A440 A9 03                    ..
 	bne     LA433   			; A442 D0 EF                    ..
 
@@ -1223,9 +1460,9 @@ sub_a448:
 	bne     :+				; A44D D0 10                    ..
 
 	ldx     #$03    			; A44F A2 03                    ..
-@LOOP:	lda     word_A4,x   			; A451 B5 A4                    ..
+@LOOP:	lda     CURSOR1_X,x   			; A451 B5 A4                    ..
 	sta     $A8,x   			; A453 95 A8                    ..
-	lda     word_9C,x   			; A455 B5 9C                    ..
+	lda     CURSOR2_X,x   			; A455 B5 9C                    ..
 	sta     $F0,x   			; A457 95 F0                    ..
 	dex             			; A459 CA                       .
 	bpl     @LOOP				; A45A 10 F5                    ..
@@ -1237,12 +1474,12 @@ sub_a448:
 	sta     $C9     			; A461 85 C9                    ..
 	bne     :+				; A463 D0 0F                    ..
 
-	lda     $9F     			; A465 A5 9F                    ..
+	lda     CURSOR2_Y+1			; A465 A5 9F                    ..
 	sta     $FB     			; A467 85 FB                    ..
 
-	lda     word_9C     			; A469 A5 9C                    ..
-	ldx     word_9C+1     			; A46B A6 9D                    ..
-	ldy     $9E     			; A46D A4 9E                    ..
+	lda     CURSOR2_X     			; A469 A5 9C                    ..
+	ldx     CURSOR2_X+1    			; A46B A6 9D                    ..
+	ldy     CURSOR2_Y			; A46D A4 9E                    ..
 	jsr     :++				; A46F 20 89 A4                  ..
 
 	dec     $C9     			; A472 C6 C9                    ..
@@ -1257,9 +1494,9 @@ sub_a448:
 	stx     $F3     			; A47F 86 F3                    ..
 	stx     $DA     			; A481 86 DA                    ..
 
-	lda     word_A4     			; A483 A5 A4                    ..
-	ldx     word_A4+1     			; A485 A6 A5                    ..
-	ldy     $A6     			; A487 A4 A6                    ..
+	lda     CURSOR1_X     			; A483 A5 A4                    ..
+	ldx     CURSOR1_X+1    			; A485 A6 A5                    ..
+	ldy     CURSOR1_Y     			; A487 A4 A6                    ..
 
 :	sta     $F8     			; A489 85 F8                    ..
 	stx     $F9     			; A48B 86 F9                    ..
@@ -1302,10 +1539,10 @@ sub_a448:
 
 @LOOP3:	lda     $F8,x   			; A4C3 B5 F8                    ..
 	bvs     :+				; A4C5 70 06                    p.
-	sta     word_9C,x   			; A4C7 95 9C                    ..
+	sta     CURSOR2_X,x   			; A4C7 95 9C                    ..
 	ldy     #$40    			; A4C9 A0 40                    .@
 	bvc     :++				; A4CB 50 04                    P.
-:	sta     word_A4,x   			; A4CD 95 A4                    ..
+:	sta     CURSOR1_X,x   			; A4CD 95 A4                    ..
 	ldy     #$28    			; A4CF A0 28                    .(
 :	dex             			; A4D1 CA                       .
 	bpl     @LOOP3				; A4D2 10 EF                    ..
@@ -1317,7 +1554,7 @@ sub_a448:
 	rts             			; A4DC 60                       `
 
 :	jsr     sub_ad8e
-	bit     $B0     			; A4E0 24 B0                    $.
+	bit     VIDEO_MODE			; A4E0 24 B0                    $.
 	lda     $F8     			; A4E2 A5 F8                    ..
 	and     #$07    			; A4E4 29 07                    ).
 	tax             			; A4E6 AA                       .
@@ -1362,7 +1599,7 @@ sub_a448:
 	sbc     off_F4
 	sta     off_F4
 	bmi     LA565   			; A530 30 33                    03
-LA532:  bit     $B0     			; A532 24 B0                    $.
+LA532:  bit     VIDEO_MODE			; A532 24 B0                    $.
 	ldy     #$00    			; A534 A0 00                    ..
 	lda     $AB     			; A536 A5 AB                    ..
 	beq     :+				; A538 F0 03                    ..
@@ -1396,18 +1633,18 @@ LA565:  lda     $AB     			; A565 A5 AB                    ..
 	beq     LA532   			; A571 F0 BF                    ..
 :	bit     $C9     			; A573 24 C9                    $.
 	bvc     :++				; A575 50 15                    P.
-	lda     $9E     			; A577 A5 9E                    ..
+	lda     CURSOR2_Y			; A577 A5 9E                    ..
 	sec             			; A579 38                       8
 	sbc     #$0B    			; A57A E9 0B                    ..
-	sta     $9E     			; A57C 85 9E                    ..
+	sta     CURSOR2_Y			; A57C 85 9E                    ..
 	bcs     :+	   			; A57E B0 02                    ..
-	dec     $9F     			; A580 C6 9F                    ..
-:	lda     $9F     			; A582 A5 9F                    ..
+	dec     CURSOR2_Y+1			; A580 C6 9F                    ..
+:	lda     CURSOR2_Y+1			; A582 A5 9F                    ..
 	lsr     a       			; A584 4A                       J
-	lda     $9E     			; A585 A5 9E                    ..
+	lda     CURSOR2_Y			; A585 A5 9E                    ..
 	ror     a       			; A587 6A                       j
 	adc     #$00    			; A588 69 00                    i.
-	sta     $A6     			; A58A 85 A6                    ..
+	sta     CURSOR1_Y     			; A58A 85 A6                    ..
 :	lda     #<(LB863-1)			; Point to obfuscated code used...
 	ldy     #>(LB863-1)			; ...for copy-protection check.
 	ldx     #$0C				; Init counter for 12 bytes of obfuscated code
@@ -1426,16 +1663,16 @@ sub_a596:
 
 ; ----------------------------------------------------------------------------
 sub_a5a2:
-	lda     word_A4+1     			; A5A2 A5 A5                    ..
+	lda     CURSOR1_X+1    			; A5A2 A5 A5                    ..
 	lsr     a       			; A5A4 4A                       J
-	lda     word_A4     			; A5A5 A5 A4                    ..
+	lda     CURSOR1_X     			; A5A5 A5 A4                    ..
 	jmp     LA5AF   			; A5A7 4C AF A5                 L..
 
 ; ----------------------------------------------------------------------------
 sub_a5aa:
-	lda     word_9C+1     			; A5AA A5 9D                    ..
+	lda     CURSOR2_X+1    			; A5AA A5 9D                    ..
 	lsr     a       			; A5AC 4A                       J
-	lda     word_9C     			; A5AD A5 9C                    ..
+	lda     CURSOR2_X     			; A5AD A5 9C                    ..
 LA5AF:  ror     a       			; A5AF 6A                       j
 	lsr     a       			; A5B0 4A                       J
 	lsr     a       			; A5B1 4A                       J
@@ -1654,11 +1891,11 @@ sub_a682:
 	sta     $C9     			; A687 85 C9                    ..
 	bne     LA695   			; A689 D0 0A                    ..
 	jsr     sub_ad8e
-	lda     word_9C     			; A68E A5 9C                    ..
+	lda     CURSOR2_X     			; A68E A5 9C                    ..
 	jsr     LA69A   			; A690 20 9A A6                  ..
 	dec     $C9     			; A693 C6 C9                    ..
 LA695:  jsr     sub_ad8e
-	lda     word_A4     			; A698 A5 A4                    ..
+	lda     CURSOR1_X     			; A698 A5 A4                    ..
 LA69A:  and     #$07    			; A69A 29 07                    ).
 	tax             			; A69C AA                       .
 	ldy     #$00    			; A69D A0 00                    ..
@@ -1960,85 +2197,139 @@ unpack_word:					; A7FE
 	sta     PLATO_WORD+1   			; ...left over from byte #2
 	rts             			; 
 
-; ----------------------------------------------------------------------------
-LA824:  lda     #$02    			; A824 A9 02                    ..
-	ldy     #$04    			; A826 A0 04                    ..
-	jsr     sub_a886   			; A828 20 86 A8                  ..
-	bcs     LA857   			; A82B B0 2A                    .*
-LA82D:  adc     $A6     			; A82D 65 A6                    e.
-	sta     $A6     			; A82F 85 A6                    ..
+;*******************************************************************************
+;*                                                                             *
+;*                             move_cur_vert                                   *
+;*                                                                             *
+;*     Move cursor position up or down. Direction determined by carry bit.     *
+;*                                                                             *
+;*******************************************************************************
+move_cur_vert:					; A824
+	lda     #$02    			; Cursor delta Y for full-screen
+	ldy     #$04    			; Cursor delta Y for zoomed ($D8)
+	jsr     get_font_hgt   			; 
+	bcs     move_cur_dn			; is subscript? yes? jump.
+
+;*******************************************************************************
+;*                                                                             *
+;*                                move_cur_up                                  *
+;*                                                                             *
+;*                          Move cursor position up                            *
+;*                                                                             *
+;*******************************************************************************
+move_cur_up:					; A82D
+	adc     CURSOR1_Y			; A82D 65 A6                    e.
+	sta     CURSOR1_Y			; A82F 85 A6                    ..
+
 	lda     $D8     			; A831 A5 D8                    ..
 	clc             			; A833 18                       .
-	adc     $9E     			; A834 65 9E                    e.
-	sta     $9E     			; A836 85 9E                    ..
-	bcc     LA83C   			; A838 90 02                    ..
-	inc     $9F     			; A83A E6 9F                    ..
-LA83C:	lda	$9F
+	adc     CURSOR2_Y			; A834 65 9E                    e.
+	sta     CURSOR2_Y			; A836 85 9E                    ..
+	bcc     :+				; A838 90 02                    ..
+	inc     CURSOR2_Y+1			; A83A E6 9F                    ..
+:	lda	CURSOR2_Y+1
 	cmp     #$01    			; A83E C9 01                    ..
-	bcc     LA856   			; A840 90 14                    ..
-	lda     $9E     			; A842 A5 9E                    ..
+	bcc     :+				; A840 90 14                    ..
+	lda     CURSOR2_Y			; A842 A5 9E                    ..
 	cmp     #$80    			; A844 C9 80                    ..
-	bcc     LA856   			; A846 90 0E                    ..
+	bcc     :+				; A846 90 0E                    ..
 	sec             			; A848 38                       8
 	sbc     #$80    			; A849 E9 80                    ..
-	sta     $9E     			; A84B 85 9E                    ..
-	lsr     $9F     			; A84D 46 9F                    F.
+	sta     CURSOR2_Y			; A84B 85 9E                    ..
+	lsr     CURSOR2_Y+1			; A84D 46 9F                    F.
 	sec             			; A84F 38                       8
-	lda     $A6     			; A850 A5 A6                    ..
+	lda     CURSOR1_Y			; A850 A5 A6                    ..
 	sbc     #$C0    			; A852 E9 C0                    ..
-	sta     $A6     			; A854 85 A6                    ..
-LA856:  rts             			; A856 60                       `
+	sta     CURSOR1_Y			; A854 85 A6                    ..
+:	rts             			; A856 60                       `
 
-; ----------------------------------------------------------------------------
-LA857:  sta     byte_D9 			; A857 85 D9                    ..
-	lda     $A6     			; A859 A5 A6                    ..
+;*******************************************************************************
+;*                                                                             *
+;*                               unpack_word                                   *
+;*                                                                             *
+;*                  Unpack 16 bit word from 3 byte packet                      *
+;*                                                                             *
+;*******************************************************************************
+move_cur_dn:					; A857
+	sta     byte_D9 			; A857 85 D9                    ..
+	lda     CURSOR1_Y			; A859 A5 A6                    ..
 	sec             			; A85B 38                       8
 	sbc     byte_D9 			; A85C E5 D9                    ..
-	sta     $A6     			; A85E 85 A6                    ..
+	sta     CURSOR1_Y			; A85E 85 A6                    ..
 	sec             			; A860 38                       8
-	lda     $9E     			; A861 A5 9E                    ..
+	lda     CURSOR2_Y			; A861 A5 9E                    ..
 	sbc     $D8     			; A863 E5 D8                    ..
-	sta     $9E     			; A865 85 9E                    ..
+	sta     CURSOR2_Y			; A865 85 9E                    ..
 	bcs     LA86B   			; A867 B0 02                    ..
-	dec     $9F     			; A869 C6 9F                    ..
-LA86B:  lda     $9F     			; A86B A5 9F                    ..
+	dec     CURSOR2_Y+1			; A869 C6 9F                    ..
+LA86B:  lda     CURSOR2_Y+1			; A86B A5 9F                    ..
 	bpl     LA881   			; A86D 10 12                    ..
-	lda     $9E     			; A86F A5 9E                    ..
+	lda     CURSOR2_Y			; A86F A5 9E                    ..
 	clc             			; A871 18                       .
 	adc     #$80    			; A872 69 80                    i.
-	sta     $9E     			; A874 85 9E                    ..
+	sta     CURSOR2_Y			; A874 85 9E                    ..
 	lda     #$01    			; A876 A9 01                    ..
-	sta     $9F     			; A878 85 9F                    ..
-	lda     $A6     			; A87A A5 A6                    ..
+	sta     CURSOR2_Y+1			; A878 85 9F                    ..
+	lda     CURSOR1_Y			; A87A A5 A6                    ..
 LA87C:  clc             			; A87C 18                       .
 	adc     #$C0    			; A87D 69 C0                    i.
-	sta     $A6     			; A87F 85 A6                    ..
+	sta     CURSOR1_Y			; A87F 85 A6                    ..
 LA881:  rts             			; A881 60                       `
 
-; ----------------------------------------------------------------------------
-; Called from end of print string
-sub_a882:
-	lda     #$06    			; Let A = 0000 0110
-	ldy     #$0C    			; Let Y = 0000 1100
+;*******************************************************************************
+;*                                                                             *
+;*                               get_font_hgt2                                  *
+;*                                                                             *
+;*                      Return height for current font                         *
+;*                                                                             *
+;*******************************************************************************
+; if CA like x1xx xxxx
+; then A = 12 and D8 = 24
+; else A = 6  and D8 = 12
+get_font_hgt2:					; A882
+	lda     #$06    			; 
+	ldy     #$0C    			; Fall into get_font_hgt
 
-sub_a886:  
-	bit     $CA     			; Test bits 7,6 in $CA
-	sty     $D8     			; Let $D8 = #$0C
+;*******************************************************************************
+;*                                                                             *
+;*                               get_font_hgt                                  *
+;*                                                                             *
+;*                      Return height for current font                         *
+;*                                                                             *
+;*******************************************************************************
+get_font_hgt:					; A886
+;** If bit 6 of $CA is clear then let leave A and $D8 as-is ********************
+	bit     $CA     			; 
+	sty     $D8     			; 
 	bvs     :+				; Is bit 6 of $CA set?
-	rts             			; no. RTS
-:	asl     a       			; Yes. Let A = 0000 1100
-	bvs     :+				; 
+	rts             			; it isn't. leave now.
+;** Otherwise double A and $D8 *************************************************
+:	asl     a       			; A = A * 2
+	bvs     :+				; $D8 = $D8 * 2 and RTS
 
+;*******************************************************************************
+;*                                                                             *
+;*                              get_font_width                                 *
+;*                                                                             *
+;*                       Return width for current font                         *
+;*                                                                             *
+;*******************************************************************************
+; 
+; if CA like x1xx xxxx 
+; then A = 9 and $D8 = 16
+; else A = 5 and $D8 = 8
+;
 sub_a890:  
+get_font_width:					; A890
+;** If bit 6 of $CA is clear then let A = 5 and $D8 = 8 ***********************
 	bit     $CA     			; Test bits 7,6 in $CA
-
-	lda     #$05    			; Let A = 0000 0101
-	ldy     #$08    			; Let Y = 0000 1000
+	lda     #$05    			; Let A = 5 pixels wide
+	ldy     #$08    			; 
 	sty     $D8     			; Let $D8 = #$08
-
-	bvc     :++				; Is bit 6 of $CA set? no?
-	lda     #$09    			; Let A = 0000 1001
-:	asl     $D8     			; Let $D8 = 
+	bvc     :++				; 
+;** Otherwise let A = 8 and $D8 = 16 ******************************************
+	lda     #$09    			; Let A = 9 pixels wide
+:	asl     $D8     			; Let $D8 = #$10
 :	rts             			; 
 
 ;*******************************************************************************
@@ -2065,7 +2356,7 @@ print_string:					; A89F
 	jsr     print_char
 	dec     $EE     			; A8AC C6 EE                    ..
 	bpl     :-
-	jmp     sub_a3b2   			; A8B0 4C B2 A3                 L..
+	jmp     proc_cr   			; A8B0 4C B2 A3                 L..
 
 ; ----------------------------------------------------------------------------
 sub_a8b3:
@@ -2148,14 +2439,14 @@ LA901:  cmp     #$60    			; A901 C9 60                    .`
 
 	ldx     #$03    			; A911 A2 03                    ..
 @LOOP:  lda     $BB,x   			; A913 B5 BB                    ..
-	sta     word_9C,x   			; A915 95 9C                    ..
+	sta     CURSOR2_X,x   			; A915 95 9C                    ..
 	dex             			; A917 CA                       .
 	bpl     @LOOP   			; A918 10 F9                    ..
 
-	lda     word_9C+1
+	lda     CURSOR2_X+1
 	lsr     a       			; A91C 4A                       J
 
-	lda     word_9C
+	lda     CURSOR2_X
 	sta     $D8     			; A91F 85 D8                    ..
 
 	ror     a       			; A921 6A                       j
@@ -2168,17 +2459,17 @@ LA901:  cmp     #$60    			; A901 C9 60                    .`
 	lsr     $D8     			; A928 46 D8                    F.
 
 :	adc     byte_D9 			; A92A 65 D9                    e.
-	sta     word_A4     			; A92C 85 A4                    ..
+	sta     CURSOR1_X     			; A92C 85 A4                    ..
 
 	ldx     #$00    			; A92E A2 00                    ..
-	stx     word_A4+1     			; A930 86 A5                    ..
+	stx     CURSOR1_X+1    			; A930 86 A5                    ..
 	bcc     :+				; A932 90 02                    ..
-	inc     word_A4+1     			; A934 E6 A5                    ..
-:	lda     $9E     			; A936 A5 9E                    ..
+	inc     CURSOR1_X+1    			; A934 E6 A5                    ..
+:	lda     CURSOR2_Y			; A936 A5 9E                    ..
 	and     #$07    			; A938 29 07                    ).
 	tax             			; A93A AA                       .
-	lsr     $9F     			; A93B 46 9F                    F.
-	lda     $9E     			; A93D A5 9E                    ..
+	lsr     CURSOR2_Y+1			; A93B 46 9F                    F.
+	lda     CURSOR2_Y			; A93D A5 9E                    ..
 	ror     a       			; A93F 6A                       j
 	sta     $D8     			; A940 85 D8                    ..
 	lsr     a       			; A942 4A                       J
@@ -2190,14 +2481,14 @@ LA901:  cmp     #$60    			; A901 C9 60                    .`
 	cmp     #$C0    			; A94C C9 C0                    ..
 	bcc     :+				; A94E 90 02                    ..
 	lda     #$BF    			; A950 A9 BF                    ..
-:	sta     $A6     			; A952 85 A6                    ..
-	lda     $9E     			; A954 A5 9E                    ..
+:	sta     CURSOR1_Y			; A952 85 A6                    ..
+	lda     CURSOR2_Y			; A954 A5 9E                    ..
 	and     #$03    			; A956 29 03                    ).
 	cmp     #$01    			; A958 C9 01                    ..
 	lda     $D8     			; A95A A5 D8                    ..
 	adc     byte_D9 			; A95C 65 D9                    e.
-	sta     $9E     			; A95E 85 9E                    ..
-	rol     $9F     			; A960 26 9F                    &.
+	sta     CURSOR2_Y			; A95E 85 9E                    ..
+	rol     CURSOR2_Y+1			; A960 26 9F                    &.
 :	rts             			; A962 60                       `
 
 ;*******************************************************************************
@@ -2569,7 +2860,7 @@ LAA96:  bit     CURRENT_ECHO   			; is remote echo enabled?
 	lda     plato_char     			; 
 	cmp     #$20    			; is $E7 a printable char? 
 	bcs     LAAFD   			; yes, print char, send $E7, RTS
-	jsr     sub_a0f3   			; AAAD 20 F6 A5
+	jsr     proc_control_ch 		; AAAD 20 F6 A5
 	jmp     LAB00   			; and send $E7, and RTS
 
 ; ----------------------------------------------------------------------------
@@ -2797,23 +3088,23 @@ print_char:					; AB5D
 
 ; ----------------------------------------------------------------------------
 sub_ab88:
-	inc     word_A4     			; AB88 E6 A4                    ..
+	inc     CURSOR1_X     			; AB88 E6 A4                    ..
 	bne     :+
-	inc     word_A4+1     			; AB8C E6 A5                    ..
+	inc     CURSOR1_X+1    			; AB8C E6 A5                    ..
 :	ldx     #$7F    			; AB8E A2 7F                    ..
 	stx     $CA     			; AB90 86 CA                    ..
 	bne     sub_abff
 
 ; ----------------------------------------------------------------------------
 LAB94:  jsr     LAD05   			; AB94 20 05 AD                  ..
-	bit     $B0     			; AB97 24 B0                    $.
+	bit     VIDEO_MODE			; AB97 24 B0                    $.
 	bvs     LABD3   			; AB99 70 38                    p8
 	jsr     sub_a5aa
-	lda     word_9C
+	lda     CURSOR2_X
 	and     #$04    			; ABA0 29 04                    ).
 	beq     LABA6   			; ABA2 F0 02                    ..
 	inc     off_F4
-LABA6:  lda     $A6     			; ABA6 A5 A6                    ..
+LABA6:  lda     CURSOR1_Y			; ABA6 A5 A6                    ..
 	ldy     #$20    			; ABA8 A0 20                    . 
 	sec             			; ABAA 38                       8
 :	sbc     #$06    			; ABAB E9 06                    ..
@@ -2839,35 +3130,35 @@ LABA6:  lda     $A6     			; ABA6 A5 A6                    ..
 	bne     LABD3   			; ABCD D0 04                    ..
 	lda     #$5F    			; ABCF A9 5F                    ._
 LABD1:  sta     (off_E3),y
-LABD3:  jsr     sub_a890
+LABD3:  jsr     get_font_width
 	ldy     $D8     			; ABD6 A4 D8                    ..
 	clc             			; ABD8 18                       .
-	adc     word_A4     			; ABD9 65 A4                    e.
-	sta     word_A4     			; ABDB 85 A4                    ..
+	adc     CURSOR1_X     			; ABD9 65 A4                    e.
+	sta     CURSOR1_X     			; ABDB 85 A4                    ..
 	bcc     LABE1   			; ABDD 90 02                    ..
-	inc     word_A4+1     			; ABDF E6 A5                    ..
+	inc     CURSOR1_X+1    			; ABDF E6 A5                    ..
 LABE1:  tya             			; ABE1 98                       .
 	clc             			; ABE2 18                       .
-	adc     word_9C     			; ABE3 65 9C                    e.
-	sta     word_9C     			; ABE5 85 9C                    ..
+	adc     CURSOR2_X     			; ABE3 65 9C                    e.
+	sta     CURSOR2_X     			; ABE5 85 9C                    ..
 	bcc     :+
-	inc     word_9C+1
-:	lda     word_9C+1
+	inc     CURSOR2_X+1
+:	lda     CURSOR2_X+1
 	cmp     #$02    			; ABED C9 02                    ..
 	bcc     LABFE   			; ABEF 90 0D                    ..
-	lda     word_A4     			; ABF1 A5 A4                    ..
+	lda     CURSOR1_X     			; ABF1 A5 A4                    ..
 	sec             			; ABF3 38                       8
 	sbc     #$40    			; ABF4 E9 40                    .@
-	sta     word_A4     			; ABF6 85 A4                    ..
+	sta     CURSOR1_X     			; ABF6 85 A4                    ..
 	lda     #$00    			; ABF8 A9 00                    ..
-	sta     word_A4+1     			; ABFA 85 A5                    ..
-	sta     word_9C+1     			; ABFC 85 9D                    ..
+	sta     CURSOR1_X+1    			; ABFA 85 A5                    ..
+	sta     CURSOR2_X+1    			; ABFC 85 9D                    ..
 LABFE:  rts             			; ABFE 60                       `
 
 ; ----------------------------------------------------------------------------
 sub_abff:
-	ldx     byte_B7
-	cpx     #$02    			; AC01 E0 02                    ..
+	ldx     CURRENT_CHSET
+	cpx     #$02    			; is curr char set M0?
 	bcc     LAC24   			; Carry set back in print_char SBC #$20
 	bne     :+				; AC05 D0 0A                    ..
 
@@ -2890,7 +3181,7 @@ sub_abff:
 	rol     byte_E6				; Xfer A's bit 5 into E6
 	sta     byte_E5				; Save what's left of A
 
-	ldx     byte_B7
+	ldx     CURRENT_CHSET				; 
 	cpx     #$03    			; AC1E E0 03                    ..
 	bcs     LAC37   			; AC20 B0 15                    ..
 	bcc     LAC3C   			; AC22 90 18                    ..
@@ -2921,16 +3212,16 @@ LAC3C:  lda     $D8     			; AC3C A5 D8                    ..
 	bne     LAC56   			; AC4B D0 09                    ..
 	lda     #$00    			; AC4D A9 00                    ..
 	sta     $C9     			; AC4F 85 C9                    ..
-	lda     word_A4     			; AC51 A5 A4                    ..
+	lda     CURSOR1_X     			; AC51 A5 A4                    ..
 	jmp     LAC58   			; AC53 4C 58 AC                 LX.
 
 ; ----------------------------------------------------------------------------
-LAC56:  lda     word_9C     			; AC56 A5 9C                    ..
+LAC56:  lda     CURSOR2_X     			; AC56 A5 9C                    ..
 LAC58:  jsr     sub_adcb
 	ldx     #$0B    			; AC5B A2 0B                    ..
 LAC5D:  ldy     #$00    			; AC5D A0 00                    ..
 	sty     $D8     			; AC5F 84 D8                    ..
-	lda     byte_B7
+	lda     CURRENT_CHSET
 	lsr     a       			; AC63 4A                       J
 	beq     LAC78   			; AC64 F0 12                    ..
 	cpx     #$0A    			; AC66 E0 0A                    ..
@@ -3043,13 +3334,13 @@ LAD05:  asl     a       			; AD05 0A                       .
 	bcc     :+
 	inc     $E6     			; AD10 E6 E6                    ..
 	clc             			; AD12 18                       .
-:	adc     chset6_base     		; AD13 65 E8                    e.
+:	adc     CHSET_BASE			; AD13 65 E8                    e.
 	sta     off_E5
 	lda     off_E5+1
-	adc     chset6_base+1   		; AD19 65 E9                    e.
+	adc     CHSET_BASE+1			; AD19 65 E9                    e.
 	sta     off_E5+1
 	jsr     sub_ad8e
-	lda     word_A4     			; AD20 A5 A4                    ..
+	lda     CURSOR1_X     			; AD20 A5 A4                    ..
 	jsr     sub_adcb
 	ldx     #$05    			; AD25 A2 05                    ..
 :	jsr     sub_ad34   			; AD27 20 34 AD                  4.
@@ -3069,7 +3360,7 @@ sub_ad34:
 	ldy     #$00    			; AD38 A0 00                    ..
 
 sub_ad3a:
-	bit     $B0     			; AD3A 24 B0                    $.
+	bit     VIDEO_MODE			; AD3A 24 B0                    $.
 	bvc     :+
 	eor     #$FF    			; AD3E 49 FF                    I.
 	bit     $C9     			; AD40 24 C9                    $.
@@ -3087,7 +3378,7 @@ sub_ad3a:
 LAD56:  sta     byte_D9 			; AD56 85 D9                    ..
 	ldy     $FC     			; AD58 A4 FC                    ..
 	lda     (off_E3),y
-	bit     $B0     			; AD5C 24 B0                    $.
+	bit     VIDEO_MODE			; AD5C 24 B0                    $.
 	bmi     LAD67   			; AD5E 30 07                    0.
 	and     $AB     			; AD60 25 AB                    %.
 LAD62:  ora     byte_D9 			; AD62 05 D9                    ..
@@ -3103,7 +3394,7 @@ LAD6F:  sta     (off_E3),y
 	lda     $A7     			; AD72 A5 A7                    ..
 	beq     LAD8D   			; AD74 F0 17                    ..
 	lda     (off_E3),y
-	bit     $B0     			; AD78 24 B0                    $.
+	bit     VIDEO_MODE			; AD78 24 B0                    $.
 	bmi     LAD83   			; AD7A 30 07                    0.
 	and     $A7     			; AD7C 25 A7                    %.
 LAD7E:  ora     $D8     			; AD7E 05 D8                    ..
@@ -3124,12 +3415,12 @@ sub_ad8e:
 
 	lda     #$7F    			; AD92 A9 7F                    ..
 	sec             			; AD94 38                       8
-	sbc     $9E     			; AD95 E5 9E                    ..
+	sbc     CURSOR2_Y			; AD95 E5 9E                    ..
 	tax             			; AD97 AA                       .
 	and     #$03    			; AD98 29 03                    ).
 	tay             			; AD9A A8                       .
 	lda     #$01    			; AD9B A9 01                    ..
-	sbc     $9F     			; AD9D E5 9F                    ..
+	sbc     CURSOR2_Y+1			; AD9D E5 9F                    ..
 	lsr     a       			; AD9F 4A                       J
 	txa             			; ADA0 8A                       .
 	ror     a       			; ADA1 6A                       j
@@ -3146,7 +3437,7 @@ sub_ad8e:
 ; ----------------------------------------------------------------------------
 :	lda     #$BF    			; ADB2 A9 BF                    ..
 	sec             			; ADB4 38                       8
-	sbc     $A6     			; ADB5 E5 A6                    ..
+	sbc     CURSOR1_Y			; ADB5 E5 A6                    ..
 	tax             			; ADB7 AA                       .
 	lda     $04C0,x 			; ADB8 BD C0 04                 ...
 	sta     off_E3+1
@@ -3192,18 +3483,18 @@ LADFF:  bit     $C9     			; ADFF 24 C9                    $.
 	bvs     LAE13   			; AE01 70 10                    p.
 	lda     $A0     			; AE03 A5 A0                    ..
 	ldx     $A1     			; AE05 A6 A1                    ..
-	ldy     word_9C     			; AE07 A4 9C                    ..
+	ldy     CURSOR2_X     			; AE07 A4 9C                    ..
 	sty     $EC     			; AE09 84 EC                    ..
 	sty     $A0     			; AE0B 84 A0                    ..
-	ldy     word_9C+1
+	ldy     CURSOR2_X+1
 	sty     $A1     			; AE0F 84 A1                    ..
 	bvc     LAE21   			; AE11 50 0E                    P.
 LAE13:  lda     $A8     			; AE13 A5 A8                    ..
 	ldx     $A9     			; AE15 A6 A9                    ..
-	ldy     word_A4     			; AE17 A4 A4                    ..
+	ldy     CURSOR1_X     			; AE17 A4 A4                    ..
 	sty     $EC     			; AE19 84 EC                    ..
 	sty     $A8     			; AE1B 84 A8                    ..
-	ldy     word_A4+1     			; AE1D A4 A5                    ..
+	ldy     CURSOR1_X+1    			; AE1D A4 A5                    ..
 	sty     $A9     			; AE1F 84 A9                    ..
 LAE21:  sta     $F0     			; AE21 85 F0                    ..
 	stx     $F1     			; AE23 86 F1                    ..
@@ -3219,17 +3510,17 @@ LAE33:  sta     $F2     			; AE33 85 F2                    ..
 	sec             			; AE37 38                       8
 	bvc     LAE46   			; AE38 50 0C                    P.
 	lda     #$BF    			; AE3A A9 BF                    ..
-	sbc     $A6     			; AE3C E5 A6                    ..
+	sbc     CURSOR1_Y			; AE3C E5 A6                    ..
 	sta     $EE     			; AE3E 85 EE                    ..
 	sta     $AA     			; AE40 85 AA                    ..
 	lda     #$00    			; AE42 A9 00                    ..
 	beq     LAE54   			; AE44 F0 0E                    ..
 LAE46:  lda     #$7F    			; AE46 A9 7F                    ..
-	sbc     $9E     			; AE48 E5 9E                    ..
+	sbc     CURSOR2_Y			; AE48 E5 9E                    ..
 	sta     $EE     			; AE4A 85 EE                    ..
 	sta     $A2     			; AE4C 85 A2                    ..
 	lda     #$01    			; AE4E A9 01                    ..
-	sbc     $9F     			; AE50 E5 9F                    ..
+	sbc     CURSOR2_Y+1			; AE50 E5 9F                    ..
 	sta     $A3     			; AE52 85 A3                    ..
 LAE54:  sta     $EF     			; AE54 85 EF                    ..
 	lda     $DA     			; AE56 A5 DA                    ..
@@ -3472,7 +3763,7 @@ LAFEE:  ldy     $EC,x   			; AFEE B4 EC                    ..
 sub_b004:
 	lda     LB93A,x 			; B004 BD 3A B9                 .:.
 	and     (off_E3),y
-	bit     $B0     			; B009 24 B0                    $.
+	bit     VIDEO_MODE			; B009 24 B0                    $.
 	bvs	:+
 	ora     LB942,x 			; B00D 1D 42 B9                 .B.
 :	sta     (off_E3),y
@@ -4027,7 +4318,7 @@ call_cio_or_err:				; B1F1
 	bpl     LB252   			; Success. Jump to nearby RTS
 display_comm_error:
 	ldy     #$18    			; Set cursor X coord in full-screen mode
-	sty     word_9C     			; 
+	sty     CURSOR2_X     			; 
 	ldy     #$12    			; Set string length - 1
 	lda     #<LB89B				; Point to string "COMMUNIC..."
 	ldx     #>LB89B				;
@@ -4122,7 +4413,7 @@ sub_user_baud:
 	jsr     close_ch1
 	bmi     display_comm_error
 	ldy     #$18    			; B258 A0 18                    ..
-	sty     word_9C     			; B25A 84 9C                    ..
+	sty     CURSOR2_X     			; B25A 84 9C                    ..
 	ldy     #$08    			; B25C A0 08                    ..
 	lda     CURRENT_BAUD			; Get baud ($FF=300, $00=1200)
 	bne     LB268   			; B260 D0 06                    ..
@@ -5171,11 +5462,11 @@ sub_register_R:
 	sta     byte_1346       		; Save "R" in RAM
 	sta     HATABS,x			; Save "R" in the new slot
 
-	lda     #<handler_R 			; MSB of start of handler vector table
-	sta     HATABS+1,x      		; Save MSB in the new slot
+	lda     #<handler_R 			; LSB of start of handler vector table
+	sta     HATABS+1,x      		; Save LSB in the new slot
 
-	lda     #>handler_R 			; LSB of start of handler vector table
-	sta     HATABS+2,x      		; Save LSB in the new slot
+	lda     #>handler_R 			; MSB of start of handler vector table
+	sta     HATABS+2,x      		; Save MSB in the new slot
 
 ;** (4) Prepare SIO to load STATUS results into DVSTAT *************************
 	lda     #<DVSTAT			; LSB of data buffer address
@@ -5529,13 +5820,80 @@ LB99E:
 	.addr	LB898				; "P:" (Printer)
 	.word	$0040
 
-LB9A6:	.byte	>$0600,>$0900,>$0000,>byte_BAEC
+;*******************************************************************************
+;*                                                                             *
+;*                              tab_ch_mem_DL1                                 *
+;*                              tab_ch_mem_DL2                                 *
+;*                                                                             *
+;*                            Character memories                               *
+;*                                                                             *
+;*******************************************************************************
 
-LB9AA:	.byte	<$0600,<$0900,<$0000,<byte_BAEC
+; DESCRIPTION
+; The next 2 tables points to the bitmaps for 4 character sets. 
+;
+; tab_ch_mem_DL1: 5x6 font for full screen display
+; tab_ch_mem_DL2: 8x8 font for zoomed display
+;
+;-------------------------------------------------------------------------------
+; (excerpt from s0ascers 3.2.3.1.2.4.1  Character memories)
+;-------------------------------------------------------------------------------
+; There are four character memories, known as M0, M1, M2 and M3. There are 
+; provisions built into the protocol to accommodate up to eight character 
+; memories, but only these four are currently in use.  M0 and M1 are constant.
+; M2 and M3 are the programmable font.
+;
+; M0 contains the standard 96-character ASCII set.
+; 
+; M1 contains the PLATO extended character set.  These are the special 
+; characters that PLATO uses which are not available in the standard ASCII set.
+; The characters are illustrated in appendix A.
+;
+; M2 is the first half of the programmable font.  Character slots zero through 
+; 63 are placed in this character memory.  The character set is loaded in the 
+; load memory mode (see section 3.2.3.1.2.3).
+;
+; M3 is the second half of the programmable font.  Character slots 64 through 
+; 127 are placed in this character memory.  
+;
+; There are eight commands to select the current character memory.  The resident
+; must start out with M0 as the default. When the PLATO host requires characters
+; from the other character memories it will send down the appropriate command.  
+; The sequences for the commands are:
+;
+;     ESC B (1B 42): select M0
+;     ESC C (1B 43): select M1
+;     ESC D (1B 44): select M2
+;     ESC E (1B 45): select M3
+; 
+; When a data character is received in text mode it is used as an index into 
+; the current character memory, and this bit map is put onto the screen in the 
+; current screen mode at the current (X,Y) location.
+;-------------------------------------------------------------------------------
 
-LB9AE:	.byte	<$0C00,<$0D80,<charset_sm,<LBE84
+;** 8x8 font for zoomed display ************************************************
+tab_ch_mem_DL2:					; B9A6
+	.byte	>$0600
+	.byte	>$0900
+	.byte	>$0000
+	.byte	>ch_mem_m1_DL2			; Extended PLATO font LO
 
-LB9B2:  .byte   >$0C00,>$0D80,>charset_sm,>LBE84
+	.byte	<$0600
+	.byte	<$0900
+	.byte	<$0000
+	.byte	<ch_mem_m1_DL2			; Extended PLATO font HI
+
+;** 5x6 font for full screen display *******************************************
+tab_ch_mem_DL1:					; B9AE
+	.byte	<ch_mem_m2_DL1			; Programmable font LO
+	.byte	<ch_mem_m3_DL1			; Programmable font LO
+	.byte	<ch_mem_m0_DL1			; Standard ASCII font LO
+	.byte	<ch_mem_m1_DL1			; Extended PLATO font LO
+
+	.byte   >ch_mem_m2_DL1			; Programmable font HI
+	.byte	>ch_mem_m3_DL1			; Programmable font HI
+	.byte	>ch_mem_m0_DL1			; Standard ASCII font HI
+	.byte	>ch_mem_m1_DL1			; Extended PLATO font HI
 
 LB9B6:	.byte	$08,$10,$10,$20,$20,$40,$80,$80
 
@@ -5759,71 +6117,76 @@ LBA67:	.byte	%01110000			; .###....
 	.byte	%00000110			; .....##.
 
 .macro	jt1	arg1
-	.byte	(arg1-sub_a367)
+	.byte	(arg1-esc_seq_ff)
 .endmacro
 
-LBA6F:
+LBA6F:  
+;** Control Characters *********************************************************
 	.repeat 8
-		jt1	sub_a3dd
+		jt1	gen_rts			; 00-07 -> RTS
 	.endrepeat
-	jt1	sub_a3de
-	jt1	sub_a3af
-	jt1	sub_a3c2
-	jt1	sub_a40a
-	jt1	sub_a3c8
-	jt1	sub_a3b2
+	jt1	proc_bs				; 08 -> BS
+	jt1	proc_ht				; 09 -> TAB
+	jt1	proc_lf				; 0A -> LF
+	jt1	proc_vt				; 0B -> VT
+	jt1	proc_ff				; 0C -> FF
+	jt1	proc_cr				; 0D -> CR
 	.repeat 11
-		jt1	sub_a3dd
+		jt1	gen_rts			; 0E-18 -> RTS
 	.endrepeat
-	jt1	sub_a36a
-	jt1	sub_a3dd
-	jt1	sub_a42b
-	jt1	sub_a36a
-	jt1	sub_a36a
-	jt1	sub_a3dd
-	jt1	sub_a36a
-	jt1	sub_a3dd
-	jt1	sub_a387
-	jt1	sub_a383
-	jt1	sub_a387
+	jt1	change_mode			; 19 -> mode 4 (block write/erase)
+	jt1	gen_rts				; 1A -> unknown
+	jt1	set_esc				; 1B -> start of escape sequence
+	jt1	change_mode			; 1C -> mode 0 (point-plot)
+	jt1	change_mode			; 1D -> mode 1 (draw line)
+	jt1	gen_rts				; 1E -> RTS
+	jt1	change_mode			; 1F -> mode 3 (alpha)
+
+;** Escape Sequences <= #$20 ***************************************************
+	jt1	gen_rts				; 00: Undefined -> RTS
+	jt1	sub_a387			; 01: ESC SOH -> Tek emulation mode
+	jt1	sub_a383			; 02: ESC STX -> Select PLATO operation
+	jt1	sub_a387			; 03: ESC ETX -> Select TTY operation
 	.repeat 8
-		jt1	sub_a3dd
+		jt1	gen_rts			; 04-0B: Undefined -> RTS
 	.endrepeat
-	jt1	sub_a367
+	jt1	esc_seq_ff			; 0C: ESC FF -> Clear screen without resetting (X,Y)
 	.repeat 4
-		jt1	sub_a3dd
+		jt1	gen_rts			; 0D-10: Undefined -> RTS
 	.endrepeat
 	.repeat 4
-		jt1	sub_a37a
+		jt1	set_vid_mode		; 11-14: ESC DC1-DC4 -> Select video mode
 	.endrepeat
 	.repeat 6
-		jt1	sub_a3dd
+		jt1	gen_rts			; 15-1A: Undefined -> RTS
 	.endrepeat
-	jt1	sub_a42b
+	jt1	set_esc				; 1B: ESC ESC -> continue to next char
 	.repeat 4
-		jt1	sub_a3dd
+		jt1	gen_rts			; 1C-1F: Undefined -> RTS
 	.endrepeat
-	jt1	sub_a396
-	jt1	sub_a39a
+
+;** Escape Sequences >= #$40 ***************************************************
+	jt1	set_super			; 40 ESC @ -> Superscript
+	jt1	set_sub				; 41 ESC A -> Subscript
 	.repeat 4
-		jt1	sub_a410
+		jt1	sel_char_set		; 42-45 ESC B-E
 	.endrepeat
 	.repeat 8
-		jt1	sub_a3dd
+		jt1	gen_rts			; 46-4D ESC F-M
 	.endrepeat
-	jt1	sub_a38d
-	jt1	sub_a391
-	jt1	sub_a36a
-	jt1	sub_a43c
+	jt1	sub_a38d			; 4E ESC N -> Select size 0
+	jt1	sub_a391			; 4F ESC O -> Select size 2
+	jt1	change_mode			; 50 ESC P -> Load memory
+	jt1	sub_a43c			; 51 ESC Q -> SSF command.
 	.repeat 3
-		jt1	sub_a431
+		jt1	sub_a431		; 52-54 ESC R-T
 	.endrepeat
-	jt1	sub_a438
-	jt1	sub_a431
-	jt1	sub_a444
-	jt1	sub_a3dd
-	jt1	sub_a440
-	jt1	sub_a39e
+	jt1	sub_a438			; 55 ESC U -> Select mode 6
+	jt1	sub_a431			; 56 ESC V -> Select mode 7
+	jt1	sub_a444			; 57 ESC W -> Load Memory Address command
+	jt1	gen_rts				; 58 ESC X -> RTS
+	jt1	load_echo			; 59 ESC Y -> Load Echo command
+	jt1	set_margin			; 50 ESC Z -> Set margin
 
 LBACA:	.byte	>(sub_a6f6-1)
 	.byte	>(sub_a448-1),0,0
@@ -5837,7 +6200,14 @@ LBAD2:	.byte	<(sub_a6f6-1)
 	.byte	<(sub_adf1-1),0
 	.byte	<(print_char2-1)		; sub_ab5a
 
-LBADA:	.byte	$03,$80,$00,$00,$80,$80,$00,$01
+LBADA:	.byte	$03
+	.byte	$80				; PLATO mode 4->block write/erase mode
+	.byte	$00
+	.byte	$00
+	.byte	$80				; PLATO mode 0->point-plot mode
+	.byte	$80				; PLATO mode 1->draw line mode
+	.byte	$00
+	.byte	$01				; PLATO mode 3->alpha mode
 
 LBAE2:	.byte	>(sub_a8b3-1)
 	.byte	>(sub_a5b5-1)
@@ -5852,6 +6222,7 @@ LBAE7:	.byte   <(sub_a8b3-1)
 	.byte	<(sub_a133-1)
 
 byte_BAEC:
+ch_mem_m1_DL2:
 	.byte   %00000000       		; ........
 	.byte   %00000000       		; ........
 	.byte   %00000000       		; ........
@@ -6239,7 +6610,7 @@ byte_BAEC:
 	.byte   %00010000       		; ...#....
 	.byte   %00010000       		; ...#....
 
-charset_sm:
+ch_mem_m0_DL1:
 	.byte   %00000000       		; ........
 	.byte   %00000000       		; ........
 	.byte   %00000000       		; ........
@@ -6912,7 +7283,7 @@ charset_sm:
 	.byte   %00000000       		; ........
 	.byte   %00000000       		; ........
 
-LBE84:
+ch_mem_m1_DL1:
 	.byte   %00000000       		; ........
 	.byte   %00000000       		; ........
 	.byte   %00000000       		; ........
