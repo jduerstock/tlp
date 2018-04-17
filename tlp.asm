@@ -28,6 +28,7 @@
 ;*                             M E M O R Y   M A P                             *
 ;*                                                                             *
 ;*******************************************************************************
+; $0400..$057F	Table of addresses to start of each Display List #1 scan line
 ; $1000..$10C9	Display List #1
 ; $10C9..$130F	Display List #2
 ;
@@ -207,33 +208,34 @@ ISTOP		:= $134C
 L0070           := $0070
 L0080           := $0080
 
-CURSOR2_X	:= $009C			; 2-byte X coordinate for cursor (zoomed display)
-CURSOR2_Y	:= $009E			; 2-byte Y coordinate for cursor (zoomed display)
+CURSOR2_X	:= $009C			; X coord for cursor (zoomed display) (0->left boundary, 511->right)
+CURSOR2_Y	:= $009E			; Y coord for cursor (zoomed display) (0->bottom of screen, 383->top)
 byte_9F		:= $009F
-byte_A0		:= $00A0
-byte_A1		:= $00A1
-byte_A2		:= $00A2
-byte_A3		:= $00A3
-CURSOR1_X	:= $00A4			; 2-byte X coordinate for cursor (full screen display)
-CURSOR1_Y	:= $00A6			; 2-byte Y coordinate for cursor (full screen display)
+CURSOR2_X_OLD	:= $00A0
+CURSOR2_Y_OLD	:= $00A2
+CURSOR1_X	:= $00A4			; X coord for cursor (full screen display) (0->left boundary, 311->right)
+CURSOR1_Y	:= $00A6			; Y coord for cursor (full screen display) (0->bottom of screen, 191->top)
 REND		:= $00A7			; Right mask for BLOCK
 CURSOR1_X_OLD	:= $00A8
 CURSOR1_Y_OLD	:= $00AA
 LEND		:= $00AB			; Left mask for BLOCK
 MARGIN2		:= $00AC			; 2-byte Left margin (zoomed display)
 MARGIN1		:= $00AE			; 2-byte Left margin (full screen)
-VIDEO_MODE	:= $00B0			; char mode $00->mode rewrite,$40->inverse video screen mode,$80->mode write,$C0->mode erase
+SCREEN_MODE	:= $00B0			; char mode $00->mode rewrite,$40->inverse video screen mode,$80->mode write,$C0->mode erase
 CURRENT_BAUD	:= $00B1			; Current 850 baud rate: $FF->300 $00->1200
 byte_B2		:= $00B2			; Used during init
 IS_MPP		:= $00B2			; If Microbits 300 then 1 else 0
 byte_B3		:= $00B3			; 7 = print_char2
 byte_B4		:= $00B4			; $00->ESC {R,S,T,V} $01->ESC 2 (Load Coordinate) $02->ESC Q (SSF) $03->ESC Y (Load Echo commnd)  $04->ESC W (Load Memory Address command)  $05->ESC U (select mode 6) 
 byte_B5		:= $00B5
+DATA_MODE	:= $00B5			; $80->graphic (point, line, or block) $01->text
 SERIN_BUF_IDX	:= $00B6			; Index or count of characters received from PLATO
 CURRENT_CHSET	:= $00B7			; $00->M2 $01->M3 $02->M0 $03->M1
 CURRENT_DL	:= $00B8			; Current Display List (80 or FF = DL #1, 00 = DL #2)
 byte_B9		:= $00B9
-byte_BA		:= $00BA
+SEND_FLG	:= $00B9			; $00->Nothing to send
+byte_BA		:= $00BA			; 
+IS_16K		:= $00BA			; TODO Flag for system < 48K RAM? (no support for zoomed display)
 CORDX		:= $00BB			; 2-byte explicit X coordinate from PLATO
 CORDY		:= $00BD			; 2-byte explicit Y coordinate from PLATO
 byte_BC		:= $00BC
@@ -249,7 +251,7 @@ JSTICK_FN_DLY	:= $00C5			; Counter that restricts handle events to no
 JSTICK_TR_DLY	:= $00C6			; Counter that restricts trigger events to no more than 2 times per second.
 JSTICK_TR	:= $00C7			; State of joystick trigger ($00=pressed, $FF->clear)
 JSTICK_FN	:= $00C8			; Direction of joystick-mapped function keys: 0D->U(NEXT),02->D(BACK),0C->L(LAB),$12->R(DATA)
-COMPR		:= $00C9			; compress?
+COMPR		:= $00C9			; Compressed graphics mode flag (full screen display)
 CURRENT_SIZE	:= $00CA			; Character Size $00->size 0 (normal) $FF->size 2 (bold/doubled)
 byte_CB		:= $00CB
 byte_CC		:= $00CC
@@ -266,6 +268,7 @@ YDLO		:= $00D6			; TODO Delta Y when calculating slope?
 YDHI		:= $00D7
 VAR		:= $00D8			; temporaries
 TMP		:= $00D9
+byte_DA		:= $00DA
 PLATO_WORD	:= $00DB			; 16-bit PLATO word (See s0ascers 3.1.2.4.2)
 off_DD		:= $00DD			; Temp variable
 JSTICK_X	:= $00DD			; VBI: Current joystick direction X-axis (-1=left +1=right)
@@ -296,12 +299,11 @@ TCRSY		:= $00F2			; block erase cursor position
 SUMLO		:= $00F4			; vector draw work variables
 SUMHI		:= $00F5			; 
 
-word_F6		:= $00F6
 INDLO		:= $00F6
 INDHI		:= $00F7
 
-INVX		:= $00F8
-INVY		:= $00F9
+INVX		:= $00F8			; X0<X1 or X1<X0
+INVY		:= $00F9			; Y0<Y1 or Y1<Y0
 
 off_FA		:= $00FA
 CURSX		:= $00F8
@@ -309,7 +311,7 @@ CURSY		:= $00FA
 
 DELLO		:= $00FA			; 
 DELHI		:= $00FB
-YM		:= $00FC
+YM		:= $00FC			; Which axis (X or Y) is the major axis between 2 coords (1->Y-axis, 0->X-axis)
 byte_FF		:= $00FF			; Initialized to #$FF at start
 
 byte_1310	:= $1310
@@ -339,7 +341,8 @@ L2000           := $2000
 L3E2E		:= $3E2E
 SERIN_BUF	:= $3E2E			; Buffer for characters received from PLATO
 L3E33           := $3E33
-L4000           := $4000
+test_if_rom	:= $3E33
+SCREEN_24K	:= $4000			; Start of 24k framebuffer for video
 L6000           := $6000
 L8000           := $8000
 
@@ -400,21 +403,21 @@ mod_ctrl	= $80
 ; After a cold or warm start, the OS runs the cart_init routine found towards
 ; the end of the cart's address space, then jumps to here.
  
-cart_start:
+cart_start:					; A000
 	jsr     sub_register_R			; Add R device to HATABS
 	jsr     init_graphics			; Initialize display lists, colors
 	jsr     display_title			; Display program title and copyright
 
-	ldy     #LB976-LB96E			; 
+	ldy     #open_k-tab_iocb		; 
 	jsr     call_cio_or_err			; Open K: on channel #2
 
 ;**(n) Attempt to open an Atari direct connect modem using T: handler **********
-	ldy     #LB996-LB96E  			; 
+	ldy     #open_t-tab_iocb 		; 
 	jsr     call_cio			; Try to open T: on channel #1
-	bmi     LA035   			; If cio returned error then skip ahead
+	bmi     :++				; If cio returned error then skip ahead
 
 ;**(n) Atari direct-connect modem detected *************************************
-	lda     #$1A    			;
+	lda     #$1A    			; Move cursor
 	sta     CURSOR2_X
 	ldy     #$33    			; String length - 1
 	lda     #<LB8DF				; "After the phone has a high..."
@@ -430,12 +433,12 @@ cart_start:
 
 ;** (n) If user presses '1' instead of RETURN try to set baud to 1200 **********
 	cmp     #key_1				; if last key press <> '1'
-	bne     LA04F   			; then skip ahead
+	bne     :+++				; then skip ahead
 	jsr     display_title			; otherwise clear screen and..
 
 ;** (n) Try changing baud rate and re-opening channel #1 ***********************
-LA035:  jsr     close_ch1			; Close CIO channel #1
-	jsr     sub_open_modem			; Attempt to open R: on channel #1 at CURRENT_BAUD
+:	jsr     close_ch1			; Close CIO channel #1
+	jsr     open_modem			; Attempt to open R: on channel #1 at CURRENT_BAUD
 	bmi     :+				; if unsuccessful then default to Microbits 300
 	lda     #<LB91C				; otherwise print "1200 baud"
 	ldx     #>LB91C				; 
@@ -444,14 +447,14 @@ LA035:  jsr     close_ch1			; Close CIO channel #1
 	jmp     kernel   			; and proceed to main loop
 
 ;** (n) If all else fails assume Microbits 300 ********************************
-:	jsr     sub_config_mpp			; 
+:	jsr     config_mpp			; 
 	jmp     kernel   			; Skip test and goto main loop
 
 ;** (n) Test 850 or direct-connect modem **************************************
-LA04F:	lda	#$4C
-	jsr	sub_b242			; Send test??
-:	lda     #$46    			; 
-	jsr     sub_b242			; Send test??
+:	lda	#$4C				; x100 1100
+	jsr	test_baud			; Send test??
+:	lda     #$46    			; x100 0110 
+	jsr     test_baud			; Send test??
 	lda     DVSTAT+1			; Keep trying until successful...
 	bpl     :-				; ...then fall through to main loop.
 
@@ -465,84 +468,93 @@ LA04F:	lda	#$4C
 kernel:						; A05E
 	jsr     proc_keyboard			; Process/send keyboard events
 	jsr     proc_joystick			; Process/send joystick events
-	jsr     sub_a12c
+	jsr     send_data			; Send data to PLATO if any
 
-	lda     SERIN_FLG 
-	beq     kernel   			; A069 F0 F3                    ..
+	lda     SERIN_FLG			; Any data received?
+	beq     kernel   			; No? -->
 
-	jsr     proc_serial_in
-	bcc     kernel   			; Is input char >= #$20?
-	jsr     LA0A3   			; yes? 
+	jsr     proc_serial_in			; Process incoming data
+	bcc     kernel   			; Any more work? No? -->
+	jsr     draw				; Process graphic data
 
 	lda     #$00    			; 
 	sta     SERIN_BUF_IDX  			; Clear counter/index
-	beq     kernel   			; jump always
+	beq     kernel   			; -->
 
 ;*******************************************************************************
 ;*                                                                             *
 ;*                              proc_serial_in                                 *
 ;*                                                                             *
-;*          ???????????????????????????????????????????????????????????        *
+;*           Read data from serial. Could be instruction or data.              *
 ;*                                                                             *
 ;*******************************************************************************
 
 ; DESCRIPTION
 ;
-; This subroutine reads a character from the serial port.
+; This subroutine reads byte from the serial port. The byte could be:
+; a) the second character in an escape sequence (previous character was ESC). 
+; b) a control code (ASCII code in non-printable range (< #$20)
+; c) an alpha code (data mode is alpha/text and ASCII code in printable range)
+; d) a graphics code (data mode is graphic)
 ;
 ; Returns to kernel with carry flag set or unset.
-; If carry is clear then there's nothing left to do in kernel and 
-; the main loop can begin from the top.
+; If carry is clear then there's nothing left to do in kernel and  the main loop
+; can begin from the top.
 
 proc_serial_in:					; A079
-	ldy     #LB98E-LB96E			; Prepare CIO for get char
+	ldy     #read_ch1-tab_iocb		; Prepare CIO for get char
 	jsr     call_cio_or_err			; A = char read from CIO
-	and     #$7F    			; strip off parity bit
+	and     #$7F    			; Remove/ignore parity bit
 
-;** Check if prevous char was start of an escape sequence (set in set_esc) *****
-	bit     byte_B3 			; 
-	bmi     proc_esc_seq   			; if prev char was ESC then N=1
+;** Process escape sequence ****************************************************
+	bit     byte_B3 			; Bit 7 set if prev char was ESC
+	bmi     proc_esc_seq   			; 
 
-;** Check if current char is a control codes ***********************************
+;** Process control code *******************************************************
 	cmp     #$20    			; is it a control code?
 	bcs     :++				; no? skip.
 
-	jsr     proc_control_ch 		; yes. process control code.
-:	clc             			; All done. Tell kernel...
+	jsr     proc_control_ch 		; yes? process control code.
+:	clc             			; All done. Tell kernel
 	rts             			; ...to go to next iteration.
 
-;** 
+;** Process character depending on current data mode ***************************
 :	ldx     SERIN_BUF_IDX			; Get PLATO input buffer index
 	sta     SERIN_BUF,x 			; Store char (A) to buffer
 	inx             			; 
 	stx     SERIN_BUF_IDX  			; Increment index
 
-	ldy     byte_B5 			; 
-	bpl     :+				; Is $B5 > 0? yes? skip?
+	ldy     DATA_MODE 			; Is mode currently $01->alpha?
+	bpl     :+				; Yes? skip ahead.
 
-	cmp     #$60    			; A099 C9 60                    .`
-	bcs     :--				; A >= #$60? yes? goto CLC,RTS
+;** Here if data mode is $80->graphic. *****************************************
+;** If data >= #$60 return to kernel with more work to do. *********************
+	cmp     #$60    			; 0110 0000
+	bcs     :--				; Return with carry set.
 
-	cmp     #$40    			; A09D C9 40                    .@
+	cmp     #$40    			; 
 	rts             			; A09F 60                       `
 
-:	cpx     byte_B5 			; Return with Z of B6 - B5
-	rts             			; and C of CMP #$20
+;** Here if data mode is $01->alpha. Return to kernel with more work to do *****
+:	cpx     DATA_MODE 			; 
+	rts             			; Return with carry set.
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                              ??????????????                                 *
+;*                                   draw                                      *
 ;*                                                                             *
-;*          ???????????????????????????????????????????????????????????        *
+;*      Depending on current data mode, draw point, line, block, or text       *
 ;*                                                                             *
 ;*******************************************************************************
-LA0A3:  
+
+; DESCRIPTION
+draw:						; ABA3
 	ldy     #$00    			; 
 	sty     SERIN_BUF_IDX    		; Clear 
 	bvc     :+++				; A0A7 50 1C                    P.
 
 	ldy     byte_B4    			; 
-	cpy     #$05    			; 
+	cpy     #$05    			; Mode 6?
 	beq     :+				; yes? skip to unpack_word.
 
 ; Unstash $B5 from $1354, Unset bit 6 from $B3 *********************************
@@ -576,12 +588,12 @@ LA0A3:
 ;*                                                                             *
 ;*                               proc_esc_seq                                  *
 ;*                                                                             *
-;*                  ???????????????????????????????????????                    *
+;*           Remove ESC flag and that signaled previous char was ESC.          *
 ;*                                                                             *
 ;*******************************************************************************
 proc_esc_seq:					; A0D2
-	asl     byte_B3 			; Move bit 7 set in set_esc()
-	lsr     byte_B3 			; ...into carry
+	asl     byte_B3 			; Strip bit 7 flag that told us
+	lsr     byte_B3 			; ... prev char was ESC.
 	jsr     proc_esc_seq2			; 
 	clc             			; Clear carry to tell kernel
 :	rts             			; ...all pending work is done.
@@ -590,28 +602,34 @@ proc_esc_seq:					; A0D2
 ;*                                                                             *
 ;*                               proc_esc_seq2                                 *
 ;*                                                                             *
-;*                  ???????????????????????????????????????                    *
+;*        Examine which escape character was received and do what it says      *
 ;*                                                                             *
 ;*******************************************************************************
 
 ; DESCRIPTION
+; This subroutine examines the 
 
 proc_esc_seq2:					; A0DB
+;** If ESC sequence is > ESC Z then it's undefined, return *********************
 	cmp     #$5B    			; is escape sequence > "Z"?
 	bcs     :-				; yes? undefined. RTS
 
 	cmp     #$3D    			; is sequence ESC '=' (color)?
-	beq     LA105   			; yes? Jump.
+	beq     get_colorf   			; yes? Jump.
 
-	cmp     #$20    			; is ESC seq > "!"?
+;** If ESC sequence is >= ESC ! then use character code as-is as index *********
+	cmp     #$20    			; is ESC seq >= "!"?
 	bcs     :+				; yes? Skip "adc #$20"
 
+;** If ESC sequence is < ESC ! then add 32 *************************************
 	adc     #$20    			; Change offset into jump
 	bcc     proc_control_ch 		; ...table and process
 
+;** If ESC 2 doesn't have a lookup table entry, check for it here **************
 :	cmp     #'2'				; if ESC 2 (or GS?) then process 
 	beq     load_coord   			; ..."Load Coordinate".
 
+;** If ESC sequence < ESC @ then it's undefined, return ************************
 	cmp     #'@'    			; Anything else less than 
 	bcc     :--				; ...ESC @ is undefined. RTS
 
@@ -659,7 +677,7 @@ proc_control_ch:				; A0F3
 ;** Lookup address for control char's subroutine from table ********************
 	clc             			; 
 	lda     #<(esc_seq_ff-1) 		; Lookup LSB for subroutine using
-	adc     LBA6F,x 			; ...control code as offset into table.
+	adc     JUMTAB,x 			; ...control code as offset into table.
 	tay             			; Stash into Y
 
 	lda     #$00    			; 
@@ -682,7 +700,8 @@ proc_control_ch:				; A0F3
 
 ; DESCRIPTION
 ; Get foreground and background color bytes and do nothing (unsupported)
-LA105:  ldx     #$02    			; Read 2 bytes
+get_colorf:					; A185
+	ldx     #$02    			; Read 2 bytes
 	lda     #$00    			; and do nothing
 	beq     LA111   			; -->
 
@@ -744,8 +763,9 @@ sub_a120:
 
 ; ----------------------------------------------------------------------------
 sub_a12c:
-	lda     $B9     			; let A = $B9
-	beq     :-				; RTS if $B9 == 0
+send_data:
+	lda     SEND_FLG     			; Anything to send?
+	beq     :-				; No? Return to kernel
 	jmp     (off_134d)			; 
 
 ;*******************************************************************************
@@ -807,7 +827,7 @@ sub_a133:
 :	sty     off_134d+1
 	sta     off_134d
 	dex             			; A17A CA                       .
-	stx     $B9     			; A17B 86 B9                    ..
+	stx     SEND_FLG     			; A17B 86 B9                    ..
 	jmp     sub_a1fe
 
 LA180:  sty     off_134d+1
@@ -1003,10 +1023,10 @@ init_graphics:
 	sta     DLIST+1 			; list loc with the hardware
 
 ;** (n) Screen RAM for display list #2 will begin at $4000 *********************
-	lda     #<L4000				; Init pointers to 1st scan line in DL2.
+	lda     #<SCREEN_24K			; Init pointers to 1st scan line in DL2.
 	sta     DL2_TEMP			; The difference between the two 
 	sta     DL2_WIND			; pointers is that DL2 will 
-	lda     #>L4000				; get clobbered during processing
+	lda     #>SCREEN_24K			; get clobbered during processing
 	sta     DL2_TEMP+1			; and ZOOM is changed only 
 	sta     DL2_WIND+1 			; when panning with joystick.
 
@@ -1019,7 +1039,7 @@ init_graphics:
 	lda     #$10    			; list at $10CA.
 	sta     $130F   			;
 
-;** (n) Create a table of pointers to 192 scan lines ****************************
+;** (n) Create a table of addresses to 192 display list #1 scan lines **********
 	ldx     #$00    			; Create a table of pointers...
 :	lda     SUMHI				; to the screen RAM for 192 scan
 	sta     $04C0,x 			; lines. LSB in $0400-$04BF...
@@ -1171,9 +1191,21 @@ display_title:					; A33D
 ;*                                                                             *
 ;*                                esc_seq_ff                                   *
 ;*                                                                             *
-;*                    Clear screen without resetting (X,Y)                     *
+;*               Received ESC FF from PLATO host (Erase Screen)                *
 ;*                                                                             *
 ;*******************************************************************************
+
+; DESCRIPTION
+;-------------------------------------------------------------------------------
+; (excerpt from s0ascers 3.2.3.1.2.4.4)  
+;-------------------------------------------------------------------------------
+;  Erase Screen (ESC FF, 1B 0C hex)
+;
+; This erases the screen.  The (X,Y) position should not be changed.  When the 
+; screen is erased all dots must be turned 'off' in monochrome or set to the 
+; background color in color.  The palette should be reset if the underlying 
+; color hardware is palette-based (see section 3.2.3.1.8).
+;-------------------------------------------------------------------------------
 esc_seq_ff:					; A367
 	jmp     clear_screen
 
@@ -1224,7 +1256,7 @@ esc_seq_ff:					; A367
 sel_data_mode:					; A36A
 ;** Convert control codes to an 0-7 index and save to byte_B3 ******************
 	txa             			; Let A = original control code
-	and     #$07    			; Convert control code to index
+	and     #$07    			; Modulus 8 to use as index
 	sta     byte_B3 			; Save index (4->point,5->line,1->block,7->text)
 
 ;** Use index into table *******************************************************
@@ -1240,7 +1272,7 @@ sel_data_mode:					; A36A
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                               set_vid_mode                                  *
+;*                              sel_screen_mode                                *
 ;*                                                                             *
 ;*          Select inverse or write or erase or rewrite video mode             *
 ;*                                                                             *
@@ -1249,25 +1281,34 @@ sel_data_mode:					; A36A
 ; DESCRIPTION
 ; This subroutine is called when one of the following escape sequences have
 ; been received from PLATO: ESC {DC1,DC2,DC3,DC4}. See s0ascers Appendix B.
-;
+;-------------------------------------------------------------------------------
+; (excerpt from s0ascers 3.2.3.1)
+;-------------------------------------------------------------------------------
+; There are four 'screen modes' that control how graphics are written to the 
+; screen.  They are called mode write, mode erase, mode rewrite and mode 
+; inverse.  All four screen modes are available in text mode.  In the other 
+; data modes, mode rewrite reduces to mode write and mode inverse reduces to
+; mode erase (i.e., a line drawn in mode inverse will be black on a monochrome 
+;-------------------------------------------------------------------------------
 ; Parameters:
 ; X: escape sequence received from PLATO
 ; 
 ; The original escape sequence is stripped of all but the lowest 2 bits leaving
 ; a simpler value. 
 ;
-; esc sequence AND 0000 0011 = x -> VIDEO_MODE
-; $11->DC1 = 0001 0001 -> 01 = 1 -> $40 -> Select inverse video screen mode.
+; esc sequence AND 0000 0011 = x -> SCREEN_MODE
+; $11->DC1 = 0001 0001 -> 01 = 1 -> $40 -> Select mode inverse.
 ; $12->DC2 = 0001 0010 -> 10 = 2 -> $80 -> Select mode write.
 ; $13->DC3 = 0001 0011 -> 11 = 3 -> $C0 -> Select mode erase.
 ; $14->DC4 = 0001 0100 -> 00 = 0 -> $00 -> Select mode rewrite.
-set_vid_mode:					; A37A
+;-------------------------------------------------------------------------------
+sel_screen_mode:
 	txa             			; Let A = original escape code
 	and     #$03    			; Strip all but 2 lowest bits
 	lsr     a       			; Rotate so bits are on left.
 	ror     a       			; This will be helpful when 
 	ror     a       			; ...used with BIT later.
-	sta     VIDEO_MODE     			; Save video mode
+	sta     SCREEN_MODE    			; Save screen mode
 	rts             			; 
 
 ;*******************************************************************************
@@ -1392,45 +1433,98 @@ sel_size_2:					; A391
 :	sta     CURRENT_SIZE 			; 
 	rts             			; 
 
-; ----------------------------------------------------------------------------
-set_super:					; A396
-	clc             			; A396 18                       .
-	jmp     move_cur_vert  			; A397 4C 24 A8                 L$.
+;*******************************************************************************
+;*                                                                             *
+;*                                 set_super                                   *
+;*                                                                             *
+;*             Received ESC @ from PLATO host to print superscript             *
+;*                                                                             *
+;*******************************************************************************
 
-; ----------------------------------------------------------------------------
+; DESCRIPTION
+;-------------------------------------------------------------------------------
+; (excerpt from s0ascers 3.2.3.1.2.4.4)  
+;-------------------------------------------------------------------------------
+; Superscript (ESC @, 1B 40)
+;
+; This increases the the screen position along the perpendicular axis by five 
+; pixels.
+;-------------------------------------------------------------------------------
+set_super:					; A396
+	clc             			; Carry clear->UP
+	jmp     move_cur_vert  			; 
+
+;*******************************************************************************
+;*                                                                             *
+;*                                  set_sub                                    *
+;*                                                                             *
+;*              Received ESC A from PLATO host to print subscript              *
+;*                                                                             *
+;*******************************************************************************
+
+; DESCRIPTION:
+;-------------------------------------------------------------------------------
+; (excerpt from s0ascers 3.2.3.1.2.4.4)  
+;-------------------------------------------------------------------------------
+; Subscript (ESC A, 1B 41 hex)
+;
+; This decreases the screen position along the perpendicular axis by five 
+; pixels.
+;-------------------------------------------------------------------------------
 set_sub:					; A39A
-	sec             			; A39A 38                       8
-	jmp     move_cur_vert  			; A39B 4C 24 A8                 L$.
+	sec             			; Carry set->DOWN
+	jmp     move_cur_vert  			; 
 
 ;*******************************************************************************
 ;*                                                                             *
 ;*                                set_margin                                   *
 ;*                                                                             *
-;*                 Set margin using current cursor position.                   *
+;*               Received ESC Z from PLATO host to set margin                  *
 ;*                                                                             *
 ;*******************************************************************************
+
+; DESCRIPTION:
+;-------------------------------------------------------------------------------
+; (excerpt from s0ascers 3.2.3.1.2.4.4)  
+;-------------------------------------------------------------------------------
+; Set Margin (ESC Z, 1B 5A hex)
+;
+; This command sets the margin used with the CR control code. The margin is set 
+; to the current X coordinate if horizontal writing is selected, and the current
+; Y coordinate if vertical writing is selected.
+;-------------------------------------------------------------------------------
 set_margin:					; A38E
-	lda     CURSOR2_X			; Zoomed display
-	sta     MARGIN2
 
-	lda     CURSOR2_X+1
-	sta     MARGIN2+1
+;** Zoomed display ************************************************************
+	lda     CURSOR2_X			; 
+	sta     MARGIN2				;
+	lda     CURSOR2_X+1			;
+	sta     MARGIN2+1			;
 
-	lda     CURSOR1_X			; Full screen display
-	sta     MARGIN1
-
-	lda     CURSOR1_X+1
-	sta     MARGIN1+1
-
+;** Full screen display ********************************************************
+	lda     CURSOR1_X			; 
+	sta     MARGIN1				;
+	lda     CURSOR1_X+1			;
+	sta     MARGIN1+1			;
 	rts
 
 ;*******************************************************************************
 ;*                                                                             *
 ;*                                  proc_ht                                    *
 ;*                                                                             *
-;*                     Tab. Moves one character width.                         *
+;                  Received TAB character from PLATO host                      *
 ;*                                                                             *
 ;*******************************************************************************
+
+; DESCRIPTION:
+;-------------------------------------------------------------------------------
+; (excerpt from s0ascers 3.2.3.1.2.4.4)  
+;-------------------------------------------------------------------------------
+; Tab (TAB, 09 hex)
+;
+; This causes the terminal to advance one character width along the current 
+; axis.  This function is like plotting an empty character.
+;-------------------------------------------------------------------------------
 proc_ht:					; A3AF
 	jmp     LABD3   			; A3AF 4C D3 AB                 L..
 
@@ -1438,29 +1532,52 @@ proc_ht:					; A3AF
 ;*                                                                             *
 ;*                                  proc_cr                                    *
 ;*                                                                             *
-;*             Carriage return. Set (X,Y) to margin on next line.              *
+;*             Received Carriage Return character from PLATO host              *
 ;*                                                                             *
 ;*******************************************************************************
+
+; DESCRIPTION:
+;-------------------------------------------------------------------------------
+; (excerpt from s0ascers 3.2.3.1.2.4.4)  
+;-------------------------------------------------------------------------------
+; Carriage Return (CR, 0D hex)
+;
+; This goes to the next line and sets the position along the current axis to 
+; the current margin.
+;-------------------------------------------------------------------------------
 proc_cr:					; A3B2
-	lda     MARGIN2				; Zoomed display
-	sta     CURSOR2_X
 
-	lda     MARGIN2+1
-	sta     CURSOR2_X+1
+;** Zoomed display ************************************************************
+	lda     MARGIN2				;
+	sta     CURSOR2_X			;
+	lda     MARGIN2+1			;
+	sta     CURSOR2_X+1			;
 
-	lda     MARGIN1				; Full screen display
-	sta     CURSOR1_X
-
-	lda     MARGIN1+1
+;** Full screen display ********************************************************
+	lda     MARGIN1				;
+	sta     CURSOR1_X			;
+	lda     MARGIN1+1			;
 	sta     CURSOR1_X+1			; Fall into linefeed (CRLF)
 
 ;*******************************************************************************
 ;*                                                                             *
 ;*                                  proc_lf                                    *
 ;*                                                                             *
-;*                  Linefeed. Moves one character height down.                 *
+;*                Received Line Feed character from PLATO server               *
 ;*                                                                             *
-;*******************************************************************************
+; *******************************************************************************
+
+; DESCRIPTION:
+;-------------------------------------------------------------------------------
+; (excerpt from s0ascers 3.2.3.1.2.4.4)  
+;-------------------------------------------------------------------------------
+; Line Feed (LF, 0A hex)
+;
+; This function decreases the display position by one character height 
+; perpendicular to the current axis (i.e., goes to the next line.)  On the 
+; horizontal axis this moves down one line.  On the vertical axis this moves 
+; right one character height.
+;-------------------------------------------------------------------------------
 proc_lf:					; A3C2
 	jsr     get_font_hgt2			; A3C2 20 82 A8                  ..
 	jmp     move_cur_dn   			; A3C5 4C 57 A8                 LW.
@@ -1469,25 +1586,44 @@ proc_lf:					; A3C2
 ;*                                                                             *
 ;*                                  proc_ff                                    *
 ;*                                                                             *
-;*               Form feed. Set (X,Y) position to top of page.                 *
+;*               Received Form Feed character from PLATO host.                 *
 ;*                                                                             *
 ;*******************************************************************************
+
+; DESCRIPTION:
+;-------------------------------------------------------------------------------
+; (excerpt from s0ascers 3.2.3.1.2.4.4)  
+;-------------------------------------------------------------------------------
+; Form Feed (FF, 0C hex)
+;
+; This function sets the screen position to the first character on the top line 
+; of the display.  The screen is not erased.
+;-------------------------------------------------------------------------------
+; Move the cursor to the top of the display. 
+; The CURSOR variables contain screen coordinates such that (0,0) is the lower 
+; left corner of the display. So for the full screen display the cursor will
+; be set to (0,186) of a 192 scan line display. And for the zoomed display
+; the cursor will be set to (0,372) of a 384 scan line display.
+;-------------------------------------------------------------------------------
 proc_ff:					; A3C8
-	lda     #$BA    			; A3C8 A9 BA                    ..
-	sta     CURSOR1_Y     			; A3CA 85 A6                    ..
 
-	lda     #$74    			; A3CC A9 74                    .t
-	sta     CURSOR2_Y     			; A3CE 85 9E                    ..
+;** Full screen display ********************************************************
+	lda     #186    			; 186 scan lines from bottom
+	sta     CURSOR1_Y     			; 
 
-	ldx     #$01    			; A3D0 A2 01                    ..
-	stx     CURSOR2_Y+1			; A3D2 86 9F                    ..
+;** Zoomed display ************************************************************
+	lda     #(<372)    			; 372 scan lines from bottom
+	sta     CURSOR2_Y     			; 
+	ldx     #(>372)    			;
+	stx     CURSOR2_Y+1			;
 
-;** Set cursor X coordinates to 0 for full and zoomed displays *****************
 	dex             			; X is now 0
-	stx     CURSOR2_X
-	stx     CURSOR2_X+1
-	stx     CURSOR1_X
-	stx     CURSOR1_X+1			; Fall through to gen_rts
+	stx     CURSOR2_X			;
+	stx     CURSOR2_X+1			;
+
+;** Full screen display ********************************************************
+	stx     CURSOR1_X			; 
+	stx     CURSOR1_X+1			; Fall through to RTS
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -1605,6 +1741,13 @@ sel_char_set:					; A410
 ;*       Set bit to inform proc_serial_in start of an escape sequence.         *
 ;*                                                                             *
 ;*******************************************************************************
+
+; DESCRIPTION
+; This subroutine is called when the ESC character has been encountered. The
+; next character to be received needs to be interpreted as an escape sequence 
+; code and not as its literal value. Set bit 7 of byte_B3 as a flag that we're 
+; starting an escape sequence. Another routine will examine this flag and 
+; branch accordingly.
 set_esc:					; A42B
 	asl     byte_B3 			; Shift bits left
 	sec             			; Set carry
@@ -1649,7 +1792,17 @@ set_mode_6:					; A438
 ;*******************************************************************************
 
 ; DESCRIPTION
-; Set the index for a jump table to process an SSF command
+; Set the index for a jump table to process an SSF command. For the Atari SSF 
+; commands are used to enable or disable the touch panel.
+;-------------------------------------------------------------------------------
+; (excerpt from s0ascers 3.2.3.1.6)
+;-------------------------------------------------------------------------------
+; The SSF (Select Special Function) command is used by the PLATO host to 
+; communicate with special devices attached to the terminal.  The command 
+; consists of the sequence ESC Q (1B 51 hex) followed by three bytes formatted 
+; as a word (see section 3.1.2.4.2).  Only the lower fifteen bits of the word 
+; are used.
+;-------------------------------------------------------------------------------
 set_ssf:					; A43C
 	lda     #$02    			; A43C A9 02                    ..
 	bne     LA433   			; A43E D0 F3                    ..
@@ -1679,14 +1832,15 @@ set_load_echo:					; A440
 ; DESCRIPTION
 ; Set the index for a jump table to process a Load Memory Address command
 set_load_mem:					; A444
-	lda     #$04    			; A444 A9 04                    ..
-	bne     LA433   			; A446 D0 EB                    ..
+	lda     #$04    			; 
+	bne     LA433   			; Always -->
 
 ; ----------------------------------------------------------------------------
 sub_a448:
-	jsr     sub_a8b3
+	jsr     get_tek_vects
 	ldx     $DA     			; A44B A6 DA                    ..
 	bne     :++				; A44D D0 10                    ..
+
 
 	ldx     #$03    			; A44F A2 03                    ..
 :	lda     CURSOR1_X,x   			; save 1st X-Y pair
@@ -1699,33 +1853,37 @@ sub_a448:
 	stx     $DA     			; A45C 86 DA                    ..
 	rts             			; A45E 60                       `
 
-:	lda     $BA     			; A45F A5 BA                    ..
-	sta     COMPR     			; A461 85 C9                    ..
-	bne     :+				; A463 D0 0F                    ..
+:	lda     IS_16K     			; A45F A5 BA                    ..
+	sta     COMPR     			; Compressed display (full screen)?
+	bne     :+				; Yes? -->
 
+;** Zoomed display *************************************************************
 	lda     CURSOR2_Y+1			; A465 A5 9F                    ..
 	sta     CURSY+1     			; A467 85 FB                    ..
 
 	lda     CURSOR2_X     			; A469 A5 9C                    ..
 	ldx     CURSOR2_X+1    			; A46B A6 9D                    ..
 	ldy     CURSOR2_Y			; A46D A4 9E                    ..
-	jsr     :++				; A46F 20 89 A4                  ..
-	dec     COMPR     			; A472 C6 C9                    ..
 
-:	ldx     #$04    			; A474 A2 04                    ..
-@LOOP2: lda     $A7,x   			; A476 B5 A7                    ..
-	sta     $EF,x   			; A478 95 EF                    ..
-	dex             			; A47A CA                       .
-	bne     @LOOP2  			; A47B D0 F9                    ..
+	jsr     :++				; Process zoomed display then
+	dec     COMPR     			; ...return to do full screen
 
-	stx     CURSY+1     			; A47D 86 FB                    ..
-	stx     TCRSY+1    			; A47F 86 F3                    ..
-	stx     $DA     			; A481 86 DA                    ..
+;** Full screen: Copy old CURSOR (X,Y) to TCRS(X,Y)
+:	ldx     #$04    			; 
+@LOOP2: lda     CURSOR1_Y_OLD-3,x  		; 
+	sta     TCRSY-3,x   			; 
+	dex             			; 
+	bne     @LOOP2  			; 
+
+	stx     CURSY+1     			; 0: Full screen < 192
+	stx     TCRSY+1    			; 0: Full screen < 192
+	stx     $DA     			; TODO A481 86 DA                    ..
 
 	lda     CURSOR1_X     			; A483 A5 A4                    ..
 	ldx     CURSOR1_X+1    			; A485 A6 A5                    ..
 	ldy     CURSOR1_Y     			; A487 A4 A6                    ..
 
+;** Full Screen and Zoomed displays *********************************************
 :	sta     CURSX     			; A489 85 F8                    ..
 	stx     CURSX+1    			; A48B 86 F9                    ..
 	sty     CURSY     			; A48D 84 FA                    ..
@@ -1762,33 +1920,33 @@ sub_a448:
 	sta     TCRSY     			; A4BB 85 F2                    ..
 	sty     CURSY     			; A4BD 84 FA                    ..
 
-:	ldx     #$03    			; A4BF A2 03                    ..
-	bit     COMPR     			; A4C1 24 C9                    $.
-@LOOP3:	lda     $F8,x   			; A4C3 B5 F8                    ..
-	bvs     :+				; A4C5 70 06                    p.
-	sta     CURSOR2_X,x   			; A4C7 95 9C                    ..
-	ldy     #$40    			; A4C9 A0 40                    .@
-	bvc     :++				; A4CB 50 04                    P.
-:	sta     CURSOR1_X,x   			; A4CD 95 A4                    ..
-	ldy     #$28    			; A4CF A0 28                    .(
-:	dex             			; A4D1 CA                       .
-	bpl     @LOOP3				; A4D2 10 EF                    ..
+:	ldx     #$03    			; 
+	bit     COMPR     			; Are we currently full-screen?
+@LOOP3:	lda     $F8,x   			; 
+	bvs     :+				; Yes? skip zoomed logic 
+	sta     CURSOR2_X,x   			; Copy from $F8,x
+	ldy     #$40    			; 64 bytes per scan line
+	bvc     :++				; If zoomed skip full screen logic.
+:	sta     CURSOR1_X,x   			; Copy from $F8,x
+	ldy     #$28    			; 40 bytes per scan line
+:	dex             			; 
+	bpl     @LOOP3				; 
 
-	sty     TMP	 			; A4D4 84 D9                    ..
-	bvs     :+				; A4D6 70 05                    p.
-	bit     $BA     			; A4D8 24 BA                    $.
-	bpl     :+				; A4DA 10 01                    ..
-	rts             			; A4DC 60                       `
+	sty     TMP	 			; Store bytes per scan line (64 or 40)
+	bvs     :+				; Is currently full screen? Skip
+	bit     IS_16K     			; Running on 48K RAM?
+	bpl     :+				; Yes? Skip.
+	rts             			; 
 
-:	jsr     sub_ad8e
-	bit     VIDEO_MODE			; A4E0 24 B0                    $.
+:	jsr     get_pfaddr			; set YOUT to upper left corner
+	bit     SCREEN_MODE			; Which mode are we in?
 	lda     $F8     			; A4E2 A5 F8                    ..
-	and     #$07    			; A4E4 29 07                    ).
+	and     #$07    			; Get modulus 8 and use as index
 	tax             			; A4E6 AA                       .
 	lda     LTAB,x				; A4E7 BD 4E B9                 .N.
-	beq     :++				; A4EA F0 06                    ..
-	bvc     :+				; A4EC 50 02                    P.
-	eor     #$FF    			; A4EE 49 FF                    I.
+	beq     :++				; no lmask --> no round up byte count
+	bvc     :+				; 
+	eor     #$FF    			; else invert bits
 :	inc     SUMLO				; points to next whole byte boundary
 :	sta     LEND     			; A4F2 85 AB                    ..
 	lda     TCRSX+1     			; right whole byte boundry
@@ -1826,7 +1984,7 @@ sub_a448:
 	sbc     SUMLO
 	sta     SUMLO
 	bmi     LA565   			; not on boundary special case
-BLOOP:	bit     VIDEO_MODE			; check need for complement
+BLOOP:	bit     SCREEN_MODE			; check need for complement
 	ldy     #$00    			; init displacement reg
 	lda     LEND     			; do left edge
 	beq     :+				; lmask=0 --> skip
@@ -1872,8 +2030,8 @@ LA565:  lda     LEND     			; create special mask
 	ror     a       			; A587 6A                       j
 	adc     #$00    			; A588 69 00                    i.
 	sta     CURSOR1_Y     			; A58A 85 A6                    ..
-:	lda     #<(LB863-1)			; Point to obfuscated code used...
-	ldy     #>(LB863-1)			; ...for copy-protection check.
+:	lda     #<(obf_code-1)			; Point to obfuscated code used...
+	ldy     #>(obf_code-1)			; ...for copy-protection check.
 	ldx     #$0C				; Init counter for 12 bytes of obfuscated code
 	jsr     check_if_pirated		; 
 	rts             			; 
@@ -1888,25 +2046,49 @@ sub_a596:
 	iny             			; A5A0 C8                       .
 	rts             			; A5A1 60                       `
 
-; ----------------------------------------------------------------------------
-sub_a5a2:
-	lda     CURSOR1_X+1    			; A5A2 A5 A5                    ..
-	lsr     a       			; A5A4 4A                       J
-	lda     CURSOR1_X     			; A5A5 A5 A4                    ..
-	jmp     LA5AF   			; A5A7 4C AF A5                 L..
+;*******************************************************************************
+;*                                                                             *
+;*                               div_cx1_by_8                                  *
+;*                                                                             *
+;*             Derives the byte offset in a scan line for CURSOR1_X            *
+;*                                                                             *
+;*******************************************************************************
 
-; ----------------------------------------------------------------------------
-sub_a5aa:
-	lda     CURSOR2_X+1    			; A5AA A5 9D                    ..
-	lsr     a       			; A5AC 4A                       J
-	lda     CURSOR2_X     			; A5AD A5 9C                    ..
-LA5AF:  ror     a       			; A5AF 6A                       j
-	lsr     a       			; A5B0 4A                       J
-	lsr     a       			; A5B1 4A                       J
-	sta     SUMLO
-	rts             			; A5B4 60                       `
+; DESCRIPTION
+; This subroutine calculates the offset in whole bytes from the start of any 
+; full screen display scan line given the 16-bit CURSOR1_X value and saves it 
+; to SUMLO. Each scan line is 40 bytes. There's 320 pixels in the full screen
+; display. Therefore, SUMLO = INT (CURSOR1_X / 8)
 
-; ----------------------------------------------------------------------------
+div_cx1_by_8:					; A5A2
+	lda     CURSOR1_X+1    			; 
+	lsr     a       			; Divide by 2
+	lda     CURSOR1_X     			; 
+	jmp     :+				; Re-use the divide-by-2s below
+
+;*******************************************************************************
+;*                                                                             *
+;*                               div_cx2_by_8                                  *
+;*                                                                             *
+;*             Derives the byte offset in a scan line for CURSOR2_X            *
+;*                                                                             *
+;*******************************************************************************
+
+; DESCRIPTION:
+; This subroutine calculates the offset in whole bytes from the start of any 
+; zoomed display scan line given the 16-bit CURSOR2_X value and saves it in SUMLO. 
+; Each scan line is 64 bytes. There's 512 pixels in the zoomed display.
+; Therefore, SUMLO = INT (CURSOR2_X / 8)
+
+div_cx2_by_8:					; A5AA
+	lda     CURSOR2_X+1    			; 
+	lsr     a       			; Divide by 2
+	lda     CURSOR2_X     			; 
+:	ror     a       			; Divide by 2
+	lsr     a       			; Divide by 2
+	lsr     a       			; Divide by 2
+	sta     SUMLO				; Save the whole byte boundary offset
+	rts             			; 
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -2129,20 +2311,25 @@ LA673:  lda     #$00    			; A673 A9 00                    ..
 ; ----------------------------------------------------------------------------
 
 sub_a682:
-	jsr     sub_a8b3
-	lda     $BA     			; A685 A5 BA                    ..
+	jsr     get_tek_vects
+	lda     IS_16K     			; A685 A5 BA                    ..
 	sta     COMPR     			; A687 85 C9                    ..
-	bne     LA695   			; A689 D0 0A                    ..
-	jsr     sub_ad8e
+	bne     :+				; Full screen only? -->
+
+;** Zoomed display *************************************************************
+	jsr     get_pfaddr
 	lda     CURSOR2_X     			; A68E A5 9C                    ..
-	jsr     LA69A   			; A690 20 9A A6                  ..
-	dec     COMPR     			; A693 C6 C9                    ..
-LA695:  jsr     sub_ad8e
+	jsr     :++				; A690 20 9A A6                  ..
+	dec     COMPR     			; Now do it for full screen
+
+;** Full screen display ********************************************************
+:	jsr     get_pfaddr
 	lda     CURSOR1_X     			; A698 A5 A4                    ..
-LA69A:  and     #$07    			; A69A 29 07                    ).
-	tax             			; A69C AA                       .
-	ldy     #$00    			; A69D A0 00                    ..
-	jmp     sub_b004
+
+:	and     #$07    			; Modulus 8 on cursor X to use
+	tax             			; ...as index later
+	ldy     #$00    			; 
+	jmp     plot				; Write to screen and RTS
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -2188,9 +2375,9 @@ clear_screen:					; A6A2
 ; ----------------------------------------------------------------------------
 LA6D0:  sta     L2000,y 			; A6D0 99 00 20                 .. 
 	bvs     :+
-	sta     L4000,y 			; A6D5 99 00 40                 ..@
-	sta     L6000,y 			; A6D8 99 00 60                 ..`
-	sta     L8000,y 			; A6DB 99 00 80                 ...
+	sta     SCREEN_24K,y			; A6D5 99 00 40                 ..@
+	sta     SCREEN_24K+$2000,y 		; A6D8 99 00 60                 ..`
+	sta     SCREEN_24K+$4000,y 		; A6DB 99 00 80                 ...
 :	iny             			; A6DE C8                       .
 	bne     LA6D0   			; A6DF D0 EF                    ..
 	inc     $82     			; Self modifying code
@@ -2215,8 +2402,7 @@ LA6EC:  .byte	$18         			; to $0082
 
 
 ;	Receive Downloaded Character Set  ------------------
-sub_a6f6:
-DLOAD:
+DLOAD:						; A6F6
 	jsr     unpack_word			; load alternate character set
 	ldx     VAR     			; A6F9 A6 D8                    ..
 	ldy     #$0F    			; A6FB A0 0F                    ..
@@ -2315,29 +2501,29 @@ LA7A2:  lda     (SUMLO),y
 	dey             			; A7AA 88                       .
 	bpl     LA7A2   			; A7AB 10 F5                    ..
 LA7AD:  ldy     #$02    			; A7AD A0 02                    ..
-	sty     $EE     			; A7AF 84 EE                    ..
+	sty     Y1LO     			; A7AF 84 EE                    ..
 	iny             			; A7B1 C8                       .
-	sty     $EC     			; A7B2 84 EC                    ..
-LA7B4:  ldy     $EC     			; A7B4 A4 EC                    ..
+	sty     X1LO     			; A7B2 84 EC                    ..
+LA7B4:  ldy     X1LO     			; A7B4 A4 EC                    ..
 	lda     (YOUT),y
-	ldy     $EE     			; A7B8 A4 EE                    ..
+	ldy     Y1LO     			; A7B8 A4 EE                    ..
 	bvc     LA7C0   			; A7BA 50 04                    P.
 	and     (YOUT),y
 	bvs     LA7C2   			; A7BE 70 02                    p.
 LA7C0:  ora     (YOUT),y
 LA7C2:  sta     (YOUT),y
 	ldx     #$02    			; A7C4 A2 02                    ..
-LA7C6:  inc     $EE     			; A7C6 E6 EE                    ..
-	inc     $EC     			; A7C8 E6 EC                    ..
-	ldy     $EC     			; A7CA A4 EC                    ..
+LA7C6:  inc     Y1LO     			; A7C6 E6 EE                    ..
+	inc     X1LO     			; A7C8 E6 EC                    ..
+	ldy     X1LO     			; A7CA A4 EC                    ..
 	cpy     #$10    			; A7CC C0 10                    ..
 	bcs     LA7DD   			; A7CE B0 0D                    ..
 	lda     (YOUT),y
-	ldy     $EE     			; A7D2 A4 EE                    ..
+	ldy     Y1LO     			; A7D2 A4 EE                    ..
 	sta     (YOUT),y
 	dex             			; A7D6 CA                       .
 	bpl     LA7C6   			; A7D7 10 ED                    ..
-	inc     $EC     			; A7D9 E6 EC                    ..
+	inc     X1LO     			; A7D9 E6 EC                    ..
 	bne     LA7B4   			; A7DB D0 D7                    ..
 LA7DD:  lda     #$0C    			; A7DD A9 0C                    ..
 	clc             			; A7DF 18                       .
@@ -2462,29 +2648,40 @@ move_cur_vert:					; A824
 ;*******************************************************************************
 
 ; DESCRIPTION
-; Parmameters:
-; A: distance to move cursor up
-; VAR:
+; Move cursor position up on the screen. Because the CURSOR variables
+; are oriented such that (0,0) is the bottom left corner of screen, Moving the
+; cursor down means *increasing* the current cursor position.
+; Register A contains the distance in scan lines for full screen display.
+; VAR contains the distance in scan lines for zoomed display.
 move_cur_up:					; A82D
+;** Full screen display ********************************************************
 	adc     CURSOR1_Y			; A82D 65 A6                    e.
 	sta     CURSOR1_Y			; A82F 85 A6                    ..
 
-	lda     VAR     			; A831 A5 D8                    ..
+;** Zoomed display *************************************************************
+	lda     VAR     			; Distance for zoomed
 	clc             			; A833 18                       .
 	adc     CURSOR2_Y			; A834 65 9E                    e.
 	sta     CURSOR2_Y			; A836 85 9E                    ..
-	bcc     :+				; A838 90 02                    ..
-	inc     CURSOR2_Y+1			; A83A E6 9F                    ..
+
+	bcc     :+				; If no carry skip hi -->
+	inc     CURSOR2_Y+1			; 
+
 :	lda	CURSOR2_Y+1
 	cmp     #$01    			; A83E C9 01                    ..
-	bcc     :+				; A840 90 14                    ..
+	bcc     :+				; is cursor(hi)<#$01 --> RTS
+
 	lda     CURSOR2_Y			; A842 A5 9E                    ..
-	cmp     #$80    			; A844 C9 80                    ..
-	bcc     :+				; A846 90 0E                    ..
+	cmp     #$80    			; cursor < 
+	bcc     :+				; is cursor(lo)<#$80 --> RTS
+
+;** Zoomed display *************************************************************
 	sec             			; A848 38                       8
 	sbc     #$80    			; A849 E9 80                    ..
 	sta     CURSOR2_Y			; A84B 85 9E                    ..
 	lsr     CURSOR2_Y+1			; A84D 46 9F                    F.
+
+;** Full screen display ********************************************************
 	sec             			; A84F 38                       8
 	lda     CURSOR1_Y			; A850 A5 A6                    ..
 	sbc     #$C0    			; A852 E9 C0                    ..
@@ -2495,9 +2692,15 @@ move_cur_up:					; A82D
 ;*                                                                             *
 ;*                               move_cur_dn                                   *
 ;*                                                                             *
-;*                  ?????????????????????????????????????                      *
+;*                         Move cursor position down                           *
 ;*                                                                             *
 ;*******************************************************************************
+
+; DESCRIPTION
+; Move cursor position down on the screen. Because the CURSOR variables
+; are oriented such that (0,0) is the bottom left corner of screen, Moving the
+; cursor down means *decreasing* the current cursor position.
+; Register A contains the distance in scan lines to move
 move_cur_dn:					; A857
 	sta     TMP	 			; A857 85 D9                    ..
 	lda     CURSOR1_Y			; A859 A5 A6                    ..
@@ -2506,7 +2709,7 @@ move_cur_dn:					; A857
 	sta     CURSOR1_Y			; A85E 85 A6                    ..
 	sec             			; A860 38                       8
 	lda     CURSOR2_Y			; A861 A5 9E                    ..
-	sbc     VAR     			; A863 E5 D8                    ..
+	sbc     VAR     			; VAR contains current text size for zoomed display
 	sta     CURSOR2_Y			; A865 85 9E                    ..
 	bcs     LA86B   			; A867 B0 02                    ..
 	dec     CURSOR2_Y+1			; A869 C6 9F                    ..
@@ -2606,16 +2809,25 @@ print_string:					; A89F
 	bpl     :-
 	jmp     proc_cr   			; A8B0 4C B2 A3                 L..
 
-; ----------------------------------------------------------------------------
-sub_a8b3:
-	jsr     fetch_serin_ch			; Returns with A
+;*******************************************************************************
+;*                                                                             *
+;*                               get_tek_vects                                 *
+;*                                                                             *
+;*                      TEKTRONIX-format vector handler                        *
+;*                                                                             *
+;*******************************************************************************
 
-	cmp     #$40    			; A8B6 C9 40                    .@
-	bcs     parse_vec_coord 		; A8B8 B0 47                    .G
-	jsr     LA8DC   			; A8BA 20 DC A8                  ..
+; DESCRIPTION
+GLOOP:						; A8B3
+get_tek_vects:					; A8B3
+	jsr     fetch_serin_ch			; Get character
 
-	lda     CORDY     			; A8BD A5 BD                    ..
-	and     #$1F    			; Clear bits 7,6,5
+	cmp     #$40    			; decode cord
+	bcs     parse_vec_coord 		; -->a low X or Y byte
+	jsr     LA8DC   			; must be hi Y
+
+	lda     CORDY     			; hi X processed behind low Y
+	and     #$1F    			; 
 
 	ora     PLATO_WORD     			; A8C1 05 DB                    ..
 	sta     CORDY     			; A8C3 85 BD                    ..
@@ -2623,16 +2835,18 @@ sub_a8b3:
 	lda     PLATO_WORD+1   			; A8C5 A5 DC                    ..
 	sta     CORDY+1     			; A8C7 85 BE                    ..
 
-	bcc     sub_a8b3			; Get next character
+	bcc     get_tek_vects			; Get next coordinate
 
-LA8CB:  jsr     LA8DC   			; A8CB 20 DC A8                  ..
+LA8CB:  
+HIX:						; hi X into CORDX pr
+	jsr     LA8DC   			; HIRO A8CB 20 DC A8                  ..
 	lda     CORDX     			; A8CE A5 BB                    ..
 	and     #$1F    			; A8D0 29 1F                    ).
 	ora     PLATO_WORD     			; A8D2 05 DB                    ..
 	sta     CORDX    			; A8D4 85 BB                    ..
 	lda     PLATO_WORD+1   			; A8D6 A5 DC                    ..
 	sta     CORDX+1     			; A8D8 85 BC                    ..
-	bcc     sub_a8b3
+	bcc     get_tek_vects			; GLOOP
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -2643,17 +2857,17 @@ LA8CB:  jsr     LA8DC   			; A8CB 20 DC A8                  ..
 ;*******************************************************************************
 ; DESCRIPTION
 ;
-LA8DC:  and     #$1F    			; Save 5-bits of 1st byte
+LA8DC:  
+HIRO:
+	and     #$1F    			; Save 5-bits of 1st byte
 	sta     PLATO_WORD+1   			; 
 
 ;** Shift bits 2..0 from PLATO_WORD+1 to bits 7..5 of A ************************
 	lda     #$00    			; Clear
 	lsr     PLATO_WORD+1   			; Shift bit to A using C
 	ror     a       			; A8E4 6A                       j
-
 	lsr     PLATO_WORD+1   			; A8E5 46 DC                    F.
 	ror     a       			; A8E7 6A                       j
-
 	lsr     PLATO_WORD+1   			; A8E8 46 DC                    F.
 	ror     a       			; A8EA 6A                       j
 
@@ -2670,8 +2884,9 @@ LA8DC:  and     #$1F    			; Save 5-bits of 1st byte
 ;*******************************************************************************
 ; DESCRIPTION
 ;
-
-:	and     #$1F    			; A8EE 29 1F                    ).
+; A8EE
+LOWY:
+:	and     #$1F    			; low Y byte
 	sta     PLATO_WORD     			; A8F0 85 DB                    ..
 
 	lda     CORDY     			; A8F2 A5 BD                    ..
@@ -2679,10 +2894,10 @@ LA8DC:  and     #$1F    			; Save 5-bits of 1st byte
 	ora     PLATO_WORD     			; A8F6 05 DB                    ..
 	sta     CORDY    			; A8F8 85 BD                    ..
 
-	jsr     fetch_serin_ch
-	cmp     #$40    			; A8FD C9 40                    .@
-	bcc     LA8CB   			; -->a not low X nor Y byte
-
+	jsr     fetch_serin_ch			; get next byte
+	cmp     #$40    			; a hi X byte?
+	bcc     HIX				; -->a not low X nor Y byte
+LOWT:
 parse_vec_coord:				; A901
 	cmp     #$60    			; A901 C9 60                    .`
 	bcs     :-				; --> low Y byte
@@ -2692,30 +2907,27 @@ parse_vec_coord:				; A901
 	lda     CORDX     			; 
 	and     #$E0    			; 
 	ora     PLATO_WORD     			; 
-	sta     CORDX     			; low X end cord sequence
+	sta     CORDX     			; low X ends cord sequence
 
-	ldx     #$03    			; A911 A2 03                    ..
-:	lda     CORDX,x   			; A913 B5 BB                    ..
+;** Update the working display cursor ******************************************
+	ldx     #$03    			; 
+:	lda     CORDX,x   			; 
 	sta     CURSOR2_X,x   			; A915 95 9C                    ..
 	dex             			; A917 CA                       .
 	bpl     :-				; A918 10 F9                    ..
 
+;** Zoomed display *************************************************************
 	lda     CURSOR2_X+1
-	lsr     a       			; A91C 4A                       J
-
+	lsr     a       			; shift hibyte into carry
 	lda     CURSOR2_X
-	sta     VAR     			; A91F 85 D8                    ..
-
-	ror     a       			; A921 6A                       j
-	sta     TMP	 			; A922 85 D9                    ..
-
-	lsr     a       			; A924 4A                       J
-	lsr     a       			; A925 4A                       J
-	bcs     :+				; A926 B0 02                    ..
-
+	sta     VAR     			; 
+	ror     a       			; 9th bit into A
+	sta     TMP	 			; save 1/2 in TMP
+	lsr     a       			; 
+	lsr     a       			; div by 8
+	bcs     :+				; 
 	lsr     VAR     			; A928 46 D8                    F.
-
-:	adc     TMP	 			; A92A 65 D9                    e.
+:	adc     TMP	 			; (1/2)+(1/8) CURSX
 	sta     CURSOR1_X     			; A92C 85 A4                    ..
 
 	ldx     #$00    			; A92E A2 00                    ..
@@ -2923,7 +3135,7 @@ LA9CE:  ldx     #$7F    			; for X = 127 to 0 step -1
 ; ------------------------------------------------------------------------------
 ;                   TRANSLATE NORMAL KEY PRESSES TO (AT)ASCII
 ; ------------------------------------------------------------------------------
-LA9DD:  ldy     #LB97E-LB96E			; Prepare CIO call to read keyboard
+LA9DD:  ldy     #read_k-tab_iocb		; Prepare CIO call to read keyboard
 	jsr     call_cio_or_err			; Make CIO call 
 	sta     plato_char     			; CIO returns with ATASCII from keyboard
 	lda     CONSOL				; check console keys
@@ -3043,13 +3255,13 @@ LAA23:  rts             			;
 ; OPTION + 'm'
 ; ------------------------------------------------------------------------------
 	cmp     #key_m    			; did user press 'm'?
-	beq     jmp_config_mpp  		; call sub_config_mpp and RTS
+	beq     jmp_config_mpp  		; call config_mpp and RTS
 
 ; ------------------------------------------------------------------------------
 ; OPTION + 'p'
 ; ------------------------------------------------------------------------------
 	cmp     #key_p  			; was OPTION + 'p'?
-	beq     jmp_printscreen 		; yes, call sub_printscreen and RTS
+	beq     jmp_printscreen 		; yes, call print_screen and RTS
 
 ; ------------------------------------------------------------------------------
 ;			      ATARI FUNCTION KEYS 
@@ -3122,11 +3334,11 @@ LAA96:  bit     CURRENT_ECHO   			; is remote echo enabled?
 
 ; ----------------------------------------------------------------------------
 jmp_config_mpp:					; AAA7  
-	jmp     sub_config_mpp
+	jmp     config_mpp
 
 ; ----------------------------------------------------------------------------
 jmp_printscreen:				; AAAA
-	jmp     sub_printscreen
+	jmp     print_screen
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -3322,10 +3534,11 @@ print_char:					; AB5D
 	rts             			; RTS now if non-printing character
 
 :	pha             			; Stash character-#$20
-	ldx     $BA     			; 
-	stx     COMPR     			; Let $C9 = $BA TODO
-	bne     :+
+	ldx     IS_16K     			; 
+	stx     COMPR     			; 
+	bne     :+				; Full screen only? -->
 
+;** Zoomed display *************************************************************
 	stx     $E6     			; Let $E6 = 0 TODO
 	stx     VAR     			; Let VAR = 0 TODO
 	jsr	sub_abff
@@ -3333,12 +3546,13 @@ print_char:					; AB5D
 	dec     COMPR     			; AB73 C6 C9                    ..
 	ldx     COMPR     			; AB75 A6 C9                    ..
 
+;** Full screen display ********************************************************
 :	pla             			; AB77 68                       h
 	inx             			; AB78 E8                       .
 	stx     $E6     			; AB79 86 E6                    ..
-	ldx     CURRENT_SIZE 			; AB7B A6 CA                    ..
-	beq     LAB94   			; AB7D F0 15                    ..
-	jsr     sub_ab88
+	ldx     CURRENT_SIZE 			; Current text/font size
+	beq     LAB94   			; normal text? -->
+	jsr     sub_ab88			; bold text? JSR
 	ldx     #$FF    			; AB82 A2 FF                    ..
 	stx     CURRENT_SIZE   			; AB84 86 CA                    ..
 	bne     LABD3   			; always branches
@@ -3354,14 +3568,16 @@ sub_ab88:
 
 ; ----------------------------------------------------------------------------
 LAB94:  jsr     LAD05   			; AB94 20 05 AD                  ..
-	bit     VIDEO_MODE			; AB97 24 B0                    $.
+	bit     SCREEN_MODE			; AB97 24 B0                    $.
 	bvs     LABD3   			; AB99 70 38                    p8
-	jsr     sub_a5aa
+
+;** Get the byte offset from start of the scan line for 16-bit CURSOR2_X *******
+	jsr     div_cx2_by_8			; Offset saved to SUMLO
 	lda     CURSOR2_X
 	and     #$04    			; ABA0 29 04                    ).
-	beq     LABA6   			; ABA2 F0 02                    ..
+	beq     :+				; ABA2 F0 02                    ..
 	inc     SUMLO
-LABA6:  lda     CURSOR1_Y			; ABA6 A5 A6                    ..
+:	lda     CURSOR1_Y			; ABA6 A5 A6                    ..
 	ldy     #$20    			; ABA8 A0 20                    . 
 	sec             			; ABAA 38                       8
 :	sbc     #$06    			; ABAB E9 06                    ..
@@ -3381,20 +3597,20 @@ LABA6:  lda     CURSOR1_Y			; ABA6 A5 A6                    ..
 	lda     $E7     			; ABC1 A5 E7                    ..
 	ldy     SUMLO
 	cmp     #$5F    			; ABC5 C9 5F                    ._
-	bne     LABD1   			; ABC7 D0 08                    ..
+	bne     :+				; ABC7 D0 08                    ..
 	lda     (YOUT),y
 	cmp     #$20    			; ABCB C9 20                    . 
 	bne     LABD3   			; ABCD D0 04                    ..
 	lda     #$5F    			; ABCF A9 5F                    ._
-LABD1:  sta     (YOUT),y
+:	sta     (YOUT),y
 LABD3:  jsr     get_font_width
 	ldy     VAR     			; ABD6 A4 D8                    ..
 	clc             			; ABD8 18                       .
 	adc     CURSOR1_X     			; ABD9 65 A4                    e.
 	sta     CURSOR1_X     			; ABDB 85 A4                    ..
-	bcc     LABE1   			; ABDD 90 02                    ..
+	bcc     :+				; ABDD 90 02                    ..
 	inc     CURSOR1_X+1    			; ABDF E6 A5                    ..
-LABE1:  tya             			; ABE1 98                       .
+:	tya             			; ABE1 98                       .
 	clc             			; ABE2 18                       .
 	adc     CURSOR2_X     			; ABE3 65 9C                    e.
 	sta     CURSOR2_X     			; ABE5 85 9C                    ..
@@ -3461,7 +3677,7 @@ LAC3C:  lda     VAR     			; AC3C A5 D8                    ..
 	adc     $E6     			; AC3E 65 E6                    e.
 	adc     $EB     			; AC40 65 EB                    e.
 	sta     $E6     			; AC42 85 E6                    ..
-	jsr     sub_ad8e
+	jsr     get_pfaddr
 
 	lda     CURRENT_SIZE 			; AC47 A5 CA                    ..
 	cmp     #$7F    			; AC49 C9 7F                    ..
@@ -3596,7 +3812,7 @@ LAD05:  asl     a       			; AD05 0A                       .
 	lda     off_E5+1
 	adc     CHSET_BASE+1			; AD19 65 E9                    e.
 	sta     off_E5+1
-	jsr     sub_ad8e
+	jsr     get_pfaddr
 	lda     CURSOR1_X     			; AD20 A5 A4                    ..
 	jsr     sub_adcb
 	ldx     #$05    			; AD25 A2 05                    ..
@@ -3617,7 +3833,7 @@ sub_ad34:
 	ldy     #$00    			; AD38 A0 00                    ..
 
 sub_ad3a:
-	bit     VIDEO_MODE			; AD3A 24 B0                    $.
+	bit     SCREEN_MODE			; AD3A 24 B0                    $.
 	bvc     :+
 	eor     #$FF    			; AD3E 49 FF                    I.
 	bit     COMPR     			; AD40 24 C9                    $.
@@ -3638,7 +3854,7 @@ sub_ad3a:
 LAD56:  sta     TMP	 			; AD56 85 D9                    ..
 	ldy     YM				; AD58 A4 FC                    ..
 	lda     (YOUT),y			; fetch affected byte
-	bit     VIDEO_MODE			; ck plot mode
+	bit     SCREEN_MODE			; ck plot mode
 	bmi     LAD67   			; overstrike[WR,ER]-->
 ; here non-overstrike, need to mask then just OR in
 	and     LEND     			; 
@@ -3655,7 +3871,7 @@ LAD6F:  sta     (YOUT),y			; display it
 	lda     REND     			; DO 2nd byte?
 	beq     LAD8D   			; nope,done 1 scan line
 	lda     (YOUT),y
-	bit     VIDEO_MODE			; AD78 24 B0                    $.
+	bit     SCREEN_MODE			; AD78 24 B0                    $.
 	bmi     LAD83   			; AD7A 30 07                    0.
 ; here non-overstrike, need to mask then just OR in
 	and     REND     			; 
@@ -3668,43 +3884,76 @@ LAD83:  bvc     LAD7E   			; WR mode-->
 LAD8B:  sta     (YOUT),y			; and display it
 LAD8D:  rts             			; AD8D 60                       `
 
-; ----------------------------------------------------------------------------
-sub_ad8e:
-	bit     COMPR     			; AD8E 24 C9                    $.
-	bvs     :+				; Is bit 6 set? Yes? Jump.
+;*******************************************************************************
+;*                                                                             *
+;*                                get_pfaddr                                   *
+;*                                                                             *
+;*                         Compute playfield address                           *
+;*                                                                             *
+;*******************************************************************************
 
-	lda     #$7F    			; AD92 A9 7F                    ..
-	sec             			; AD94 38                       8
-	sbc     CURSOR2_Y			; AD95 E5 9E                    ..
-	tax             			; AD97 AA                       .
-	and     #$03    			; AD98 29 03                    ).
-	tay             			; AD9A A8                       .
-	lda     #$01    			; AD9B A9 01                    ..
-	sbc     CURSOR2_Y+1			; AD9D E5 9F                    ..
-	lsr     a       			; AD9F 4A                       J
+; DESCRIPTION
+; This subroutine calculates the address in screen RAM where the next draw
+; operation will take place. This is done for both the full screen and zoomed
+; displays. COMPR is meant to skip the zoomed display on machines having less
+; than 48K but does not function properly.
+;
+; YOUT is the 
+get_pfaddr:					; AD8E
+	bit     COMPR     			; Do we skip zoomed display logic?
+	bvs     :+				; Full screen only? -->
+
+;** Zoomed display *************************************************************
+
+;-------------------------------------------------------------------------------
+; Invert Y coordinate. PLATO's native screen origin (0,0) is the lower left. 
+; On the Atari the same screen coordinate is (0,383). Convert the PLATO cursor
+; position to an Atari screen RAM address. 
+;-------------------------------------------------------------------------------
+
+;** Use CURSOR2_Y to find the scan line. 
+;** Calculate the difference between two 16-bit integers: (383 - CURSOR2_Y) .
+;** 1) Calculate the difference between lo bytes.
+	lda     #(<383)				; 
+	sec             			; 
+	sbc     CURSOR2_Y			; 383(LO) - CURSOR2_Y(LO)
+	tax             			; Stash result in X
+	and     #$03    			; While here, grab modulus 4 and...
+	tay             			; ...use later as table index
+
+;** 2) Calculate the difference betwen hi bytes.
+	lda     #(>383)   			; 
+	sbc     CURSOR2_Y+1			; 383(HI) - CURSOR2_Y(HI)
+	lsr     a       			; 
+
 	txa             			; ADA0 8A                       .
 	ror     a       			; ADA1 6A                       j
 	lsr     a       			; ADA2 4A                       J
 	clc             			; ADA3 18                       .
-	adc     #$40    			; ADA4 69 40                    i@
-	sta     YOUT+1
-	jsr     sub_a5aa
-	clc             			; ADAB 18                       .
-	adc     PAGE,y				; Y is set from the "and #$03" above.
-	sta     YOUT
-	rts             			; ADB1 60                       `
+	adc     #(>SCREEN_24K)  		; Offset from start of 24K framebuffer
+	sta     YOUT+1				; Save MSB for character start address
 
-; ----------------------------------------------------------------------------
-:	lda     #$BF    			; ADB2 A9 BF                    ..
-	sec             			; ADB4 38                       8
-	sbc     CURSOR1_Y			; ADB5 E5 A6                    ..
-	tax             			; ADB7 AA                       .
-	lda     $04C0,x 			; ADB8 BD C0 04                 ...
-	sta     YOUT+1
-	jsr     sub_a5a2
-	clc             			; ADC0 18                       .
-	adc     $0400,x 			; ADC1 7D 00 04                 }..
-	sta     YOUT
+;** Use CURSOR2_X to find the whole byte offset from the start of the scan line.
+	jsr     div_cx2_by_8			; Byte offset returned to A
+	clc             			; 
+
+;** Get LSB for start of scanline (cycles every 4 lines $xx00,$xx40,$xx80,$xxC0)
+;** and fine tune it by adding the byte offset for CURSOR2_X *******************
+	adc     PAGE,y				; 
+	sta     YOUT				; 
+	rts             			; 
+
+;** Full screen displsy ********************************************************
+:	lda     #$BF    			; Invert Y coordinate from PLATO's lower left origin
+	sec             			; 
+	sbc     CURSOR1_Y			; 
+	tax             			; 
+	lda     $04C0,x 			; Table of pointers to screen HI
+	sta     YOUT+1				; Save MSB for character start address
+	jsr     div_cx1_by_8			; A = f(CURSOR1_X)
+	clc             			; 
+	adc     $0400,x 			; Offset from table of scan line addresses
+	sta     YOUT				; Save LSB for character start address
 	bcc     :+
 	inc     $E4     			; ADC8 E6 E4                    ..
 :	rts
@@ -3738,284 +3987,448 @@ sub_adcb:					; ADCB
 LADEE:  sta     LEND     			; 
 	rts             			; 
 
-; ----------------------------------------------------------------------------
+;*******************************************************************************
+;*                                                                             *
+;*                                ???????????                                  *
+;*                                                                             *
+;*                       ?????????????????????????????                         *
+;*                                                                             *
+;*******************************************************************************
+
+; DESCRIPTION
+;
+; The initial coordinates for (X0,Y0) and (X1,Y1) are obtained from the current
+; and previous cursor positions. There are two drawing algorithms depending
+; on whether the line's slope > 1 (Major Axis = Y) or slope < 1 (Major Axis = X)
+; The coordinate pairs may be swapped to ensure the (X0,Y0) pair is left-most
+; and/or bottom-most.
+;-------------------------------------------------------------------------------
+;
+;           DX   
+;         x-----x
+;         |     |
+;         |       (X1,Y1)
+;         |     #  ---x                            DX
+;         |     #     |             x-------------------------------x
+;         |    #      |             |                               |
+;         |    #      |             |                                 (X1,Y1)
+;         |   #       |             |                               #  ----x
+;         |   #       |             |                           ####       |
+;         |  #     DY |             |                       ####           |
+;         |  #        |             |                   ####               |
+;         | #         |             |               ####                DY |
+;         | #         |             |           ####                       |
+;         |#          |             |       ####                           |
+;          #          |                 ####                               |
+; (X0,Y0) #  -------- x             ####  ---------------------------------x
+;                                   (X0,Y0)
+;        Major Axis: Y                              Major Axis: X
+;        YM  = 1                                    YM  = 0
+;        SUM = DX (#Steps)                          SUM = DY (#Steps)
+;        IND = $FF - SUM
+;        
+;
+;-------------------------------------------------------------------------------
 sub_adf1:
-	jsr     sub_a8b3
-	lda     $BA     			; ADF4 A5 BA                    ..
-	sta     COMPR     			; ADF6 85 C9                    ..
-	bne     LADFF   			; ADF8 D0 05                    ..
-	jsr     LADFF   			; ADFA 20 FF AD                  ..
-	dec     COMPR     			; ADFD C6 C9                    ..
+	jsr     get_tek_vects
+	lda     IS_16K     			; Memory constrained?
+	sta     COMPR     			; If so, only 1 pass as full-screen.
+	bne     :+				; 
+	jsr     :+	   			; Else two passes. Once for full
+	dec     COMPR     			; ...screen and again for zoomed.
+:	bit     COMPR     			; 
+	bvs     :+				; Full screen? -->
 
-LADFF:  bit     COMPR     			; ADFF 24 C9                    $.
-	bvs     LAE13   			; AE01 70 10                    p.
-	lda     $A0     			; AE03 A5 A0                    ..
-	ldx     $A1     			; AE05 A6 A1                    ..
-	ldy     CURSOR2_X     			; AE07 A4 9C                    ..
-	sty     $EC     			; AE09 84 EC                    ..
-	sty     $A0     			; AE0B 84 A0                    ..
+;-------------------------------------------------------------------------------
+; (X0,Y0) = (CURSOR_X_OLD, CURSOR_Y_OLD)
+; (X1,Y1) = (CURSOR_X, CURSOR_Y)
+;-------------------------------------------------------------------------------
+
+;** Zoomed display *************************************************************
+	lda     CURSOR2_X_OLD  			;
+	ldx     CURSOR2_X_OLD+1 		;
+
+	ldy     CURSOR2_X     			; 
+	sty     X1LO     			; X1LO = CURSOR2_X
+	sty     CURSOR2_X_OLD  			;
+
 	ldy     CURSOR2_X+1
-	sty     $A1     			; AE0F 84 A1                    ..
-	bvc     LAE21   			; AE11 50 0E                    P.
-LAE13:  lda     CURSOR1_X_OLD  			; AE13 A5 A8                    ..
-	ldx     $A9     			; AE15 A6 A9                    ..
-	ldy     CURSOR1_X     			; AE17 A4 A4                    ..
-	sty     X1LO     			; AE19 84 EC                    ..
-	sty     CURSOR1_X_OLD  			; AE1B 84 A8                    ..
-	ldy     CURSOR1_X+1    			; AE1D A4 A5                    ..
-	sty     $A9     			; AE1F 84 A9                    ..
-LAE21:  sta     X0LO     			; AE21 85 F0                    ..
-	stx     X0HI     			; AE23 86 F1                    ..
-	sty     X1HI     			; AE25 84 ED                    ..
-	bvs     LAE2F   			; AE27 70 06                    p.
-	lda     $A2     			; AE29 A5 A2                    ..
-	ldx     $A3     			; AE2B A6 A3                    ..
-	bvc     LAE33   			; AE2D 50 04                    P.
-LAE2F:  lda     CURSOR1_Y_OLD  			; AE2F A5 AA                    ..
-	ldx     #$00    			; AE31 A2 00                    ..
-LAE33:  sta     Y0LO     			; AE33 85 F2                    ..
-	stx     Y0HI     			; AE35 86 F3                    ..
-	sec             			; AE37 38                       8
-	bvc     :+				; AE38 50 0C                    P.
+	sty     CURSOR2_X_OLD+1  		;
+	bvc     :++				; Zoomed display? -->
 
-	lda     #$BF    			; AE3A A9 BF                    ..
+;** Full screen display ********************************************************
+:	lda     CURSOR1_X_OLD  			;
+	ldx     CURSOR1_X_OLD+1 		; 
+
+	ldy     CURSOR1_X     			; 
+	sty     X1LO     			; X1LO = CURSOR2_X
+	sty     CURSOR1_X_OLD  			; 
+
+	ldy     CURSOR1_X+1    			; 
+	sty     CURSOR1_X_OLD+1 		; 
+
+;** Both Full screen and zoomed displays ***************************************
+:	sta     X0LO     			; X0LO = CURSOR{1,2}_X_OLD
+	stx     X0HI     			; X0HI = CURSOR{1,2}_X_OLD+1
+	sty     X1HI     			; X1HI = CURSOR{1,2}_X+1
+	bvs     :+				; Full screen? -->
+
+;** Zoomed display *************************************************************
+	lda     CURSOR2_Y_OLD  			; 
+	ldx     CURSOR2_Y_OLD+1 		; 
+	bvc     :++				; Zoomed display? -->
+
+;** Full screen display ********************************************************
+:	lda     CURSOR1_Y_OLD  			; 
+	ldx     #$00    			; Y0HI < 192 on full screen so MSB = 0
+
+;** Both Full screen and zoomed displays ***************************************
+:	sta     Y0LO     			; Y0LO = CURSOR{1,2}_Y_OLD
+	stx     Y0HI     			; Y0HI = 0 or CURSOR2_Y_OLD+1  
+	sec             			; 
+	bvc     :+				; Zoomed display? -->
+
+;** Full display: Invert Y (bottom is 0) ***************************************
+	lda     #191    			; Scan lines in full screen
 	sbc     CURSOR1_Y			; AE3C E5 A6                    ..
-	sta     Y1LO    			; AE3E 85 EE                    ..
-	sta     CURSOR1_Y_OLD  			; AE40 85 AA                    ..
-	lda     #$00    			; AE42 A9 00                    ..
+	sta     Y1LO    			; Y1LO = 191 - CURSOR1_Y
+	sta     CURSOR1_Y_OLD  			; 
+	lda     #$00    			; Y1HI always 0 (192 < 256)
 	beq     :++				; -->
 
-:	lda     #$7F    			; AE46 A9 7F                    ..
-	sbc     CURSOR2_Y			; AE48 E5 9E                    ..
-	sta     Y1LO     			; AE4A 85 EE                    ..
-	sta     $A2     			; AE4C 85 A2                    ..
+;** Zoomed display: Invert Y (bottom is 0) *************************************
+:	lda     #(<383)    			; Scan lines in zoomed display (lo)
+	sbc     CURSOR2_Y			; 
+	sta     Y1LO     			; Y1LO = 383 - CURSOR2_Y
+	sta     CURSOR2_Y_OLD  			; 
 
-	lda     #$01    			; AE4E A9 01                    ..
-	sbc     CURSOR2_Y+1			; AE50 E5 9F                    ..
-	sta     $A3     			; AE52 85 A3                    ..
-:	sta     Y1HI     			; AE54 85 EF                    ..
+	lda     #(>383)    			; Scan lines in zoomed display (hi)
+	sbc     CURSOR2_Y+1			; 
+	sta     CURSOR2_Y_OLD+1 		; AE52 85 A3                    ..
+
+;** Both Full screen and zoomed displays ***************************************
+:	sta     Y1HI     			; Y1HI = 0 or 383 - CURSOR2_Y+1
+
 
 	lda     $DA     			; AE56 A5 DA                    ..
 	bne     :+				; AE58 D0 03                    ..
-	jmp     LAF94   			; jump to nearby RTS
+	jmp     LAF94   			; If compressed then set DA = 0, RTS
 
-:	ldy     #$00    			; AE5D A0 00                    ..
-	lda     X1HI     			; AE5F A5 ED                    ..
-	cmp     X0HI     			; compute X-difference
-	bcc     :+				; AE63 90 08                    ..
-	bne     :++				; AE65 D0 14                    ..
-	lda     X1LO     			; AE67 A5 EC                    ..
-	cmp     X0LO     			; AE69 C5 F0                    ..
-	bcs     :++				; AE6B B0 0E                    ..
-:	sec             			; AE6D 38                       8
-	lda     X0LO     			; AE6E A5 F0                    ..
-	sbc     X1LO    			; AE70 E5 EC                    ..
-	sta     XDLO     			; AE72 85 D4                    ..
-	lda     X0HI     			; AE74 A5 F1                    ..
-	sbc     X1HI     			; AE76 E5 ED                    ..
-	dey             			; AE78 88                       .
-	bne     :++				; AE79 D0 0A                    ..
-:	lda     X1LO     			; AE7B A5 EC                    ..
-	sbc     X0LO     			; AE7D E5 F0                    ..
-	sta     XDLO     			; AE7F 85 D4                    ..
-	lda     X1HI     			; AE81 A5 ED                    ..
-	sbc     X0HI     			; AE83 E5 F1                    ..
-:	sty     INVX     			; AE85 84 F8                    ..
-	sta     XDHI     			; AE87 85 D5                    ..
+;-------------------------------------------------------------------------------
+; Calculate delta X
+;-------------------------------------------------------------------------------
+:	ldy     #$00    			; Y = $00
+	lda     X1HI     			; 
+	cmp     X0HI     			; X1HI - X0HI
+	bcc     :+				; X1HI < X0HI? -->
+	bne     :++				; X1HI > X0HI? -->
+
+	lda     X1LO     			; Here if X1HI == X0HI  
+	cmp     X0LO     			; X1LO - X0LO
+	bcs     :++				; X1LO >= X0LO? -->
+
+;** Calculate delta X when X1LO < X0LO or X1HI <= X0HI *************************
+:	sec             			; 
+	lda     X0LO     			; 
+	sbc     X1LO    			; 
+	sta     XDLO     			; Delta X (LO) = X0LO - X1LO
+
+	lda     X0HI     			; 
+	sbc     X1HI     			; A = X0HI - X1HI
+	dey             			; Y = $FF
+	bne     :++				; -->
+
+;** Calculate delta X when X1LO >= X0LO or X1HI > X0HI *************************
+:	lda     X1LO     			; 
+	sbc     X0LO     			; 
+	sta     XDLO     			; Delta X (LO) = X1LO - X0LO
+
+	lda     X1HI     			; 
+	sbc     X0HI     			; A = X1HI - X0HI
+
+:	sty     INVX     			; $00->(X0 <= X1), $FF->(X0 > X1)
+	sta     XDHI     			; Delta X (HI) = A
+
+;-------------------------------------------------------------------------------
+; Calculate delta Y
+;-------------------------------------------------------------------------------
 	ldy     #$00    			; AE89 A0 00                    ..
-	lda     Y1HI     			; compute Y-difference
-	cmp     Y0HI     			; AE8D C5 F3                    ..
-	bcc     :+				; AE8F 90 08                    ..
-	bne     :++				; AE91 D0 14                    ..
+	lda     Y1HI     			; 
+	cmp     Y0HI     			; Y1HI - Y0HI
+	bcc     :+				; Y1HI < Y0HI? -->
+	bne     :++				; Y1HI > Y0HI? -->
+
+;** Here if Y1HI = Y0HI ********************************************************
 	lda     Y1LO     			; AE93 A5 EE                    ..
-	cmp     Y0LO     			; AE95 C5 F2                    ..
-	bcs     :++				; AE97 B0 0E                    ..
+	cmp     Y0LO     			; Y1LO - Y0LO
+	bcs     :++				; Y1LO >= Y0LO? -->
+
+;** Calculate delta Y when Y1LO < Y0LO *****************************************
 :	sec             			; AE99 38                       8
-	lda     Y0LO     			; AE9A A5 F2                    ..
-	sbc     Y1LO     			; AE9C E5 EE                    ..
-	sta     YDLO     			; AE9E 85 D6                    ..
-	lda     Y0HI     			; AEA0 A5 F3                    ..
-	sbc     Y1HI     			; AEA2 E5 EF                    ..
-	dey             			; AEA4 88                       .
-	bne     :++				; AEA5 D0 0A                    ..
-:	lda     Y1LO     			; AEA7 A5 EE                    ..
-	sbc     Y0LO     			; AEA9 E5 F2                    ..
-	sta     YDLO     			; AEAB 85 D6                    ..
-	lda     Y1HI     			; AEAD A5 EF                    ..
-	sbc     Y0HI     			; AEAF E5 F3                    ..
-:	sty     INVY     			; AEB1 84 F9                    ..
-	sta     YDHI     			; AEB3 85 D7                    ..
-	bit     COMPR     			; AEB5 24 C9                    $.
-	lda     XDHI     			; AEB7 A5 D5                    ..
-	cmp     YDHI     			; AEB9 C5 D7                    ..
-	bcc     :+				; AEBB 90 08                    ..
-	bne     LAEE6   			; AEBD D0 27                    .'
-	lda     XDLO     			; AEBF A5 D4                    ..
-	cmp     YDLO     			; AEC1 C5 D6                    ..
-	bcs     LAEE6   			; AEC3 B0 21                    .!
-:	lda     #$01    			; AEC5 A9 01                    ..
-	sta     YM				; AEC7 85 FC                    ..
-	lda     YDLO     			; AEC9 A5 D6                    ..
-	sta     SUMLO
-	lda     YDHI     			; AECD A5 D7                    ..
-	sta     SUMHI     			; AECF 85 F5                    ..
-	lda     INVY     			; AED1 A5 F9                    ..
-	beq     :+				; AED3 F0 03                    ..
-	jsr     swap_coords			; AED5 20 EC AF                  ..
-:	ldx     INVX     			; AED8 A6 F8                    ..
-	beq     LAEFD   			; AEDA F0 21                    .!
-LAEDC:  bvc     :+				; AEDC 50 04                    P.
-	lda     #$D8    			; AEDE A9 D8                    ..
-	bne     LAF05   			; AEE0 D0 23                    .#
-:	lda     #$C0    			; AEE2 A9 C0                    ..
-	bne     LAF05   			; AEE4 D0 1F                    ..
-LAEE6:  lda     #$00    			; AEE6 A9 00                    ..
-	sta     YM				; AEE8 85 FC                    ..
-	lda     XDLO     			; AEEA A5 D4                    ..
-	sta     SUMLO
-	lda     XDHI     			; AEEE A5 D5                    ..
-	sta     SUMHI     			; AEF0 85 F5                    ..
-	lda     INVX     			; AEF2 A5 F8                    ..
-	beq     :+				; AEF4 F0 03                    ..
-	jsr     swap_coords			; AEF6 20 EC AF                  ..
-:	ldx     INVY     			; AEF9 A6 F9                    ..
-	bne     LAEDC   			; AEFB D0 DF                    ..
-LAEFD:  bvc     :+				; AEFD 50 04                    P.
-	lda     #$28    			; AEFF A9 28                    .(
-	bne     LAF05   			; AF01 D0 02                    ..
-:	lda     #$40    			; AF03 A9 40                    .@
-LAF05:  stx     DELHI     			; AF05 86 FB                    ..
+	lda     Y0LO     			; 
+	sbc     Y1LO     			; 
+	sta     YDLO     			; YDLO = Y0LO - Y1LO
+
+	lda     Y0HI     			; 
+	sbc     Y1HI     			; A = Y0HI - Y1HI
+	dey             			; Y = $FF
+	bne     :++				; -->
+
+; Calculate delta Y when Y1LO > Y0LO *******************************************
+:	lda     Y1LO     			;
+	sbc     Y0LO     			; 
+	sta     YDLO     			; YDLO = Y1LO - Y0LO
+
+	lda     Y1HI     			; 
+	sbc     Y0HI     			; A = Y1HI - Y0HI
+
+:	sty     INVY     			; $FF->(Y0>Y1) $00->(Y0<Y1)
+	sta     YDHI     			; Delta Y (HI) = A
+
+;-------------------------------------------------------------------------------
+; Calculate number of steps to store in SUM. Is it Delta X or Delta Y?
+;-------------------------------------------------------------------------------
+	bit     COMPR     			; FF->zoomed 1->full screen
+
+;** Compare HI byte of Delta X and Delta Y *************************************
+	lda     XDHI     			; 
+	cmp     YDHI     			; XDHI - YDHI
+	bcc     :+				; XDHI < YDHI -->
+	bne     @TR2				; XDHI > YDHI -->
+						; 
+;** Here if XDHI = YDHI. Look to LSB for tie-breaker ***************************
+	lda     XDLO     			; decide which is major axis
+	cmp     YDLO     			; XDLO - YDLO
+	bcs     @TR2				; XDLO >= YDLO? -->
+
+;** Here if XDLO < YDLO ********************************************************
+:	lda     #$01    			; Y-axis *is* the major axis
+	sta     YM				; ...since YD > XD
+
+;** Delta Y won. Set SUM using YD (number of iterations needed) ****************
+	lda     YDLO     			; 
+	sta     SUMLO				; 
+	lda     YDHI     			;
+	sta     SUMHI     			;
+
+;** Normalize coordinates. Swap if necessary ***********************************
+	lda     INVY     			; 
+	beq     :+				; Already normalized? Yes? -->
+	jsr     swap_coords			; Otherwise swap coordinates
+:	ldx     INVX     			; 
+	beq     @TR3				; AEDA F0 21                    .!
+
+;** TODO This seems backwards?
+@TR1:	bvc     :+				; Is zoomed display? -->
+	lda     #216    			; DELLO = 216 (Full-screen)
+	bne     @DM				; -->
+:	lda     #192    			; DELLO = 192 (Zoomed)
+	bne     @DM	   			; -->
+
+;** Here if XD >= YD ***********************************************************
+@TR2:	lda     #$00    			; Y-axis is *not* the major axis
+	sta     YM				; ...since XD >= YD
+
+;** Delta X won. Set SUM using XD (number of steps needed) *********************
+	lda     XDLO     			; 
+	sta     SUMLO				;
+	lda     XDHI     			;
+	sta     SUMHI     			;
+
+;** Normalize coordinates. Swap if necessary ***********************************
+	lda     INVX     			; 
+	beq     :+				; Already normalized? Yes? -->
+	jsr     swap_coords			; Otherwise swap coordinates
+:	ldx     INVY     			; Set DELLO 
+	bne     @TR1				; 
+
+@TR3:	bvc     :+				; is Zoomed display? -->
+	lda     #40				; DELLO = 40 AEFF A9 28                    .(
+	bne     @DM	   			; -->
+:	lda     #64				; DELLO = 64 AF03 A9 40                    .@
+
+;-------------------------------------------------------------------------------
+; Save number of steps needed to draw 
+;-------------------------------------------------------------------------------
+@DM:	stx     DELHI     			; X = either INVX or INVY
 	sta     DELLO     			; AF07 85 FA                    ..
-	lda     SUMLO
-	eor     #$FF    			; AF0B 49 FF                    I.
-	sta     INDLO     			; AF0D 85 F6                    ..
-	lda     SUMHI     			; AF0F A5 F5                    ..
-	eor     #$FF    			; AF11 49 FF                    I.
-	sta     INDHI     			; AF13 85 F7                    ..
-	lsr     SUMHI     			; AF15 46 F5                    F.
-	ror     SUMLO
+
+	lda     SUMLO				; Convert from "count-down to zero"
+	eor     #$FF    			; ...to "count-up to zero"
+	sta     INDLO     			; ...and save it.
+
+	lda     SUMHI     			; Convert from "count-down to zero"
+	eor     #$FF    			; ...to "count-up to zero"
+	sta     INDHI     			; ...and save it.
+
+	lsr     SUMHI     			; 
+	ror     SUMLO				; SUM = INT (SUM / 2)
+
+;-------------------------------------------------------------------------------
+; Get screen RAM address
+;-------------------------------------------------------------------------------
 	lda     Y0LO     			; AF19 A5 F2                    ..
-	bvc     :+				; AF1B 50 09                    P.
-	tax             			; AF1D AA                       .
-	ldy     $0400,x 			; AF1E BC 00 04                 ...
-	lda     $04C0,x 			; AF21 BD C0 04                 ...
-	bne     :++				; AF24 D0 10                    ..
-:	and     #$03    			; AF26 29 03                    ).
-	tax             			; AF28 AA                       .
+	bvc     :+				; Zoomed display? -->
+
+;** Full screen display ********************************************************
+	tax             			; 
+	ldy     $0400,x 			; Table of scan line addresses (LO)
+	lda     $04C0,x 			; Table of scan line addresses (HI)
+	bne     :++				; -->
+
+;** Zoomed display *************************************************************
+:	and     #$03    			; Y0LO modulus 4
+	tax             			; ...for indexing later
 	lda     Y0HI    			; AF29 A5 F3                    ..
 	lsr     a       			; AF2B 4A                       J
 	lda     Y0LO     			; AF2C A5 F2                    ..
 	ror     a       			; AF2E 6A                       j
 	lsr     a       			; AF2F 4A                       J
 	clc             			; AF30 18                       .
-	adc     #(>$4000)    			; screen high
-	ldy     PAGE,x				; AF33 BC 36 B9                 .6.
+	adc     #(>SCREEN_24K)  		; offset # pages from screen RAM
+	ldy     PAGE,x				; ...and then scan lines
+
+;-------------------------------------------------------------------------------
+; Save screen RAM address where data is to be written
+;-------------------------------------------------------------------------------
 :	sty     YOUT
 	sta     YOUT+1
-	lda     X0LO     			; AF3A A5 F0                    ..
-	and     #$07    			; AF3C 29 07                    ).
-	tax             			; AF3E AA                       .
-	lda     X0HI     			; AF3F A5 F1                    ..
-	lsr     a       			; AF41 4A                       J
-	lda     X0LO     			; AF42 A5 F0                    ..
-	ror     a       			; AF44 6A                       j
-	lsr     a       			; AF45 4A                       J
-	lsr     a       			; AF46 4A                       J
-	tay             			; AF47 A8                       .
-BRA1:	jsr     sub_b004			; AF48
-	inc     INDLO     			; AF4B E6 F6                    ..
-	bne     :+				; AF4D D0 04                    ..
-	inc     INDHI     			; AF4F E6 F7                    ..
+
+;-------------------------------------------------------------------------------
+; Draw line? TODO
+;-------------------------------------------------------------------------------
+	lda     X0LO     			; AF3A 
+	and     #$07    			; X0LO modulus 8 for index later
+	tax             			; Prepare for indexing
+
+	lda     X0HI     			; Divide X0 by 8
+	lsr     a       			; Move bit 0 to Carry
+	lda     X0LO     			; 
+	ror     a       			; Pull bit from Carry
+	lsr     a       			; 
+	lsr     a       			; 
+	tay             			; Y = X0 / 8
+
+BRA1:	jsr     plot				; AF48
+	inc     INDLO     			; Increment counter LO
+	bne     :+				; Rollover?
+	inc     INDHI     			; Yes. Increment counter HI.
 	beq     LAF94   			; AF51 F0 41                    .A
+
 :	clc             			; AF53 18                       .
-	lda     YM				; AF54 A5 FC                    ..
-	bne     LAF9D   			; AF56 D0 45                    .E
+	lda     YM				; Which axis is major axis (X or Y)? 
+	bne     LAF9D   			; (1->Y-Axis)? -->
+
+;-------------------------------------------------------------------------------
+; Draw routine for X-axis major (iterate horizontally)
+;-------------------------------------------------------------------------------
 	lda     SUMLO				; check various terminating
 	adc     YDLO     			; conditions...
-	sta     SUMLO
+	sta     SUMLO				; SUMLO = SUMLO + YDLO
+
 	lda     SUMHI     			; (this could be rewritten)
-	adc     YDHI     			; AF60 65 D7                    e.
-	sta     SUMHI     			; AF62 85 F5                    ..
-	cmp     XDHI     			; AF64 C5 D5                    ..
-	bcc     :++				; AF66 90 21                    .!
-	bne     :+				; AF68 D0 06                    ..
-	lda     SUMLO
-	cmp     XDLO     			; AF6C C5 D4                    ..
-	bcc     :++				; AF6E 90 19                    ..
-:	lda     SUMLO
-	sbc     XDLO     			; AF72 E5 D4                    ..
-	sta     SUMLO				; AF74 85 F4                    ..
-	lda     SUMHI
-	sbc     XDHI     			; AF78 E5 D5                    ..
-	sta     SUMHI
-	clc             			; AF7C 18                       .
-	lda     YOUT
-	adc     DELLO    			; AF7F 65 FA                    e.
-	sta     YOUT
-	lda     YOUT+1
-	adc     DELHI     			; AF85 65 FB                    e.
-	sta     YOUT+1
-:	inx             			; AF89 E8                       .
-	cpx     #$08    			; AF8A E0 08                    ..
-	bcc     BRA1				; AF8C 90 BA                    ..
-	ldx     #$00    			; AF8E A2 00                    ..
-	iny             			; AF90 C8                       .
-LAF91:  jmp     BRA1				; AF91 4C 48 AF                 LH.
+	adc     YDHI     			; 
+	sta     SUMHI     			; SUMHI = SUMHI + YDHI
+
+	cmp     XDHI     			; SUMHI - XDHI
+	bcc     :++				; SUMHI < XDHI? -->
+	bne     :+				; SUMHI > XDHI? -->
+
+	lda     SUMLO				; Here if SUMHI == XDHI
+	cmp     XDLO     			; SUMLO - XDLO (tie-breaker)
+	bcc     :++				; SUMLO < XDLO? --> 
+
+:	lda     SUMLO				;
+	sbc     XDLO     			;
+	sta     SUMLO				; SUMLO = SUMLO - XDLO
+
+	lda     SUMHI				; 
+	sbc     XDHI     			; 
+	sta     SUMHI				; SUMHI = SUMHI - XDHI
+
+	clc             			; 
+	lda     YOUT				;
+	adc     DELLO    			; 
+	sta     YOUT				; YOUT = YOUT + DELLO
+
+	lda     YOUT+1				;
+	adc     DELHI     			; 
+	sta     YOUT+1				; YOUT+1 = YOUT+1 + DELHI
+
+:	inx             			; 
+	cpx     #$08    			; X - 8
+	bcc     BRA1				; X < 8? -->
+
+	ldx     #$00    			; Here if X >= 8, reset X
+	iny             			; ...and increment Y
+LAF91:  jmp     BRA1				; -->
 
 ; ----------------------------------------------------------------------------
-LAF94:  ldx     COMPR     			; AF94 A6 C9                    ..
-	bne	:+
-	rts             			; AF98 60                       `
-
-; ----------------------------------------------------------------------------
-:	dex             			; AF99 CA                       .
-	stx     $DA     			; AF9A 86 DA                    ..
+LAF94:  ldx     COMPR     			; Compressed display?
+	bne	:+				; yes -->
+	rts             			; 
+:	dex             			; Make it 0
+	stx     $DA     			; TODO AF9A 86 DA                    ..
 	rts             			; AF9C 60                       `
 
-; ----------------------------------------------------------------------------
-; routine for Y-axis major
-LAF9D:  lda     SUMLO
-	adc     XDLO     			; AF9F 65 D4                    e.
-	sta     SUMLO
-	lda     SUMHI
-	adc     XDHI     			; AFA5 65 D5                    e.
-	sta     SUMHI
-	cmp     YDHI     			; AFA9 C5 D7                    ..
-	bcc     LAFD7   			; AFAB 90 2A                    .*
-	bne     LAFB5   			; AFAD D0 06                    ..
-	lda     SUMLO				; AFAF A5 F4                    ..
-	cmp     YDLO     			; AFB1 C5 D6                    ..
-	bcc     LAFD7   			; AFB3 90 22                    ."
-LAFB5:  lda     SUMLO				; AFB5 A5 F4                    ..
-	sbc     YDLO     			; AFB7 E5 D6                    ..
-	sta     SUMLO				; AFB9 85 F4                    ..
-	lda     SUMHI
-	sbc     YDHI     			; AFBD E5 D7                    ..
-	sta     SUMHI
+;-------------------------------------------------------------------------------
+; Draw routine for Y-axis major (iterate vertically)
+;-------------------------------------------------------------------------------
+LAF9D:  
+	lda     SUMLO				; AF9D
+	adc     XDLO     			; 
+	sta     SUMLO				; SUMLO = SUMLO + XDLO
+
+	lda     SUMHI				; 
+	adc     XDHI     			; 
+	sta     SUMHI				; SUMHI = SUMHI + XDHI
+
+	cmp     YDHI     			; SUMHI - YDHI
+	bcc     :+++				; SUMHI < YDHI? -->
+	bne     :+				; SUMHI > YDHI? -->
+
+	lda     SUMLO				; Here if SUMHI == YDHI 
+	cmp     YDLO     			; SUMLO - YDLO (tie-breaker)
+	bcc     :+++				; SUMLO < YDLO? --> TODO Doublecheck
+
+:	lda     SUMLO				;
+	sbc     YDLO     			;
+	sta     SUMLO				; SUMLO = SUMLO - YDLO
+
+	lda     SUMHI				; 
+	sbc     YDHI     			; 
+	sta     SUMHI				; SUMHI = SUMHI - YDHI
+
 	bit     DELHI     			; AFC1 24 FB                    $.
-	bvs     :+
+	bvs     :+				; 
+
 	inx             			; AFC5 E8                       .
-	cpx     #$08    			; AFC6 E0 08                    ..
-	bcc     LAFD7   			; AFC8 90 0D                    ..
-	ldx     #$00    			; AFCA A2 00                    ..
-	iny             			; AFCC C8                       .
-	bne     LAFD7   			; AFCD D0 08                    ..
+	cpx     #$08    			; X - 8
+	bcc     :++				; X < 8? -->
+
+	ldx     #$00    			; Here if X >= 8, reset X
+	iny             			; ...and increment Y
+	bne     :++				; Y <> 0? -->
+
 :	dex             			; AFCF CA                       .
-	bpl     LAFD7   			; AFD0 10 05                    ..
+	bpl     :+				; AFD0 10 05                    ..
+
 	ldx     #$07    			; AFD2 A2 07                    ..
 	dey             			; AFD4 88                       .
 	bmi     LAF94   			; AFD5 30 BD                    0.
-LAFD7:  clc             			; AFD7 18                       .
-	lda     COMPR     			; AFD8 A5 C9                    ..
-	beq     LAFE0   			; AFDA F0 04                    ..
-	lda     #$28    			; AFDC A9 28                    .(
-	bne     LAFE2   			; AFDE D0 02                    ..
-LAFE0:  lda     #$40    			; AFE0 A9 40                    .@
-LAFE2:  adc     YOUT
-	sta     YOUT
-	bcc     LAF91   			; AFE6 90 A9                    ..
-	inc     YOUT+1
-	bne     LAF91   			; AFEA D0 A5                    ..
+
+;** Calculate to next scan line?? TODO *****************************************
+:	clc             			; 
+	lda     COMPR     			; Is compressed display?
+	beq     :+				; 1->Full screen 0->Zoomed -->
+	lda     #$28    			; Full screen, 40 byte scan line
+	bne     :++				; -->
+:	lda     #$40    			; Zoomed display, 64 byte scan line
+:	adc     YOUT				; Point to byte immediately below
+	sta     YOUT				; 
+	bcc     LAF91   			; No carry? --> (BRA1)
+	inc     YOUT+1				; Yes carry
+	bne     LAF91   			; -->  (BRA1)
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -4049,15 +4462,22 @@ swap_coords:
 	sta     INVY     			; ...and save
 	rts             			; 
 
-; ----------------------------------------------------------------------------
-HERE:
-sub_b004:
+;*******************************************************************************
+;*                                                                             *
+;*                                   plot                                      *
+;*                                                                             *
+;*                          Write byte in screen RAM                           *
+;*                                                                             *
+;*******************************************************************************
+
+; DESCRIPTION
+plot:						; B004
 	lda     MTAB,x				; Main Deposit Loop
 	and     (YOUT),y			; what's on the screen now
-	bit     VIDEO_MODE			; which mode are we in?
-	bvs	:+				; if ERASE -->
+	bit     SCREEN_MODE			; which mode are we in?
+	bvs	:+				; if $C0 (ERASE) -->
 	ora     BTAB,x				; if WRITE, OR it back
-:	sta     (YOUT),y			; and update screne memory
+:	sta     (YOUT),y			; and update screen memory
 	rts             			; 
 
 ;*******************************************************************************
@@ -4594,7 +5014,7 @@ send_to_plato:					; B1DF
 ;*                                                                             *
 ;*******************************************************************************
 call_cio_putch:					; B1EF
-:	ldy     #LB986-LB96E			; Prepare CIO put char to channel #1
+:	ldy     #write_ch1-tab_iocb		; Prepare CIO put char to channel #1
 						; Fall through to CIO call
 
 ;*******************************************************************************
@@ -4632,23 +5052,23 @@ display_comm_error:
 sub_b206:
 call_cio:
 	pha
-	ldx     LB96E,y				; CIO channel number * 16
-	lda     LB96E+1,y
-	sta     ICCOM,x				; CIO command
-	lda     LB96E+2,y
-	sta     ICAX1,x				; CIO aux 1
-	lda     LB96E+3,y
-	sta     ICAX2,x				; CIO aux 2
-	lda     LB96E+4,y
-	sta     ICBA,x				; CIO buffer base address (lo)
-	lda     LB96E+5,y
-	sta     ICBA+1,x			; CIO buffer base address (hi)
-	lda     LB96E+6,y
-	sta     ICBL,x				; CIO buffer size (lo)
-	lda     LB96E+7,y
-	sta     ICBL+1,x			; CIO buffer size (hi)
+	ldx     tab_iocb,y				; CIO channel number * 16
+	lda     tab_iocb+1,y
+	sta     ICCOM,x					; CIO command
+	lda     tab_iocb+2,y
+	sta     ICAX1,x					; CIO aux 1
+	lda     tab_iocb+3,y
+	sta     ICAX2,x					; CIO aux 2
+	lda     tab_iocb+4,y
+	sta     ICBA,x					; CIO buffer base address (lo)
+	lda     tab_iocb+5,y
+	sta     ICBA+1,x				; CIO buffer base address (hi)
+	lda     tab_iocb+6,y
+	sta     ICBL,x					; CIO buffer size (lo)
+	lda     tab_iocb+7,y
+	sta     ICBL+1,x				; CIO buffer size (hi)
 	pla
-	jmp     CIOV				; CIOV executes an RTS
+	jmp     CIOV					; CIOV executes an RTS
 
 
 ;*******************************************************************************
@@ -4676,13 +5096,23 @@ sub_b23a:
 	jmp     CIOV				; CIO will RTS
 
 ; ----------------------------------------------------------------------------
-sub_b242:
-	pha					;
-	lda     #$1B    			; 
+;*******************************************************************************
+;*                                                                             *
+;*                                 test_baud                                   *
+;*                                                                             *
+;*               User-requested baud change from OPTION + 1 or 3               *
+;*                                                                             *
+;*******************************************************************************
+test_baud:					; B242
+;** Send ESC character to PLATO ************************************************
+	pha					; Stash parameter character
+	lda     #$1B    			; Send ESC code to PLATO
 	sta     TSTDAT				; 
 	jsr     call_cio_putch			; 
-	pla             			; 
-	jsr     call_cio_putch			;
+
+;** Send parameter character to PLATO ******************************************
+	pla             			; Retrieve original parameter
+	jsr     call_cio_putch			; Send to PLATO
 	lda     #$00    			;
 	sta     TSTDAT				;
 LB252:  rts             			;
@@ -4714,20 +5144,20 @@ sub_user_baud:
 LB268:  lda     #<LB913				; "300  baud"
 	ldx     #>LB913
 LB26C:  jsr     print_string
-	jmp     sub_open_modem			; sub_open_modem will RTS
+	jmp     open_modem			; open_modem will RTS
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                              sub_config_mpp                                 *
+;*                                 config_mpp                                  *
 ;*                                                                             *
 ;*                        Configure for Microbits 300                          *
 ;*                                                                             *
 ;*******************************************************************************
 sub_b272:
-sub_config_mpp:
+config_mpp:
 	jsr     close_ch1			; 
 	jsr     sub_register_mpp		; Register Microbits 300 in HATABS
-	ldy     #LB96E-LB96E			; Open "R:" on channel #1
+	ldy     #open_r-tab_iocb		; Open "R:" on channel #1
 	jsr     call_cio_or_err			; 
 
 ;**(n) Set flag that MPP is assumed ********************************************
@@ -4742,18 +5172,17 @@ sub_config_mpp:
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                              sub_printscreen                                *
+;*                               print_screen                                  *
 ;*                                                                             *
-;*                       Print whatever's on the screen.	               *
+;*                      Print whatever's on the screen.	                       *
 ;*                                                                             *
 ;*******************************************************************************
-LB28A:  
-sub_printscreen:
+print_screen:					; B28A
 	ldx     IS_MPP				; which comm device: 1->MPP 0->Modem
 	dex             			; 
 	beq     :+				; is modem a Microbits 300?
 	jsr     close_ch1			; no, close channel #1.
-:	ldy     #LB99E-LB96E			; Open "P:" on channel #3
+:	ldy     #open_p-tab_iocb		; Open "P:" on channel #3
 	jsr     call_cio			; 
 	bmi     LB2C0   			; if cio error, goto LB2C0
 
@@ -4779,7 +5208,7 @@ LB2AC:  ldx     #$30    			; Set CIO Channel #3 (Printer)
 	jmp     LB71C   			; B2B8 4C 1C B7                 L..
 
 ; ----------------------------------------------------------------------------
-:	ldy     #LB996-LB96E			; Atari Modem
+:	ldy     #open_t-tab_iocb		; Atari Modem
 	jmp     call_cio_or_err			; Open "T:" for read/write
 
 ; ----------------------------------------------------------------------------
@@ -5546,7 +5975,7 @@ sub_b6c9:
 ;** (n) Restore vector addresses for VSERIN, VSEROR, VSEROC ********************
 	ldy     #$05    			; 
 	sei             			; Prevent IRQs
-:	lda     byte_1330,y 			; Values saved earlier in sub_b719
+:	lda     byte_1330,y 			; Values saved earlier in open_modem
 	sta     VSERIN,y 			; are restored to the serial vectors
 	dey             			; 
 	bpl     :-                              ; End loop after 6 iterations
@@ -5624,7 +6053,7 @@ sub_read:
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                               sub_open_modem                                *
+;*                                open_modem                                   *
 ;*                                                                             *
 ;*                           ?????????????????????                             *
 ;*                                                                             *
@@ -5639,8 +6068,7 @@ sub_read:
 ; 2) A Microbits 300 is connected then return with sign flag set.
 ; 3) An 850 is connected and will be set to the default 1200 baud and return 
 ;    with sign flag clear.
-sub_b719:
-sub_open_modem:
+open_modem:					; B719
 	jsr     sub_setbaud			; Set baud/word/etc and request ACK
 LB71C:  ldy     #$00    			; Prepare CIO open R: on channel #1
 	jsr     call_cio			; Call CIO
@@ -5896,8 +6324,8 @@ play_beep:					; B828
 	bne     @LOOP				; Y Loop 4 times
 
 ;** Check if program is pirated ***********************************************
-	lda     #<(LB863-1)			; Point to obfuscated code used for...
-	ldy     #>(LB863-1)			; ...copy-protection check
+	lda     #<(obf_code-1)			; Point to obfuscated code used for...
+	ldy     #>(obf_code-1)			; ...copy-protection check
 	ldx     #$0C    			; Initialize counter to 12
 	jmp     check_if_pirated		; Perform copy-protection check
 
@@ -5918,8 +6346,9 @@ play_beep:					; B828
 ; RAM at $3E33. Then jumps to the decrypted code. The code tries to alter $BFFC 
 ; which is at the tail end of the cartridge's address space. Normally this
 ; address is read-only. If the program is able to alter the the contents of 
-; the address, it is deemed to be an illegal copy and jumps to COLDSV. On a 
-; 400/800 this would be the memo pad.
+; the address, it is deemed to be an illegal copy because address space is RAM
+; and jumps to COLDSV. On a 400/800 this would be the memo pad. On an XL this
+; would be the self-diagnostics.
 ;
 ; Here is the 12 bytes of code after decryption:
 ;
@@ -5944,18 +6373,19 @@ check_if_pirated:				; B84B
 	rol     a       			; rotate the key with each iteration.
 	pha             			; stash key (to be clobbered soon)
 	eor     (off_EC),y			; decrypt instruction using XOR
-	sta     L3E33-1,y			; save decypted instruction to RAM
+	sta     test_if_rom-1,y			; save decypted instruction to RAM
 	pla             			; restore key
 	dex             			; decrement counter
 	bne     @LOOP				; loop while counter <> 0
 
 ;** Run the decrypted code and RTS (or COLDSV) *********************************
-	jmp     L3E33   			; 
+	jmp     test_if_rom   			; 
 
 ; ----------------------------------------------------------------------------
 ; Obfuscated code that performs copy-protection check. Decrypted using XOR.
 ; ----------------------------------------------------------------------------
-LB863:	.byte	$65,$AA,$12,$F7,$49,$D5,$25,$A9
+obf_code:					; B863
+	.byte	$65,$AA,$12,$F7,$49,$D5,$25,$A9
 	.byte	$19,$DC,$B2,$CD
 
 ;*******************************************************************************
@@ -6053,48 +6483,58 @@ CMRTAB:	.byte	$00,$00,$00,$00
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                   LB96E                                     *
+;*                                 tab_iocb                                    *
 ;*                                                                             *
 ;*                     IOCB Device/Operation Lookup Table                      *
 ;*                                                                             *
 ;*******************************************************************************
 
-LB96E:  .byte   $10				; IOCB Channel #1
+; DESCRIPTION
+; This table contains the parameters for opening/reading/writing to devices
+; using the Atari's device handler system.
+
+tab_iocb:
+open_r:						; B96E
+	.byte   $10				; IOCB Channel #1
 	.byte	$03				; ICCOM: open
 	.byte	$0D				; ICAX1: (mode) concurrent read/write
 	.byte	$00				; 
 	.addr	LB892				; "R:" (RS232)
 	.word	$0000				; 
 
-LB976:	.byte	$20				; IOCB Channel #2
+open_k:						; B976
+	.byte	$20				; IOCB Channel #2
 	.byte	$03				; ICCOM: open
 	.byte	$04				; ICAX1: (mode) read
 	.byte	$00				; 
 	.addr	LB88F				; "K:"
 	.word	$0000				; 
 
-LB97E:	.byte	$20				; IOCB Channel #2
+read_k:						; B97E
+	.byte	$20				; IOCB Channel #2
 	.byte	$07				; ICCOM: get character
 	.byte	$04				; ICAX1: (mode) read
 	.byte	$00				;
 	.addr	$0000				;
 	.word	$0000				;
 
-LB986:	.byte	$10				; IOCB Channel #1
+write_ch1:					; B986
+	.byte	$10				; IOCB Channel #1
 	.byte	$0B				; ICCOM: put character
 	.byte	$0D				; ICAX1: (mode) concurrent read/write
 	.byte	$00				;
 	.addr	$0000				;
 	.word	$0000				;
 
-LB98E:	.byte	$10				; IOCB Channel #1
+read_ch1:					; B98E
+	.byte	$10				; IOCB Channel #1
 	.byte	$07				; ICCOM: get character
 	.byte	$0D				; ICAX1: (mode) concurrent read/write
 	.byte	$00				; 
 	.addr	$0000				; 
 	.word	$0000				; 
 
-LB996:
+open_t:						; B996
 	.byte	$10				; IOCB Channel #1
 	.byte	$03				; ICCOM: open
 	.byte	$0D				; ICAX1: (mode) concurrent read/write
@@ -6102,7 +6542,7 @@ LB996:
 	.addr	LB895				; "T:" (Microbit???? or Atari????)
 	.word	$0000				;
 
-LB99E:
+open_p:						; B99E
 	.byte	$30				; IOCB Channel #3
 	.byte	$03				; ICCOM: open
 	.byte	$08				; ICAX1: (mode) write
@@ -6410,7 +6850,7 @@ LBA67:	.byte	%01110000			; .###....
 	.byte	(arg1-esc_seq_ff)
 .endmacro
 
-LBA6F:  
+JUMTAB:						; BA6F
 ;** Control Characters *********************************************************
 	.repeat 8
 		jt1	gen_rts			; 00-07 -> RTS
@@ -6434,7 +6874,7 @@ LBA6F:
 
 ;** Escape Sequences <= #$20 ***************************************************
 	jt1	gen_rts				; 00: Undefined -> RTS
-	jt1	sel_term_tty			; 01: ESC SOH -> Teminal mode Tektronix
+	jt1	sel_term_tty			; 01: ESC SOH -> Terminal mode Tektronix
 	jt1	sel_term_plato			; 02: ESC STX -> Terminal mode PLATO
 	jt1	sel_term_tty			; 03: ESC ETX -> Terminal mode TTY
 	.repeat 8
@@ -6445,7 +6885,7 @@ LBA6F:
 		jt1	gen_rts			; 0D-10: Undefined -> RTS
 	.endrepeat
 	.repeat 4
-		jt1	set_vid_mode		; 11-14: ESC DC1-DC4 -> Select video mode
+		jt1	sel_screen_mode		; 11-14: ESC DC1-DC4 -> Select video mode
 	.endrepeat
 	.repeat 6
 		jt1	gen_rts			; 15-1A: Undefined -> RTS
@@ -6466,7 +6906,7 @@ LBA6F:
 	.endrepeat
 	jt1	sel_size_0			; 4E ESC N -> Select text size 0 (normal)
 	jt1	sel_size_2			; 4F ESC O -> Select text size 2 (double)
-	jt1	sel_data_mode		; 50 ESC P -> Load memory
+	jt1	sel_data_mode			; 50 ESC P -> Load memory
 	jt1	set_ssf				; 51 ESC Q -> SSF command.
 	.repeat 3
 		jt1	set_mode_7		; 52-54 ESC R-T
@@ -6478,20 +6918,26 @@ LBA6F:
 	jt1	set_load_echo			; 59 ESC Y -> Load Echo command
 	jt1	set_margin			; 50 ESC Z -> Set margin
 
-LBACA:	.byte	>(sub_a6f6-1)
-	.byte	>(sub_a448-1),0,0
+LBACA:	.byte	>(DLOAD-1)			; Download character set
+	.byte	>(sub_a448-1)
+	.byte	$00
+	.byte	$00
 	.byte	>(sub_a682-1)
-	.byte	>(sub_adf1-1),0
+	.byte	>(sub_adf1-1)
+	.byte	$00
 	.byte   >(print_char2-1)		; sub_ab5a
 
-LBAD2:	.byte	<(sub_a6f6-1)
-	.byte	<(sub_a448-1),0,0
+LBAD2:	.byte	<(DLOAD-1)			; Download character set
+	.byte	<(sub_a448-1)
+	.byte	$00
+	.byte	$00
 	.byte	<(sub_a682-1)
-	.byte	<(sub_adf1-1),0
+	.byte	<(sub_adf1-1)
+	.byte	$00
 	.byte	<(print_char2-1)		; sub_ab5a
 
 LBADA:	
-    .byte	$03
+	.byte	$03				; unused?
 	.byte	$80				; data mode 4->block write/erase mode
 	.byte	$00
 	.byte	$00
@@ -6500,13 +6946,13 @@ LBADA:
 	.byte	$00
 	.byte	$01				; data mode 3->alpha mode
 
-LBAE2:	.byte	>(sub_a8b3-1)			; byte_B4 = 1 
+LBAE2:	.byte	>(get_tek_vects-1)		; byte_B4 = 1 
 	.byte	>(proc_ssf-1)			; byte_B4 = 2 ESC Q (SSF)
 	.byte	>(proc_echo-1)			; byte_B4 = 3 ESC Y (load Echo)
 	.byte	>(sub_a640-1)			; byte_B4 = 4 ESC W (load Memory Address)
 	.byte	>(sub_a133-1)			; byte_B4 = 5 ESC U (select mode 6)
 
-LBAE7:	.byte   <(sub_a8b3-1)
+LBAE7:	.byte   <(get_tek_vects-1)
 	.byte	<(proc_ssf-1)
 	.byte	<(proc_echo-1)
 	.byte	<(sub_a640-1)
