@@ -29,9 +29,13 @@
 ;*                                                                             *
 ;*******************************************************************************
 ; $0400..$057F	Table of addresses to start of each Display List #1 scan line
+; $0600..$08FF  Programmable character set M2 - zoomed display (64 @ 8x12)
+; $0900..$0BFF  Programmable character set M3 - zoomed display (64 @ 8x12)
+; $0C00..$0D7F  Programmable character set M2 - full screen display (64 @ 5x6)
+; $0D80..$0EFF  Programmable character set M3 - full screen display (64 @ 5x6)
 ; $1000..$10C9	Display List #1
 ; $10C9..$130F	Display List #2
-;
+; $1310..$1355  Additional variables
 ; $2010..$3DFF	8K frame buffer for Display List #1
 ; $4000..$9FFF	24K frame buffer for Display List #2
 ; $A000..$BFFF	8K Cart ROM
@@ -227,7 +231,7 @@ byte_B2		:= $00B2			; Used during init
 IS_MPP		:= $00B2			; If Microbits 300 then 1 else 0
 byte_B3		:= $00B3			; 7 = print_char2
 byte_B4		:= $00B4			; $00->ESC {R,S,T,V} $01->ESC 2 (Load Coordinate) $02->ESC Q (SSF) $03->ESC Y (Load Echo commnd)  $04->ESC W (Load Memory Address command)  $05->ESC U (select mode 6) 
-byte_B5		:= $00B5
+byte_B5		:= $00B5			; 
 DATA_MODE	:= $00B5			; $80->graphic (point, line, or block) $01->text
 SERIN_BUF_IDX	:= $00B6			; Index or count of characters received from PLATO
 CURRENT_CHSET	:= $00B7			; $00->M2 $01->M3 $02->M0 $03->M1
@@ -293,7 +297,8 @@ Y0HI		:= $00F3			;
 TCRSX		:= $00F0			; block erase cursor position
 TCRSY		:= $00F2			; block erase cursor position
 
-SUMLO		:= $00F4			; vector draw work variables
+SUM		:= $00F4			; vector draw work variables
+SUMLO		:= $00F4			; 
 SUMHI		:= $00F5			; 
 
 INDLO		:= $00F6
@@ -344,8 +349,10 @@ SCREEN_DL2	:= $4000			; Start of 24k framebuffer for video
 L6000           := $6000
 L8000           := $8000
 
-ch_mem_m2_DL1	= $0C00				; Base address for programmable font M2
-ch_mem_m3_DL1	= $0D80				; Base address for programmable font M3
+ch_mem_m2_DL2	= $0600				; Base address for programmable font M2 (64 chars @ 12 bytes/char)
+ch_mem_m3_DL2	= $0900				; Base address for programmable font M3 (64 chars @ 12 bytes/char)
+ch_mem_m2_DL1	= $0C00				; Base address for programmable font M2 (64 chars @ 6 bytes/char)
+ch_mem_m3_DL1	= $0D80				; Base address for programmable font M3 (64 chars @ 6 bytes/char)
 
 ; Keyboard scan codes
 key_0		= $32
@@ -546,7 +553,7 @@ proc_serial_in:					; A079
 ;*******************************************************************************
 
 ; DESCRIPTION
-draw:						; ABA3
+draw:						; A0A3
 	ldy     #$00    			; 
 	sty     SERIN_BUF_IDX    		; Clear 
 	bvc     :+++				; A0A7 50 1C                    P.
@@ -774,7 +781,7 @@ send_data:					; A12C
 sub_a133:
 	ldy     PLATO_WORD+1  			; A133 A4 DC                    ..
 	lda     PLATO_WORD     			; A135 A5 DB                    ..
-	ldx     byte_FF 				; A137 A6 FF                    ..
+	ldx     byte_FF 			; A137 A6 FF                    ..
 	bpl     :+++				; A139 10 10                    ..
 
 	iny             			; A13B C8                       .
@@ -783,7 +790,7 @@ sub_a133:
 	tax             			; A13E AA                       .
 	bmi     :++				; A13F 30 03                    0.
 
-	sta     byte_FF 				; A141 85 FF                    ..
+	sta     byte_FF 			; A141 85 FF                    ..
 :	rts             			; A143 60                       `
 
 :	inx             			; A144 E8                       .
@@ -1084,8 +1091,8 @@ init_graphics:					; A214
 ;** (n) Set default background and border color for Display List #1 *************
 	lda     #$01    			; Set initial Y location for touch screen 
 	sta     CROSS_Y 			; cross-shaped cursor.
-	sta     byte_B5 			; Set priority for screen objects...
-	sta     GPRIOR  			; 0000 0001 = Player 0-3, Playfied 0-3, BAK
+	sta     DATA_MODE 			; Initialize PLATO data mode to alpha
+	sta     GPRIOR  			; Set priority for screen objects: 0000 0001 = Player 0-3, Playfied 0-3, BAK
 	lda     #$16				; $10 = rust + $06 luminance
 	sta     COLOR4  			; for the border and background
 	sta     COLOR2  			; to hue: 1 (orange), luminance: 6
@@ -1208,7 +1215,7 @@ esc_seq_ff:					; A367
 ;*                                                                             *
 ;*                               sel_data_mode                                 *
 ;*                                                                             *
-;*        Received ESC {EM,FS,GS,US} from PLATO to change drawing mode         *
+;*      Received ESC {EM,FS,GS,US,'P'} from PLATO to change drawing mode       *
 ;*                                                                             *
 ;*******************************************************************************
 
@@ -1240,6 +1247,7 @@ esc_seq_ff:					; A367
 ; $1C = 0001 1100 -> 100 = 4 -> $80 -> (PLATO mode 0) point-plot mode
 ; $1D = 0001 1101 -> 101 = 5 -> $80 -> (PLATO mode 1) draw line mode 
 ; $1F = 0001 1111 -> 111 = 7 -> $01 -> (PLATO mode 3) alpha mode
+; $50 = 0101 0000 -> 000 = 0 -> $03 -> (PLATO mode 2) Load memory (mode 2 data with character convert)
 ;
 ;-------------------------------------------------------------------------------
 ; (excerpt from s0ascers 3.2.3.1)
@@ -1252,12 +1260,12 @@ sel_data_mode:					; A36A
 ;** Convert control codes to an 0-7 index and save to byte_B3 ******************
 	txa             			; Let A = original control code
 	and     #$07    			; Modulus 8 to use as index
-	sta     byte_B3 			; Save index (4->point,5->line,1->block,7->text)
+	sta     byte_B3 			; Save index (4->point,5->line,1->block,7->text,0->load mem)
 
 ;** Use index into table *******************************************************
 	tax             			; Use index to get another value from lookup
 	lda     LBADA,x 			; ...table ($80->graphic, $01->text)
-	sta     byte_B5 			; Save lookup value to B5
+	sta     DATA_MODE 			; Save lookup value to B5
 
 ;** Clear TODO *****************************************************************
 	ldx     #$00    			; 
@@ -1714,7 +1722,7 @@ sel_char_set:					; A410
 	and     #$03    			; Strip all but 2 lowest bits
 	tay             			; ...and use it for indexing
 
-;** Point to 4x6 character set for full screen display *************************
+;** Point to 5x6 character set for full screen display *************************
 	lda     tab_ch_mem_DL1,y		; Get LSB from table
 	sta     CHSET_BASE			; ...and save it to variable.
 
@@ -2327,12 +2335,62 @@ proc_echo:					; A5FF
 ;*                                                                             *
 ;*                              load_mem_addr                                  * 
 ;*                                                                             *
-;*                                                                             *
+;*  Converts address for character bitmap from CDC address to Atari address    *
 ;*                                                                             *
 ;*******************************************************************************
 
 ; DESCRIPTION
-; Downloads a programmable character bitmap into the Atari's memory
+;
+; Converts the address of a programmable character bitmap received from PLATO to
+; two addresses usable on the Atari: one for the full-screen display and one for
+; the zoomed display.
+;
+; The bitmaps for programmable character sets must be stored in memory. The 
+; PLATO host delivers the address for a pending character bitmap using the load 
+; memory address command. What's delivered is an absolute address for a CDC 
+; PLATO terminal. The CDC terminals stored the bitmaps starting at address 
+; $3800. This address must be transformed for the Atari's address space. 
+;
+; Further, the native PLATO character set is 16 bytes per character. For 
+; THE LEARNING PHONE, the characters are scaled to 12 bytes per character 
+; for the zoomed display and 6 bytes per character for the full-screen display.
+;
+; Because there are 64 programmable characters in the M2 set, the range
+; of native PLATO addresses is $3800-$3BFF in 16 byte increments.
+;
+; Consider the example where the PLATO host sends an address for the bitmap to 
+; the 2nd character in an M2 character set. The fixed base address for the 
+; CDC terminal is $3800, so the 2nd character would at address $3810 (16 bytes 
+; per character). 
+;
+; For the Atari, the base address for the full-screen character set begins at 
+; page $0C, therefore the character's address would be $0C06 (6 bytes per
+; character). The base address for the zoomed display character set is page $06,
+; therefore the address to the character's bitmap would be $06C0 (12 bytes per
+; character).
+;
+; To convert the offset from multiples of 16 to multiples of 6, the routine uses
+; a series of bit shifts to divide by multiples of 2 along with some addition.
+;
+; 6 = 16/4 + 16/8
+; 6 =   4  +   2
+;
+; To convert the offset from multiples of 16 to multiples of 12, the routine
+; re-uses values derived during the previous operation to accomplish a similar 
+; calculation.
+;
+; 12 = 16/2 + 16/4
+; 12 =   8  +   4
+;
+; Input: 
+; PLATO_WORD (16-bit address)
+;
+; Upon return: 
+; SUM:	16-bit address for pending 5x6 character bitmap for full-screen display
+; YOUT: 16-bit address for pending 8x12 character bitmap for zoomed display
+;
+; Note: this subroutine temporarily re-purposes the variables YOUT, SUM.
+;
 ;-------------------------------------------------------------------------------
 ; (excerpt from 3.2.3.1.5)
 ;-------------------------------------------------------------------------------
@@ -2349,55 +2407,95 @@ proc_echo:					; A5FF
 ;-------------------------------------------------------------------------------
 
 load_mem_addr:					; A640
-	lda     PLATO_WORD+1   			; A640 A5 DC                    ..
-	ldx     PLATO_WORD     			; A642 A6 DB                    ..
-	and     #$07    			; A644 29 07                    ).
-	lsr     A       			; A646 4A                       J
-	sta     YOUT+1				; A647 85 E4
-	sta     PLATO_WORD+1   			; A649 85 DC                    ..
 
-	txa             			; A64B 8A                       .
-	ror     A       			; A64C 6A                       j
-	sta     YOUT				; A64D 86 E3
+;-------------------------------------------------------------------------------
+; PLATO_WORD holds an 16-bit CDC terminal address with the range of $3800-$3BF0. 
+; The MSB would be $38..$3B (00111000..00111011).
+; AND'ing with 00000111 effectively subtracts $3800 from the address.
+;-------------------------------------------------------------------------------
+	lda     PLATO_WORD+1   			; MSB of CDC-terminal character bitmap
+	ldx     PLATO_WORD     			; LSB of CDC-terminal character bitmap
+	and     #$07    			; Strip off base, leaving offset.
 
-	lsr     PLATO_WORD+1  			; A64F 46 DC                    F.
-	ror     A       			; A651 6A                       j
-	sta     TMP	 			; A652 85 D9                    ..
+;-------------------------------------------------------------------------------
+; Divide offset by 2. (16/2)
+; Remember that PLATO is sending an address that is a multiple of 16, so the 
+; lower nybble is always $x0 and there's no loss of precision with the shifts.
+;------------------------------------------------------------------------------
+	lsr     A       			; Divide MSB by 2, remainder into carry
+	sta     YOUT+1				; Save divide by 2 for later
+	sta     PLATO_WORD+1   			; 
 
-	ldx     PLATO_WORD+1   			; A654 A6 DC                    ..
-	stx     VAR     			; A656 86 D8                    ..
+	txa             			; 
+	ror     A       			; Divide LSB by 2, carry included
+	sta     YOUT				; Save divide by 2 for later
 
-	lsr     PLATO_WORD+1   			; A658 46 DC                    F.
-	ror     A       			; A65A 6A                       j
-	adc     TMP	 			; A65B 65 D9                    e.
-	sta     SUMLO				; A6BD 85 F4
+;-------------------------------------------------------------------------------
+; Divide again by 2, effectively divide by 4 so far. (16/4)
+;-------------------------------------------------------------------------------
+	lsr     PLATO_WORD+1  			; Divide MSB by 2, remainder into carry
+	ror     A       			; Divide LSB by 2, carry included
+	sta     VAR+1	 			; Save divide by 4 for later
 
-	lda     #$0C    			; A65F A9 0C                    ..
-	adc     VAR     			; A661 65 D8                    e.
-	sta     SUMHI				; A663 85 F5
+	ldx     PLATO_WORD+1   			; 
+	stx     VAR     			; VAR = MSB offset / 4
 
-	lda     YOUT				; A665 A5 E3
-	adc     TMP	 			; A667 65 D9                    e.
-	sta     YOUT				; A669 A5 E3
+;-------------------------------------------------------------------------------
+; Divide again by 2, effectively divide by 8 so far. (16/8)
+; Derive LSB of address to full-screen display character (6 bytes/character)
+;-------------------------------------------------------------------------------
+	lsr     PLATO_WORD+1   			; Divide MSB by 2, remainder into carry
+	ror     A       			; Divide LSB by 2, carry included
+	adc     VAR+1	 			; 6 = 16/8 + 16/4 
+	sta     SUM				; LSB of address to DL1 character
 
-	lda     YOUT+1				; A66B A5 E4
-	adc     VAR     			; A66D 65 D8                    e.
-	adc     #$06    			; A66F 69 06                    i.
-	sta     YOUT+1
+;-------------------------------------------------------------------------------
+; Derive MSB of address to full-screen display character (6 bytes/character)
+; SUM contains 16-bit address for pending 5x6 character bitmap.
+;-------------------------------------------------------------------------------
+	lda     #(>ch_mem_m2_DL1) 		; Get MSB to character set base
+	adc     VAR     			; Add MSB offset
+	sta     SUM+1				; MSB of address to DL1 character
 
-LA673:  lda     #$00    			; A673 A9 00                    ..
-	sta     TMP	 			; A675 85 D9                    ..
-	sta     VAR     			; A677 85 D8                    ..
+;-------------------------------------------------------------------------------
+; Derive LSB of address to zoomed display character (12 bytes/character)
+;-------------------------------------------------------------------------------
+	lda     YOUT				; Get LSB divide by 2 from earlier
+	adc     VAR+1	 			; Add LSB divide by 4 from earlier
+	sta     YOUT				; 12 = 16/2 + 16/4
 
-;** Clear 29 bytes *************************************************************
+;-------------------------------------------------------------------------------
+; Derive MSB of address to zoomed display character (12 bytes/character)
+; YOUT contains 16-bit address for pending 8x12 character bitmap.
+;-------------------------------------------------------------------------------
+	lda     YOUT+1				; Get MSB divide by 2 from earlier
+	adc     VAR     			; Add MSB divide by 4 from earlier
+	adc     #(>ch_mem_m2_DL2) 		; Add MSB to character set base
+	sta     YOUT+1				; 12 = 16/2 + 16/4
+
+;-------------------------------------------------------------------------------
+; Clear working variables
+;-------------------------------------------------------------------------------
+LA673:  lda     #$00    			; 
+	sta     VAR+1	 			; 
+	sta     VAR     			;
+
+;-------------------------------------------------------------------------------
+; Clear buffer for transforming bitmap of 5 x 6 character???? TODO
+;-------------------------------------------------------------------------------
 	ldx     #$1D    			; A679 A2 1D                    ..
 @LOOP:	sta     $3E10,x 			; A67B 9D 10 3E                 ..>
 	dex             			; A67E CA                       .
 	bpl     @LOOP
 	rts             			; A681 60                       `
 
-; ----------------------------------------------------------------------------
+;*******************************************************************************
+;*                                                                             *
+;*                                 ????????????                                *
+;*                                                                             *
+;*******************************************************************************
 
+; DESCRIPTION
 sub_a682:
 	jsr     get_tek_vects
 	lda     IS_16K     			; A685 A5 BA                    ..
@@ -2488,48 +2586,66 @@ LA6EC:  .byte	$18         			; to $0082
 	bne     LA6EC-2   			; A6F3 D0 F5                    ..
 	rts             			; A6F5 60                       `
 
+;*******************************************************************************
+;*                                                                             *
+;*                                   DLOAD                                     *
+;*                                                                             *
+;*                     Receive Downloaded Character Set                        *
+;*                                                                             *
+;*******************************************************************************
 
-;	Receive Downloaded Character Set  ------------------
+; DESCRIPTION
+;
+
 DLOAD:						; A6F6
-	jsr     unpack_word			; load alternate character set
+	jsr     unpack_word			; Get PLATO_WORD
+
+;** Loop 16 times
 	ldx     VAR     			; A6F9 A6 D8                    ..
 	ldy     #$0F    			; A6FB A0 0F                    ..
 @DLX:	lsr     PLATO_WORD+1   			; A6FD 46 DC                    F.
 	ror     PLATO_WORD     			; A6FF 66 DB                    f.
+
 	lda     MTAB,x				; A701 BD 3A B9                 .:.
 	and     (YOUT),y
 	bcc     @DL0				; A706 90 1E                    ..
 	inc     TMP	 			; A708 E6 D9                    ..
 	pha             			; A70A 48                       H
+
 	lda     LB9BE,y 			; A70B B9 BE B9                 ...
 	tax             			; A70E AA                       .
+
 	lda     LB9F4,x 			; A70F BD F4 B9                 ...
 	sta     LEND     			; A712 85 AB                    ..
+
 	ldx     VAR     			; A714 A6 D8                    ..
 	lda     LB9CE,x 			; A716 BD CE B9                 ...
+
 	clc             			; A719 18                       .
 	adc     LEND     			; A71A 65 AB                    e.
 	tax             			; A71C AA                       .
 	inc     $3E10,x 			; A71D FE 10 3E                 ..>
+
 	pla             			; A720 68                       h
 	ldx     VAR     			; A721 A6 D8                    ..
 	ora     BTAB,x				; A723 1D 42 B9                 .B.
-@DL0:	sta     (YOUT),y
+@DL0:	sta     (YOUT),y			; Write 8x12 character bitmap to memory
 	dey             			; A728 88                       .
 	bpl     @DLX				; A729 10 D2                    ..
+
 	inx             			; A72B E8                       .
 	cpx     #$08    			; A72C E0 08                    ..
 	bcs     :+   				; A72E B0 03                    ..
 	stx     VAR     			; A730 86 D8                    ..
 	rts             			; A732 60                       `
 
-; ----------------------------------------------------------------------------
+;** Loop 6 times
 :  	lda     #$00    			; A733 A9 00                    ..
 	tax             			; A735 AA                       .
 	ldy     #$05    			; A736 A0 05                    ..
-:  	sta     (SUMLO),y
+:  	sta     (SUMLO),y			; Write 5x6 character bitmap to memory
 	dey             			; A73A 88                       .
-	bpl     :-   			; A73B 10 FB                    ..
+	bpl     :-				; A73B 10 FB                    ..
 
 	lda     TMP	 			; A73D A5 D9                    ..
 	cmp     #$36    			; A73F C9 36                    .6
@@ -2538,10 +2654,11 @@ DLOAD:						; A6F6
 	cmp     #$55    			; A744 C9 55                    .U
 	bcs     LA771   			; A746 B0 29                    .)
 
+;** Iterate over 6 rows of 5 pixels? TODO
 	ldy     #$05    			; A748 A0 05                    ..
-LA74A:  ldx     #$04    			; A74A A2 04                    ..
+@LOOPI: ldx     #$04    			; A74A A2 04                    ..
 	stx     LEND     			; A74C 86 AB                    ..
-:  	lda     LB9F4,y 			; A74E B9 F4 B9                 ...
+@LOOPJ: lda     LB9F4,y 			; A74E B9 F4 B9                 ...
 	clc             			; A751 18                       .
 	adc     LEND     			; A752 65 AB                    e.
 	tax             			; A754 AA                       .
@@ -2549,14 +2666,17 @@ LA74A:  ldx     #$04    			; A74A A2 04                    ..
 	cmp     $3E10,x 			; A758 DD 10 3E                 ..>
 	bcc	:+
 	bne     :++   				; A75D D0 09                    ..
+
 :	lda     (SUMLO),y
 	ldx     LEND     			; A761 A6 AB                    ..
 	ora     BTAB,x				; A763 1D 42 B9                 .B.
 	sta     (SUMLO),y
+
 :  	dec     LEND     			; A768 C6 AB                    ..
-	bpl     :---   				; A76A 10 E2                    ..
+	bpl     @LOOPJ
 	dey             			; A76C 88                       .
-	bpl     LA74A   			; A76D 10 DB                    ..
+	bpl     @LOOPI   			; A76D 10 DB                    ..
+
 	bmi     LA7AD   			; A76F 30 3C                    0<
 LA771:  stx     TMP	 			; A771 86 D9                    ..
 	bit     TMP	 			; A773 24 D9                    $.
@@ -6578,7 +6698,7 @@ LB71C:  ldy     #$00    			; Prepare CIO open R: on channel #1
 	sta     DBYT    			; Tell SIO to receive 9 bytes
 
 	ldy     #$40    			; Prep Y for DSTATS ($40->receive data)
-	lda     #$58    			; Prep A for DCOMND ($58->?? ('X'?)
+	lda     #'X'				; Prep A for DCOMND ($58->concurrent read/write)
 
 ;** (n) Submit SIO command to possible 850 *************************************
 	jsr     sub_sendsio                     ; Send SIO command frame
@@ -6947,38 +7067,6 @@ PAGE:	.byte	$00,$40,$80,$C0
 
 ;
 
-;*******************************************************************************
-;*                                                                             *
-;*                                   LTAB                                      *
-;*                                   MTAB                                      *
-;*                                   RTAB                                      *
-;*                                                                             *
-;*                 Left/middle/right playfield mask tables                     *
-;*                                                                             *
-;*******************************************************************************
-; DESCRIPTION
-; The bitmaps for a typical Atari text mode fit neatly in discrete 8-bit 
-; boundaries (40 characters wide with 40 bytes per line). 
-; The PLATO terminal character display is 64 columns of 32 characters. In 
-; the full-screen display mode, the 5x6 font will have characters that straddle
-; over two bytes of screen RAM. Given a particular byte of screen RAM the 
-; bit map for the character may straddle over to the left byte, or the right
-; byte, or may shift within a few pixels of the middle byte.
-;
-; The tables LTAB, MTAB, and RTAB provide a bit mask for shifting a character's
-; bitmap over to the screen RAM's byte to the left, center, or right.
-;                  
-;      # shifts     LTAB     MTAB     RTAB
-;         -1      00000000 01111111 10000000
-;          1      01111111 10111111 11000000
-;          2      00111111 11011111 11100000
-;          3      00011111 11101111 11110000
-;          4      00001111 11110111 11111000
-;          5      00000111 11111011 11111100
-;          6      00000011 11111101 11111110
-;          7      00000001 11111110 00000000
-; 
-;
 MTAB:	.byte   %01111111	; $7F
 	.byte	%10111111	; $BF
 	.byte	%11011111	; $DF
@@ -7000,6 +7088,40 @@ BTAB:	.byte   %10000000	; $80
 ; unused?
 DTAB:	.byte	$E3,$E1,$E0,$E2
 
+;*******************************************************************************
+;*                                                                             *
+;*                                   LTAB                                      *
+;*                                   RTAB                                      *
+;*                                                                             *
+;*                      Left/right playfield mask tables                       *
+;*                                                                             *
+;*******************************************************************************
+
+; DESCRIPTION
+; The bitmaps for a typical Atari text mode fit neatly in discrete 8-bit 
+; boundaries (40 characters wide with 40 bytes per line). 
+; The PLATO terminal character display is 64 columns of 32 characters. In 
+; the full-screen display mode, the 5x6 font will have characters that straddle
+; across two bytes of screen RAM. Given a particular byte of screen RAM the 
+; bit map for the character may have to be shifted up to 7 pixels to the right
+; from the byte's boundary.
+; 
+; The tables LTAB and RTAB provide a mask for merging a character bitmap onto
+; the playfield without destroying pixels already enabled.
+;
+; TODO (This isn't fully researched)
+;
+;      # shifts     LTAB     RTAB
+;          0      00000000 
+;          1      01111111 10000000
+;          2      00111111 11000000
+;          3      00011111 11100000
+;          4      00001111 11110000
+;          5      00000111 11111000
+;          6      00000011 11111100
+;          7      00000001 11111110
+;          0               00000000
+;
 LTAB:	.byte	%00000000	; $00
 	.byte	%01111111	; $7F
 	.byte	%00111111	; $3F
@@ -7158,13 +7280,13 @@ open_p:						; B99E
 
 ;** 8x8 font for zoomed display ************************************************
 tab_ch_mem_DL2:					; B9A6
-	.byte	>$0600				; (M2) Programmable font HI
-	.byte	>$0900				; (M3) Programmable font HI
+	.byte	>ch_mem_m2_DL2			; (M2) Programmable font HI
+	.byte	>ch_mem_m3_DL2			; (M3) Programmable font HI
 	.byte	>$0000				; (M0) Standard ASCII font HI
 	.byte	>ch_mem_m1_DL2			; (M1) Extended PLATO font HI
 
-	.byte	<$0600				; (M2) Programmable font LO
-	.byte	<$0900				; (M3) Programmable font LO
+	.byte	<ch_mem_m2_DL2			; (M2) Programmable font LO
+	.byte	<ch_mem_m3_DL2			; (M3) Programmable font LO
 	.byte	<$0000				; (M0) Standard ASCII font LO
 	.byte	<ch_mem_m1_DL2			; (M1) Extended PLATO font LO
 
@@ -7187,12 +7309,14 @@ LB9BE:	.byte	$00,$00,$00,$01,$01,$01,$02,$02
 
 LB9CE:	.byte	$00,$00,$01,$02,$02,$03,$03,$04
 
-LB9D6:  .byte   $03,$02,$03,$03,$02,$03,$02,$03
-	.byte	$03,$02,$02,$01,$02,$02,$01,$02
-	.byte	$01,$02,$02,$01,$03,$02,$03,$03
-	.byte	$02,$03,$02,$03,$03,$02
+LB9D6:  .byte   $03,$02,$03,$03,$02		;  0..4
+	.byte	$03,$02,$03,$03,$02		;  5..9
+	.byte	$02,$01,$02,$02,$01		; 10..14
+	.byte   $02,$01,$02,$02,$01		; 15..19
+	.byte   $03,$02,$03,$03,$02		; 20..24
+	.byte	$03,$02,$03,$03,$02		; 25..30
 
-LB9F4:  .byte   $00,$05,$0A,$0F,$14,$19
+LB9F4:  .byte   0,5,10,15,20,25
 
 LB9FA:  .byte   $00,$00,$01,$01,$01,$01,$01,$02
 
@@ -7509,7 +7633,7 @@ LBAD2:	.byte	<(DLOAD-1)			; Download character set
 	.byte	<(print_char2-1)		; sub_ab5a
 
 LBADA:	
-	.byte	$03				; unused?
+	.byte	$03				; data mode 2->Load memory 
 	.byte	$80				; data mode 4->block write/erase mode
 	.byte	$00
 	.byte	$00
