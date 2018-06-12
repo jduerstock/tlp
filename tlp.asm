@@ -2626,9 +2626,102 @@ LA6EC:  .byte	$18         			; to $0082
 ;*******************************************************************************
 
 ; DESCRIPTION
-; This routine is converts the 16x8 bitmap of a PLATO programmable character
-; into a 5x6 bitmap for the full-screen display and a 8x12 bitmap for the 
+; This routine converts the 16x8 bitmap of a PLATO programmable character set 
+; into a 5x6 bitmap for the full-screen display and an 8x12 bitmap for the 
 ; zoomed display.
+;
+; VAR:  Which of the 8 PLATO_WORDs in the 8x16 bitmap is currently being 
+;       processed (set in caller).
+; TMP:  Number of pixels set ("on") in the 8x16 bitmap
+; SUM:	Pointer to 5x6 bitmap used in full-screen display
+; YOUT: Initially, pointer to transposed version of original 8x16 PLATO bitmap.
+;       In the end, pointer to 8x12 bitmap used in zoomed display 
+
+; The first operation is to transpose the 16x8 bitmap to an 8x16 bitmap. The
+; lowest pixel is shifted to the carry register. If the pixel is unset, then the 
+; loop skips to its next iteration. Otherwise the corresponding bit is set in
+; (YOUT),Y using the mask table MTAB to first unset the one pixel for the current
+; bitfield (row) and later the table BTAB to set the one pixel.
+; 
+;
+;                                                           (YOUT),Y      
+;                                                X -->   7 6 5 4 3 2 1 0  
+;                                                       +-+-+-+-+-+-+-+-+ 
+;                                                Y--> F | | | | | | | |o| 
+;          <-PLATO_WORD+1-><--PLATO_WORD-->           E | | | | | | | |o| 
+;   Y-->    0 1 2 3 4 5 6 7 8 9 A B C D E F           D | | | | | | |o|o| 
+;          +-------------------------------+          C | | | | | | |o|o| 
+; VAR--> 0 |o:o: : : : : : : : : : : : : : |          B | | | | | |o|o|o| 
+;        1 |o:o:o:o: : : : : : : : : : : : |          A | | | | | |o|o|o| 
+;        2 |o:o:o:o:o:o: : : : : : : : : : |          9 | | | | |o|o|o|o| 
+;        3 |o:o:o:o:o:o:o:o: : : : : : : : |          8 | | | | |o|o|o|o| 
+;        4 |o:o:o:o:o:o:o:o:o:o: : : : : : |          7 | | | |o|o|o|o|o| 
+;        5 |o:o:o:o:o:o:o:o:o:o:o:o: : : : |          6 | | | |o|o|o|o|o| 
+;        6 | : :o:o:o:o:o:o:o:o:o:o:o:o: : |          5 | | |o|o|o|o|o|o| 
+;        7 | : : : :o:o:o:o:o:o:o:o:o:o:o:o|          4 | | |o|o|o|o|o|o| 
+;          +-------------------------------+          3 | |o|o|o|o|o|o| | 
+;                                                     2 | |o|o|o|o|o|o| | 
+;                                                     1 |o|o|o|o|o|o| | | 
+;                                                     0 |o|o|o|o|o|o| | | 
+;                                                       +-+-+-+-+-+-+-+-+ 
+;
+; During the transposition process, a sequence of table lookups are used to 
+; define groupings of pixels (illustrated below in the (YOUT,Y) table). The number
+; of pixels found in each grouping is tallied and stored in the table at $3E10.
+;
+; A lookup table at $LB9D6 contains a threshold for each pixel group. If the 
+; tally for the source pixel group is greater than or equal to the corresponding
+; threshold then a pixel is set in the resulting 5x6 bitmap.
+;
+;               (YOUT,Y)                        
+;      Table   Groupings of    
+;  Y   LB9BE,Y orig PLATO       
+;  |     |     8x16 bitmap        LB9F4,X (X=LB9BE,Y)                       
+;  v     v   7 6 5 4 3 2 1 0            |   Table               Table       
+;           +---+-+---+---+-+           |   $3E10,X             LB9D6,X     
+;  F     5  |   | |   |   |o|           |      (X=LB9F4,X + LB9CE,X (0..29))        
+;  E     5  |   | |   |   |o|           |                                   
+;  D     5  |   | |   |  o|o|           |   Tallies           Thresholds    
+;           +---+-+---+---+-+           v  4 3 2 1 0           4 3 2 1 0    
+;  C     4  |   | |   |  o|o|             +-+-+-+-+-+         +-+-+-+-+-+   
+;  B     4  |   | |   |o o|o|           0 |0|0|0|1|3|       0 |3|2|3|3|2|   
+;  A     4  |   | |   |o o|o|             +-+-+-+-+-+         +-+-+-+-+-+   
+;           +---+-+---+---+-+           5 |0|0|0|5|3|       5 |3|2|3|3|2|   
+;  9     3  |   | |  o|o o|o|             +-+-+-+-+-+         +-+-+-+-+-+   
+;  8     3  |   | |  o|o o|o|          10 |0|0|2|4|2|  >=? 10 |2|1|2|2|1|   
+;           +---+-+---+---+-+             +-+-+-+-+-+         +-+-+-+-+-+   
+;  7     2  |   | |o o|o o|o|          15 |0|0|4|4|2|      15 |2|1|2|2|1|   
+;  6     2  |   | |o o|o o|o|             +-+-+-+-+-+         +-+-+-+-+-+   
+;           +---+-+---+---+-+          20 |1|3|6|6|2|      20 |3|2|3|3|2|   
+;  5     1  |   |o|o o|o o|o|             +-+-+-+-+-+         +-+-+-+-+-+   
+;  4     1  |   |o|o o|o o|o|          25 |5|3|6|4|0|      25 |3|2|3|3|2|   
+;  3     1  |  o|o|o o|o o| |             +-+-+-+-+-+         +-+-+-+-+-+   
+;           +---+-+---+---+-+             <-5 bytes->         <-5 bytes->   
+;  2     0  |  o|o|o o|o o| |                                               
+;  1     0  |o o|o|o o|o  | |                         | |
+;  0     0  |o o|o|o o|o  | |                        \| |/
+;           +---+-+---+---+-+                         \ /
+;           <--- 1 byte ---->                          v
+;                                         
+;                                                   (SUM),Y                
+;                                                  Resulting               
+;                                                 5x6 bitmap               
+;                                               7 6 5 4 3 2 1 0            
+;                                              +-+-+-+-+-+-+-+-+           
+;                                           5  | | | | |o| | | |           
+;                                              +-+-+-+-+-+-+-+-+           
+;                                           4  | | | |o|o| | | |           
+;                                              +-+-+-+-+-+-+-+-+           
+;                                           3  | | |o|o|o| | | |           
+;                                              +-+-+-+-+-+-+-+-+           
+;                                           2  | | |o|o|o| | | |           
+;                                              +-+-+-+-+-+-+-+-+           
+;                                           1  | |o|o|o|o| | | |           
+;                                              +-+-+-+-+-+-+-+-+                                            
+;                                           0  |o|o|o|o| | | | |     
+;                                              +-+-+-+-+-+-+-+-+     
+;                                              <--- 1 byte ---->     
+;
 ;-------------------------------------------------------------------------------
 ; (excerpt from s0ascers 3.2.3.1.2.3)
 ;-------------------------------------------------------------------------------
@@ -2683,182 +2776,79 @@ LA6EC:  .byte	$18         			; to $0082
 ;  The resident must account for this when receiving character
 ;  sets.
 ;-------------------------------------------------------------------------------
-;
-; VAR:  Which of the 8 PLATO_WORDs is currently being processed (set in caller)
-; TMP:  Number of pixels set ("on") in the 8x16 bitmap
-; SUM:	Pointer to 5x6 bitmap used in full-screen display
-; YOUT: Initially, pointer to transposed version of original 8x16 PLATO bitmap.
-;       In the end, pointer to 8x12 bitmap used in zoomed display 
-
-; The first operation is to transpose the 16x8 bitmap to an 8x16 bitmap. The
-; lowest pixel is shifted to the carry register. If the pixel is unset, then the 
-; loop skips to its next iteration. Otherwise the corresponding bit is set in
-; (YOUT),Y using the mask table MTAB to first unset the one pixel for the current
-; bitfield (row) and later the table BTAB to set the one pixel.
-; 
-;
-;                                                           (YOUT),Y      
-;                                                X -->   7 6 5 4 3 2 1 0  
-;                                                       +-+-+-+-+-+-+-+-+ 
-;                                                Y--> F | | | | | | | |o| 
-;          <-PLATO_WORD+1-><--PLATO_WORD-->           E | | | | | | | |o| 
-;   Y-->    0 1 2 3 4 5 6 7 8 9 A B C D E F           D | | | | | | |o|o| 
-;          +-------------------------------+          C | | | | | | |o|o| 
-; VAR--> 0 |o:o: : : : : : : : : : : : : : |          B | | | | | |o|o|o| 
-;        1 |o:o:o:o: : : : : : : : : : : : |          A | | | | | |o|o|o| 
-;        2 |o:o:o:o:o:o: : : : : : : : : : |          9 | | | | |o|o|o|o| 
-;        3 |o:o:o:o:o:o:o:o: : : : : : : : |          8 | | | | |o|o|o|o| 
-;        4 |o:o:o:o:o:o:o:o:o:o: : : : : : |          7 | | | |o|o|o|o|o| 
-;        5 |o:o:o:o:o:o:o:o:o:o:o:o: : : : |          6 | | | |o|o|o|o|o| 
-;        6 | : :o:o:o:o:o:o:o:o:o:o:o:o: : |          5 | | |o|o|o|o|o|o| 
-;        7 | : : : :o:o:o:o:o:o:o:o:o:o:o:o|          4 | | |o|o|o|o|o|o| 
-;          +-------------------------------+          3 | |o|o|o|o|o|o| | 
-;                                                     2 | |o|o|o|o|o|o| | 
-;                                                     1 |o|o|o|o|o|o| | | 
-;                                                     0 |o|o|o|o|o|o| | | 
-;                                                       +-+-+-+-+-+-+-+-+ 
-;
-; During the transposition process, the sequence of table lookups are used to 
-; define groups of pixels (illustrated below in the (YOUT,Y) table). The number
-; of pixels found in each grouping is tallied and stored in the table at $3E10.
-;
-; A lookup table at $LB9D6 contains a threshold for each pixel group. If the 
-; tally for the source pixel group is greater than or equal to the corresponding
-; threshold then a pixel is set in the resulting 5x6 bitmap.
-;
-;                                LB9F4,X (X=LB9BE,Y)
-;                                      |
-;                                      |   $3E10,X             LB9D6,X                     
-;                                      |      (X=LB9F4,X + LB9CE,X)
-;  Y   LB9BE,Y                         |   
-;  |     |      (YOUT),Y               |   Tallies           Thresholds 
-;  v     v   7 6 5 4 3 2 1 0           v  4 3 2 1 0           4 3 2 1 0   
-;           +---+-+---+---+-+            +-+-+-+-+-+         +-+-+-+-+-+  
-;  F     5  | : | | : | : |o|          0 |0|0|0|1|3|       0 |3|2|3|3|2|  
-;  E     5  | : | | : | : |o|            +-+-+-+-+-+         +-+-+-+-+-+  
-;  D     5  | : | | : | :o|o|          5 |0|0|0|5|3|       5 |3|2|3|3|2|  
-;           +---+-+---+---+-+            +-+-+-+-+-+         +-+-+-+-+-+  
-;  C     4  | : | | : | :o|o|         10 |0|0|2|4|2|      10 |2|1|2|2|1|  
-;  B     4  | : | | : |o:o|o|            +-+-+-+-+-+         +-+-+-+-+-+  
-;  A     4  | : | | : |o:o|o|         15 |0|0|4|4|2|      15 |2|1|2|2|1|  
-;           +---+-+---+---+-+            +-+-+-+-+-+         +-+-+-+-+-+  
-;  9     3  | : | | :o|o:o|o|         20 |1|3|6|6|2|      20 |3|2|3|3|2|  
-;  8     3  | : | | :o|o:o|o|            +-+-+-+-+-+         +-+-+-+-+-+  
-;           +---+-+---+---+-+         25 |5|3|6|4|0|      25 |3|2|3|3|2|  
-;  7     2  | : | |o:o|o:o|o|            +-+-+-+-+-+         +-+-+-+-+-+  
-;  6     2  | : | |o:o|o:o|o|           
-;           +---+-+---+---+-+                  (SUM),Y       
-;  5     1  | : |o|o:o|o:o|o|                 Resulting    
-;  4     1  | : |o|o:o|o:o|o|                 5x6 bitmap        
-;  3     1  | :o|o|o:o|o:o| |              7 6 5 4 3 2 1 0   
-;           +---+-+---+---+-+             +-+-+-+-+-+-+-+-+  
-;  2     0  | :o|o|o:o|o:o| |          5  | | | | |o| | | |  
-;  1     0  |o:o|o|o:o|o: | |             +-+-+-+-+-+-+-+-+  
-;  0     0  |o:o|o|o:o|o: | |          4  | | | |o|o| | | |  
-;           +---+-+---+---+-+             +-+-+-+-+-+-+-+-+  
-;                                      3  | | |o|o|o| | | |
-;                                         +-+-+-+-+-+-+-+-+
-;                                      2  | | |o|o|o| | | |
-;                                         +-+-+-+-+-+-+-+-+
-;                                      1  | |o|o|o|o| | | |
-;                                         +-+-+-+-+-+-+-+-+
-;                                      0  |o|o|o|o| | | | |
-;                                         +-+-+-+-+-+-+-+-+
-;
-;
-;
 
 load_memory:					; A6F6
 	jsr     unpack_word			; Get PLATO_WORD
 
-;** Loop 16 times (for each byte in PLATO M2 character bitmap)
-	ldx     VAR     			; A6F9 A6 D8                    ..
-	ldy     #$0F    			; A6FB A0 0F                    ..
+; Let X = current word being processed (8 16-bit words per character)
+; Let Y = loop for each bit in word
+	ldx     VAR     			; Get current word  A6F9 A6 D8                    ..
+	ldy     #$0F    			; Loop for each bit in word A6FB A0 0F                    ..
 
 ;-------------------------------------------------------------------------------
 ; Transpose 16x8 bitmap into 8x16
 ;-------------------------------------------------------------------------------
-
 ; Shift lowest pixel into Carry
-@DLX:	lsr     PLATO_WORD+1   			; A6FD 46 DC                    F.
-	ror     PLATO_WORD     			; A6FF 66 DB                    f.
+@DLX:	lsr     PLATO_WORD+1   			; 16-bit shift
+	ror     PLATO_WORD     			; Shift lowest bit into Carry
 
-; MTAB:	.byte   %01111111
-; 	.byte	%10111111
-; 	.byte	%11011111
-; 	.byte	%11101111
-; 	.byte	%11110111
-; 	.byte	%11111011
-; 	.byte	%11111101
-; 	.byte	%11111110
-
-	lda     MTAB,X				; Clear pixel in local 
-	and     (YOUT),Y			; ...copy of bitmap 
-	bcc     @DL0				; no pixel in Carry, no work --> A706 90 1E                    ..
-	inc     TMP	 			; Tally of pixels set
+; Use MTAB,X to clear the Xth bit in (YOUT),Y
+	lda     MTAB,X				; Get mask
+	and     (YOUT),Y			; Clear Xth bit. Leave others untouched.
+	bcc     @DL0				; No carry, no work --> A706 90 1E                    ..
+	inc     TMP	 			; Keep total number pixels set in 8x16 bitmap
 	pha             			; Stash bitfield with cleared pixel
 
-; LB9BE:	.byte	0,0,0,1,1,1,2,2,3,3,4,4,4,5,5,5
+;-------------------------------------------------------------------------------
+; Assign groupings for pixels using a series of tables. Map an offset to a pixel 
+; in the 5x6 bitmap (0..30) using the current bit/location being processed in
+; the 8x16 bitmap from PLATO.
+;-------------------------------------------------------------------------------
+	lda     LB9BE,Y 			; Get value 0..5 using Y from table.
+	tax             			; Use it as an index
 
-	lda     LB9BE,Y 			; A70B B9 BE B9                 ...
-	tax             			; A70E AA                       .
+	lda     LB9F4,X 			; Get value 0..25 (multiples of 5) from table.
+	sta     LEND     			; Use it as base offset later.
 
-; LB9F4:  .byte   0,5,10,15,20,25
+	ldx     VAR     			; Which PLATO_WORD are we on? 0..7
+	lda     LB9CE,X 			; Use it to get value 0..4 from table
 
-	lda     LB9F4,X 			; A70F BD F4 B9                 ...
-	sta     LEND     			; A712 85 AB                    ..
+	clc             			; Using 0..25 + 0..4 values...
+	adc     LEND     			; derive 0..29.
+	tax             			; Use it as an index.
 
-; Get vertical
-; LB9CE:	.byte	0,0,1,2,2,3,3,4
+	inc     $3E10,X 			; Tally pixels set in current 5x6 grouping
 
-	ldx     VAR     			; A714 A6 D8                    ..
-	lda     LB9CE,X 			; A716 BD CE B9                 ...
-
-; LEND = value between 29..0 (25+4..0+0)
-	clc             			; A719 18                       .
-	adc     LEND     			; LEND = 
-	tax             			; A71C AA                       .
-
-; $3E10 may help measure the importance of a pixel. Rather than merely dropping
-; every nth row or column of the 8x16 bitmap, a weighted score is kept.
-;
-	inc     $3E10,X 			; A71D FE 10 3E                 ..>
-
-;BTAB:	.byte   %10000000	; $80
-;	.byte	%01000000	; $40
-;	.byte	%00100000	; $20
-;	.byte	%00010000	; $10
-;	.byte	%00001000	; $08
-;	.byte	%00000100	; $04
-;	.byte	%00000010	; $02
-;	.byte	%00000001	; $01
-
-	pla             			; Retrieve bitmap with cleared pixel
-	ldx     VAR     			; A721 A6 D8                    ..
-	ora     BTAB,X				; Set pixel
-@DL0:	sta     (YOUT),Y			; TODO Clobbering 1st M2 char afterwards. Save bitfield with newly-set pixel
+;-------------------------------------------------------------------------------
+; Back to working on transposition of 16x8 bitmap to 8x16 bitmap.
+; Save current bitfield to memory
+;-------------------------------------------------------------------------------
+	pla             			; Retrieve bitfield with cleared pixel from earlier
+	ldx     VAR     			; Which PLATO_WORD are we on? 0..7
+	ora     BTAB,X				; Set pixel using mask table
+@DL0:	sta     (YOUT),Y			; Save updated 8x16 bits
 	dey             			; Next Y
 	bpl     @DLX				; 
 
 ;-------------------------------------------------------------------------------
-; Return after the 8 PLATO_WORDs in a 8x16 bitmap have been processed.
+; RTS after the 8 PLATO_WORDs in a 16x8 bitmap have been processed.
 ;-------------------------------------------------------------------------------
-	inx             			; A72B E8                       .
-	cpx     #$08    			; A72C E0 08                    ..
-	bcs     :+   				; X < 8? --> A72E B0 03                    ..
-	stx     VAR     			; Let VAR = 8 A730 86 D8                    ..
-	rts             			; A732 60                       `
+	inx             			; Next PLATO_WORD
+	cpx     #$08    			; Done yet?
+	bcs     :+   				; Not yet -->
+	stx     VAR     			; Let VAR = 8
+	rts             			; 
 
 ;-------------------------------------------------------------------------------
-; Save data as 5x6 bitmap
+; Save data for 5x6 bitmap
 ; Clear 6 byte array at (SUM) that will hold the 5x6 character bitmap
 ;-------------------------------------------------------------------------------
-:  	lda     #$00    			; Let A = 0	A733 A9 00                    ..
-	tax             			; Let X = 0	A735 AA                       .
-	ldy     #$05    			; Let Y = 5	A736 A0 05                    ..
-:  	sta     (SUM),Y				; write 0 to array
-	dey             			; next Y	A73A 88                       .
-	bpl     :-				;		A73B 10 FB                    ..
+:  	lda     #$00    			; Let A = 0
+	tax             			; Let X = 0
+	ldy     #$05    			; Let Y = 5
+:  	sta     (SUM),Y				; write zero
+	dey             			;
+	bpl     :-				; next Y
 
 ;-------------------------------------------------------------------------------
 ; TMP contains number of pixels set in the 8x16 bitmap
@@ -2866,7 +2856,7 @@ load_memory:					; A6F6
 	lda     TMP	 			; A73D A5 D9                    ..
 	cmp     #$36    			; 54 out of 128? 2/5? A73F C9 36                    .6
 	bcc     LA771   			; TMP < 54? --> A741 90 2E                    ..
-	dex             			; Let X = $FF (used by BIT later) A743 CA                       .
+	
 	cmp     #$55    			; 85 out of 128? 2/3? A744 C9 55                    .U
 	bcs     LA771   			; TMP >= 85? --> A746 B0 29                    .)
 
