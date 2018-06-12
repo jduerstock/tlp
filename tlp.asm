@@ -23,11 +23,15 @@
 ;*******************************************************************************
 ; Input file: tlp.bin
 
+	.setcpu "6502"
+
 ;*******************************************************************************
 ;*                                                                             *
 ;*                             M E M O R Y   M A P                             *
 ;*                                                                             *
 ;*******************************************************************************
+; $0000..$00FF  Zero Page - hardware shadow registers and cart variables
+; $0100..$01FF  Stack
 ; $0400..$057F	Table of addresses to start of each Display List #1 scan line
 ; $0600..$08FF  Programmable character set M2 - zoomed display (64 @ 8x12)
 ; $0900..$0BFF  Programmable character set M3 - zoomed display (64 @ 8x12)
@@ -40,7 +44,11 @@
 ; $4000..$9FFF	24K frame buffer for Display List #2
 ; $A000..$BFFF	8K Cart ROM
 
-	.setcpu "6502"
+;*******************************************************************************
+;*                                                                             *
+;*                      M A C R O   D E F I N I T I O N S		       *
+;*                                                                             *
+;*******************************************************************************
 
 .macro  RString       Arg
 	.repeat .strlen(Arg), I
@@ -580,11 +588,11 @@ draw:						; A0A3
 	rts             			; Goto vector
 
 :	ldx     byte_B3 			; Get jump table offset (7 = print_char2)
-	lda     LBACA,x 			; Get MSB of subroutine
+	lda     tab_data_mode_HI,X 		; Get MSB of subroutine
 	beq     :+				; RTS to main loop if subroutine is undefined
 
 	pha             			; Otherwise trick RTS to return to 
-	lda     LBAD2,x 			; jump table subroutine
+	lda     tab_data_mode_LO,X 		; jump table subroutine
 	pha             			; 
 :	rts             			; 
 
@@ -773,12 +781,13 @@ send_data:					; A12C
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                ?????????????                                *
+;*                                sel_mode_6                                *
 ;*                                                                             *
 ;*                 ??????????????????????????????????????????                  *
 ;*                                                                             *
 ;*******************************************************************************
 sub_a133:
+sel_mode_6:
 	ldy     PLATO_WORD+1  			; A133 A4 DC                    ..
 	lda     PLATO_WORD     			; A135 A5 DB                    ..
 	ldx     byte_FF 			; A137 A6 FF                    ..
@@ -921,9 +930,9 @@ sub_a1fe:
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                init_graphics                                *
+;*                              init_graphics                                  *
 ;*                                                                             *
-;*                 Initialize display lists, colors, player-missiles           *
+;*              Initialize display lists, colors, player-missiles              *
 ;*                                                                             *
 ;*******************************************************************************
 
@@ -1126,8 +1135,8 @@ init_graphics:					; A214
 	jsr     sub_irqen			; Enable new set of interrupts
 
 ;** (n) Set system timer for vector #7  ******************************************
-	ldy     #<sub_b013      		; LSB of new vector routine
-	ldx     #>sub_b013      		; MSB of new vector routine
+	ldy     #<vbi_handler     		; LSB of new vector routine
+	ldx     #>vbi_handler     		; MSB of new vector routine
 	lda     #$07    			; Number of the vector to change
 	jmp     SETVBV  			; Set system timers (SETVBV will rts)
 
@@ -1264,7 +1273,7 @@ sel_data_mode:					; A36A
 
 ;** Use index into table *******************************************************
 	tax             			; Use index to get another value from lookup
-	lda     LBADA,x 			; ...table ($80->graphic, $01->text)
+	lda     tab_data_mode_id,X 		; ...table ($80->graphic, $01->text)
 	sta     DATA_MODE 			; Save lookup value to B5
 
 ;** Clear TODO *****************************************************************
@@ -1450,7 +1459,7 @@ sel_size_2:					; A391
 ;-------------------------------------------------------------------------------
 ; Superscript (ESC @, 1B 40)
 ;
-; This increases the the screen position along the perpendicular axis by five 
+; This increases the screen position along the perpendicular axis by five 
 ; pixels.
 ;-------------------------------------------------------------------------------
 set_super:					; A396
@@ -1839,8 +1848,16 @@ set_load_mem:					; A444
 	lda     #$04    			; 
 	bne     LA433   			; Always -->
 
-; ----------------------------------------------------------------------------
-sub_a448:
+;*******************************************************************************
+;*                                                                             *
+;*                                draw_block                                   *
+;*                                                                             *
+;*           PLATO host sent EM - Select block erase mode (mode 4)             *
+;*                                                                             *
+;*******************************************************************************
+
+; DESCRIPTION
+draw_block:					; A448
 	jsr     get_tek_vects
 	ldx     $DA     			; A44B A6 DA                    ..
 	bne     :++				; A44D D0 10                    ..
@@ -2491,27 +2508,41 @@ LA673:  lda     #$00    			;
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                 ????????????                                *
+;*                                plot_point                                   *
+;*                                                                             *
+;*            PLATO host sent FS - Selects point-plot mode (mode 0)            *
 ;*                                                                             *
 ;*******************************************************************************
 
 ; DESCRIPTION
-sub_a682:
-	jsr     get_tek_vects
-	lda     IS_16K     			; A685 A5 BA                    ..
-	sta     COMPR     			; A687 85 C9                    ..
+;-------------------------------------------------------------------------------
+; (Excerpt from s0ascers 3.2.3.1.2.1)
+;-------------------------------------------------------------------------------
+; The PLATO host sends an FS code (1C hex) to the terminal to put it in point 
+; mode (also known as mode 0). In this mode screen coordinates are sent to the 
+; terminal.  These coordinates are in the format described in section 3.1.2.4.3.
+; With a monochrome display device, the pixel is turned on in modes write and 
+; rewrite and turned off in modes erase and inverse.
+;
+; The current (X,Y) position is left at this location.
+;-------------------------------------------------------------------------------
+plot_point:					; A682
+	jsr     get_tek_vects			; Get coordinate(s) for point(s)
+	lda     IS_16K     			; Get memory constraint flag
+	sta     COMPR     			; 1->16K 0->48K+
 	bne     :+				; Full screen only? -->
 
 ;** Zoomed display *************************************************************
-	jsr     get_pfaddr
-	lda     CURSOR2_X     			; A68E A5 9C                    ..
-	jsr     :++				; A690 20 9A A6                  ..
-	dec     COMPR     			; Now do it for full screen
+	jsr     get_pfaddr			; Get CURSOR2_Y for plot
+	lda     CURSOR2_X     			; Get CURSOR2_X for plot
+	jsr     :++				; Call plot for zoomed display
+	dec     COMPR     			; Now do it to full screen
 
 ;** Full screen display ********************************************************
-:	jsr     get_pfaddr
-	lda     CURSOR1_X     			; A698 A5 A4                    ..
+:	jsr     get_pfaddr			; Get CURSOR1_Y for plot
+	lda     CURSOR1_X     			; Get CURSOR1_X for plot
 
+;** Both Zoomed and Full screen display ****************************************
 :	and     #$07    			; Modulus 8 on cursor X to use
 	tax             			; ...as index later
 	ldy     #$00    			; 
@@ -2588,165 +2619,449 @@ LA6EC:  .byte	$18         			; to $0082
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                   DLOAD                                     *
+;*                               load_memory                                   *
 ;*                                                                             *
-;*                     Receive Downloaded Character Set                        *
+;*                      Receive Downloaded Character Set                       *
 ;*                                                                             *
 ;*******************************************************************************
 
 ; DESCRIPTION
+; This routine is converts the 16x8 bitmap of a PLATO programmable character
+; into a 5x6 bitmap for the full-screen display and a 8x12 bitmap for the 
+; zoomed display.
+;-------------------------------------------------------------------------------
+; (excerpt from s0ascers 3.2.3.1.2.3)
+;-------------------------------------------------------------------------------
+; Load character set mode is initiated by the escape sequence ESC P (1B 50 hex).
+; Each character consists of eight words of data.  Each word is a vertical strip
+; of the 16 high by 8 wide character.  Bit one is at the bottom and bit 16 is at
+; the top when the character is displayed on the screen.  Many terminals' screen 
+; memories are not mapped to accommodate display of characters in this format, 
+; so it may be desirable to reformat the characters so that they are 16 bytes of
+; eight-bit horizontal strips.  The reformatting should take place after each 
+; character is received (i.e., after every eight words).
+; 
+; The following is an example of a character and the data
+; words that would be transmitted from PLATO to form it:
+;
+;            Bit
+;                  ---------------
+;            16   | | | | | | | | |
+;            15   | | | | | | | | |
+;            14   | | | | | | | | |
+;            13   | | | | | | | | |
+;            12   | | | | | | | | |
+;            11   | | | | | | | | |
+;            10   | |o|o|o|o| | | |
+;             9   | | | | | |o| | |
+;             8   | |o|o|o|o|o| | |
+;             7   |o| | | | |o| | |
+;             6   |o| | | | |o| | |
+;             5   | |o|o|o|o| |o| |
+;             4   | | | | | | | | |
+;             3   | | | | | | | | |
+;             2   | | | | | | | | |
+;             1   | | | | | | | | |
+;                  ---------------
+;
+;       Word       1 2 3 4 5 6 7 8
+;
+;  The eight words for this character are (in hex):
+;
+;       0060
+;       0290
+;       0290
+;       0290
+;       0290
+;       01E0
+;       0010
+;       0000
+;
+;  The programmable character sets are not always completely
+;  utilized.  If there are gaps in the character set, new load
+;  memory address commands will be sent to skip over the holes.
+;  The resident must account for this when receiving character
+;  sets.
+;-------------------------------------------------------------------------------
+;
+; VAR:  Which of the 8 PLATO_WORDs is currently being processed (set in caller)
+; TMP:  Number of pixels set ("on") in the 8x16 bitmap
+; SUM:	Pointer to 5x6 bitmap used in full-screen display
+; YOUT: Initially, pointer to transposed version of original 8x16 PLATO bitmap.
+;       In the end, pointer to 8x12 bitmap used in zoomed display 
+
+; The first operation is to transpose the 16x8 bitmap to an 8x16 bitmap. The
+; lowest pixel is shifted to the carry register. If the pixel is unset, then the 
+; loop skips to its next iteration. Otherwise the corresponding bit is set in
+; (YOUT),Y using the mask table MTAB to first unset the one pixel for the current
+; bitfield (row) and later the table BTAB to set the one pixel.
+; 
+;
+;                                                           (YOUT),Y      
+;                                                X -->   7 6 5 4 3 2 1 0  
+;                                                       +-+-+-+-+-+-+-+-+ 
+;                                                Y--> F | | | | | | | |o| 
+;          <-PLATO_WORD+1-><--PLATO_WORD-->           E | | | | | | | |o| 
+;   Y-->    0 1 2 3 4 5 6 7 8 9 A B C D E F           D | | | | | | |o|o| 
+;          +-------------------------------+          C | | | | | | |o|o| 
+; VAR--> 0 |o:o: : : : : : : : : : : : : : |          B | | | | | |o|o|o| 
+;        1 |o:o:o:o: : : : : : : : : : : : |          A | | | | | |o|o|o| 
+;        2 |o:o:o:o:o:o: : : : : : : : : : |          9 | | | | |o|o|o|o| 
+;        3 |o:o:o:o:o:o:o:o: : : : : : : : |          8 | | | | |o|o|o|o| 
+;        4 |o:o:o:o:o:o:o:o:o:o: : : : : : |          7 | | | |o|o|o|o|o| 
+;        5 |o:o:o:o:o:o:o:o:o:o:o:o: : : : |          6 | | | |o|o|o|o|o| 
+;        6 | : :o:o:o:o:o:o:o:o:o:o:o:o: : |          5 | | |o|o|o|o|o|o| 
+;        7 | : : : :o:o:o:o:o:o:o:o:o:o:o:o|          4 | | |o|o|o|o|o|o| 
+;          +-------------------------------+          3 | |o|o|o|o|o|o| | 
+;                                                     2 | |o|o|o|o|o|o| | 
+;                                                     1 |o|o|o|o|o|o| | | 
+;                                                     0 |o|o|o|o|o|o| | | 
+;                                                       +-+-+-+-+-+-+-+-+ 
+;
+; During the transposition process, the sequence of table lookups are used to 
+; define groups of pixels (illustrated below in the (YOUT,Y) table). The number
+; of pixels found in each grouping is tallied and stored in the table at $3E10.
+;
+; A lookup table at $LB9D6 contains a threshold for each pixel group. If the 
+; tally for the source pixel group is greater than or equal to the corresponding
+; threshold then a pixel is set in the resulting 5x6 bitmap.
+;
+;                                LB9F4,X (X=LB9BE,Y)
+;                                      |
+;                                      |   $3E10,X             LB9D6,X                     
+;                                      |      (X=LB9F4,X + LB9CE,X)
+;  Y   LB9BE,Y                         |   
+;  |     |      (YOUT),Y               |   Tallies           Thresholds 
+;  v     v   7 6 5 4 3 2 1 0           v  4 3 2 1 0           4 3 2 1 0   
+;           +---+-+---+---+-+            +-+-+-+-+-+         +-+-+-+-+-+  
+;  F     5  | : | | : | : |o|          0 |0|0|0|1|3|       0 |3|2|3|3|2|  
+;  E     5  | : | | : | : |o|            +-+-+-+-+-+         +-+-+-+-+-+  
+;  D     5  | : | | : | :o|o|          5 |0|0|0|5|3|       5 |3|2|3|3|2|  
+;           +---+-+---+---+-+            +-+-+-+-+-+         +-+-+-+-+-+  
+;  C     4  | : | | : | :o|o|         10 |0|0|2|4|2|      10 |2|1|2|2|1|  
+;  B     4  | : | | : |o:o|o|            +-+-+-+-+-+         +-+-+-+-+-+  
+;  A     4  | : | | : |o:o|o|         15 |0|0|4|4|2|      15 |2|1|2|2|1|  
+;           +---+-+---+---+-+            +-+-+-+-+-+         +-+-+-+-+-+  
+;  9     3  | : | | :o|o:o|o|         20 |1|3|6|6|2|      20 |3|2|3|3|2|  
+;  8     3  | : | | :o|o:o|o|            +-+-+-+-+-+         +-+-+-+-+-+  
+;           +---+-+---+---+-+         25 |5|3|6|4|0|      25 |3|2|3|3|2|  
+;  7     2  | : | |o:o|o:o|o|            +-+-+-+-+-+         +-+-+-+-+-+  
+;  6     2  | : | |o:o|o:o|o|           
+;           +---+-+---+---+-+                  (SUM),Y       
+;  5     1  | : |o|o:o|o:o|o|                 Resulting    
+;  4     1  | : |o|o:o|o:o|o|                 5x6 bitmap        
+;  3     1  | :o|o|o:o|o:o| |              7 6 5 4 3 2 1 0   
+;           +---+-+---+---+-+             +-+-+-+-+-+-+-+-+  
+;  2     0  | :o|o|o:o|o:o| |          5  | | | | |o| | | |  
+;  1     0  |o:o|o|o:o|o: | |             +-+-+-+-+-+-+-+-+  
+;  0     0  |o:o|o|o:o|o: | |          4  | | | |o|o| | | |  
+;           +---+-+---+---+-+             +-+-+-+-+-+-+-+-+  
+;                                      3  | | |o|o|o| | | |
+;                                         +-+-+-+-+-+-+-+-+
+;                                      2  | | |o|o|o| | | |
+;                                         +-+-+-+-+-+-+-+-+
+;                                      1  | |o|o|o|o| | | |
+;                                         +-+-+-+-+-+-+-+-+
+;                                      0  |o|o|o|o| | | | |
+;                                         +-+-+-+-+-+-+-+-+
+;
+;
 ;
 
-DLOAD:						; A6F6
+load_memory:					; A6F6
 	jsr     unpack_word			; Get PLATO_WORD
 
-;** Loop 16 times
+;** Loop 16 times (for each byte in PLATO M2 character bitmap)
 	ldx     VAR     			; A6F9 A6 D8                    ..
 	ldy     #$0F    			; A6FB A0 0F                    ..
+
+;-------------------------------------------------------------------------------
+; Transpose 16x8 bitmap into 8x16
+;-------------------------------------------------------------------------------
+
+; Shift lowest pixel into Carry
 @DLX:	lsr     PLATO_WORD+1   			; A6FD 46 DC                    F.
 	ror     PLATO_WORD     			; A6FF 66 DB                    f.
 
-	lda     MTAB,x				; A701 BD 3A B9                 .:.
-	and     (YOUT),y
-	bcc     @DL0				; A706 90 1E                    ..
-	inc     TMP	 			; A708 E6 D9                    ..
-	pha             			; A70A 48                       H
+; MTAB:	.byte   %01111111
+; 	.byte	%10111111
+; 	.byte	%11011111
+; 	.byte	%11101111
+; 	.byte	%11110111
+; 	.byte	%11111011
+; 	.byte	%11111101
+; 	.byte	%11111110
 
-	lda     LB9BE,y 			; A70B B9 BE B9                 ...
+	lda     MTAB,X				; Clear pixel in local 
+	and     (YOUT),Y			; ...copy of bitmap 
+	bcc     @DL0				; no pixel in Carry, no work --> A706 90 1E                    ..
+	inc     TMP	 			; Tally of pixels set
+	pha             			; Stash bitfield with cleared pixel
+
+; LB9BE:	.byte	0,0,0,1,1,1,2,2,3,3,4,4,4,5,5,5
+
+	lda     LB9BE,Y 			; A70B B9 BE B9                 ...
 	tax             			; A70E AA                       .
 
-	lda     LB9F4,x 			; A70F BD F4 B9                 ...
+; LB9F4:  .byte   0,5,10,15,20,25
+
+	lda     LB9F4,X 			; A70F BD F4 B9                 ...
 	sta     LEND     			; A712 85 AB                    ..
 
+; Get vertical
+; LB9CE:	.byte	0,0,1,2,2,3,3,4
+
 	ldx     VAR     			; A714 A6 D8                    ..
-	lda     LB9CE,x 			; A716 BD CE B9                 ...
+	lda     LB9CE,X 			; A716 BD CE B9                 ...
 
+; LEND = value between 29..0 (25+4..0+0)
 	clc             			; A719 18                       .
-	adc     LEND     			; A71A 65 AB                    e.
+	adc     LEND     			; LEND = 
 	tax             			; A71C AA                       .
-	inc     $3E10,x 			; A71D FE 10 3E                 ..>
 
-	pla             			; A720 68                       h
+; $3E10 may help measure the importance of a pixel. Rather than merely dropping
+; every nth row or column of the 8x16 bitmap, a weighted score is kept.
+;
+	inc     $3E10,X 			; A71D FE 10 3E                 ..>
+
+;BTAB:	.byte   %10000000	; $80
+;	.byte	%01000000	; $40
+;	.byte	%00100000	; $20
+;	.byte	%00010000	; $10
+;	.byte	%00001000	; $08
+;	.byte	%00000100	; $04
+;	.byte	%00000010	; $02
+;	.byte	%00000001	; $01
+
+	pla             			; Retrieve bitmap with cleared pixel
 	ldx     VAR     			; A721 A6 D8                    ..
-	ora     BTAB,x				; A723 1D 42 B9                 .B.
-@DL0:	sta     (YOUT),y			; Write 8x12 character bitmap to memory
-	dey             			; A728 88                       .
-	bpl     @DLX				; A729 10 D2                    ..
+	ora     BTAB,X				; Set pixel
+@DL0:	sta     (YOUT),Y			; TODO Clobbering 1st M2 char afterwards. Save bitfield with newly-set pixel
+	dey             			; Next Y
+	bpl     @DLX				; 
 
+;-------------------------------------------------------------------------------
+; Return after the 8 PLATO_WORDs in a 8x16 bitmap have been processed.
+;-------------------------------------------------------------------------------
 	inx             			; A72B E8                       .
 	cpx     #$08    			; A72C E0 08                    ..
-	bcs     :+   				; A72E B0 03                    ..
-	stx     VAR     			; A730 86 D8                    ..
+	bcs     :+   				; X < 8? --> A72E B0 03                    ..
+	stx     VAR     			; Let VAR = 8 A730 86 D8                    ..
 	rts             			; A732 60                       `
 
-;** Loop 6 times
-:  	lda     #$00    			; A733 A9 00                    ..
-	tax             			; A735 AA                       .
-	ldy     #$05    			; A736 A0 05                    ..
-:  	sta     (SUMLO),y			; Write 5x6 character bitmap to memory
-	dey             			; A73A 88                       .
-	bpl     :-				; A73B 10 FB                    ..
+;-------------------------------------------------------------------------------
+; Save data as 5x6 bitmap
+; Clear 6 byte array at (SUM) that will hold the 5x6 character bitmap
+;-------------------------------------------------------------------------------
+:  	lda     #$00    			; Let A = 0	A733 A9 00                    ..
+	tax             			; Let X = 0	A735 AA                       .
+	ldy     #$05    			; Let Y = 5	A736 A0 05                    ..
+:  	sta     (SUM),Y				; write 0 to array
+	dey             			; next Y	A73A 88                       .
+	bpl     :-				;		A73B 10 FB                    ..
 
+;-------------------------------------------------------------------------------
+; TMP contains number of pixels set in the 8x16 bitmap
+;-------------------------------------------------------------------------------
 	lda     TMP	 			; A73D A5 D9                    ..
-	cmp     #$36    			; A73F C9 36                    .6
-	bcc     LA771   			; A741 90 2E                    ..
-	dex             			; A743 CA                       .
-	cmp     #$55    			; A744 C9 55                    .U
-	bcs     LA771   			; A746 B0 29                    .)
+	cmp     #$36    			; 54 out of 128? 2/5? A73F C9 36                    .6
+	bcc     LA771   			; TMP < 54? --> A741 90 2E                    ..
+	dex             			; Let X = $FF (used by BIT later) A743 CA                       .
+	cmp     #$55    			; 85 out of 128? 2/3? A744 C9 55                    .U
+	bcs     LA771   			; TMP >= 85? --> A746 B0 29                    .)
 
-;** Iterate over 6 rows of 5 pixels? TODO
+;-------------------------------------------------------------------------------
+; TRACK A: Here if TMP >= 54 and TMP < 85
+;-------------------------------------------------------------------------------
+
+;** Iterate over 6 rows of 5 pixels
 	ldy     #$05    			; A748 A0 05                    ..
+;-------------------------------------------------------------------------------
+; Outer Loop 6 times
+;-------------------------------------------------------------------------------
 @LOOPI: ldx     #$04    			; A74A A2 04                    ..
 	stx     LEND     			; A74C 86 AB                    ..
-@LOOPJ: lda     LB9F4,y 			; A74E B9 F4 B9                 ...
+
+;-------------------------------------------------------------------------------
+; Inner Loop 5 times
+;-------------------------------------------------------------------------------
+; LB9F4:  .byte   0,5,10,15,20,25
+; Let X = 25+4, 25+3, .., 25+0, 20+4, 20+3, .., 20+0, ..
+@LOOPJ: lda     LB9F4,Y 			; Get multiple of 5 for outer loop A74E B9 F4 B9                 ...
 	clc             			; A751 18                       .
-	adc     LEND     			; A752 65 AB                    e.
-	tax             			; A754 AA                       .
-	lda     LB9D6,x 			; A755 BD D6 B9                 ...
-	cmp     $3E10,x 			; A758 DD 10 3E                 ..>
-	bcc	:+
-	bne     :++   				; A75D D0 09                    ..
+	adc     LEND     			; Add to inner loop index A752 65 AB                    e.
+	tax             			; Copy to X for index into lookup table A754 AA                       .
 
-:	lda     (SUMLO),y
-	ldx     LEND     			; A761 A6 AB                    ..
-	ora     BTAB,x				; A763 1D 42 B9                 .B.
-	sta     (SUMLO),y
+; Use X as index into table
+; LB9D6:.byte   3,2,3,3,2		;  0..4
+; 	.byte	3,2,3,3,2		;  5..9
+; 	.byte	2,1,2,2,1		; 10..14
+; 	.byte   2,1,2,2,1		; 15..19
+; 	.byte   3,2,3,3,2		; 20..24
+; 	.byte	3,2,3,3,2		; 25..29
 
-:  	dec     LEND     			; A768 C6 AB                    ..
+	lda     LB9D6,X 			; Get Lookup A755 BD D6 B9                 ...
+	cmp     $3E10,X 			; Compare to pixel weight A758 DD 10 3E                 ..>
+	bcc	:+				; Lookup <= weight? Set pixel -->
+	bne     :++   				; Lookup > weight? Skip pixel --> A75D D0 09                    ..
+
+; BTAB:	.byte   %10000000	; $80
+; 	.byte	%01000000	; $40
+; 	.byte	%00100000	; $20
+; 	.byte	%00010000	; $10
+; 	.byte	%00001000	; $08
+
+; Here if Lookup <= weight
+; Set pixel in 5x6 bitmap.
+:	lda     (SUM),Y				; Get current bitfield
+	ldx     LEND     			; Get index (curr pixel) A761 A6 AB                    ..
+	ora     BTAB,X				; Set pixel A763 1D 42 B9                 .B.
+	sta     (SUM),Y				; Save updated bitfield
+
+; Here if Lookup != weight (or arriving from above)
+:  	dec     LEND     			; Next LEND A768 C6 AB                    ..
 	bpl     @LOOPJ
-	dey             			; A76C 88                       .
+	dey             			; Next Y A76C 88                       .
 	bpl     @LOOPI   			; A76D 10 DB                    ..
 
-	bmi     LA7AD   			; A76F 30 3C                    0<
+	bmi     LA7AD   			; Skip TRACK B --> A76F 30 3C                    0<
+
+;-------------------------------------------------------------------------------
+; TRACK B: Here if TMP < 54 or TMP >= 85
+; X=$00 -> TMP < 54
+; X=$FF -> TMP >= 85
+;-------------------------------------------------------------------------------
 LA771:  stx     TMP	 			; A771 86 D9                    ..
-	bit     TMP	 			; A773 24 D9                    $.
-	ldy     #$0F    			; A775 A0 0F                    ..
-LA777:  lda     (YOUT),y
-	bvc     :+
-	eor     #$FF    			; A77B 49 FF                    I.
-:	sta     VAR     			; A77D 85 D8                    ..
-	ldx     #$07    			; A77F A2 07                    ..
-	lda     #$00    			; A781 A9 00                    ..
-:  	rol     VAR     			; A783 26 D8                    &.
-	bcc     :+				; A785 90 03                    ..
-	ora     LB9B6,x 			; A787 1D B6 B9                 ...
-:  	dex             			; A78A CA                       .
-	bpl     :--				; A78B 10 F6                    ..
-	pha             			; A78D 48                       H
-	lda     LB9BE,y 			; A78E B9 BE B9                 ...
-	sty     VAR     			; A791 84 D8                    ..
-	tay             			; A793 A8                       .
-	pla             			; A794 68                       h
-	ora     (SUMLO),y
-	sta     (SUMLO),y
-	ldy     VAR     			; A799 A4 D8                    ..
+	bit     TMP	 			; Set V if TMP >= 85 A773 24 D9                    $.
+
+;-------------------------------------------------------------------------------
+; Outer Loop 16 times
+;-------------------------------------------------------------------------------
+	ldy     #$0F    			; Let Y = 16	A775 A0 0F                    ..
+LA777:  lda     (YOUT),Y			; Get original 8x16 PLATO bitfield
+	bvc     :+				; if TMP < 54 -->
+	eor     #$FF    			; if TMP >= 85 invert bits A77B 49 FF                    I.
+:	sta     VAR     			; VAR = curr row of 8x16 PLATO bitfield A77D 85 D8                    ..
+
+;-------------------------------------------------------------------------------
+; Inner Loop 8 times 
+;-------------------------------------------------------------------------------
+	ldx     #$07    			; Iterate 8 times (for each row in bitmap) A77F A2 07                    ..
+	lda     #$00    			; A will hold bitfield. Start with clean slate.  A781 A9 00                    ..
+:  	rol     VAR     			; Pull leftmost bit off bitfield into Carry A783 26 D8                    &.
+	bcc     :+				; Is the bit set? No? --> A785 90 03                    ..
+
+;LB9B6: .byte   %00001000 0
+;       .byte   %00010000 1
+;       .byte   %00010000 2
+;       .byte   %00100000 3
+;       .byte   %00100000 4
+;       .byte   %01000000 5
+;       .byte   %10000000 6
+;       .byte   %10000000 7
+
+	ora     LB9B6,x 			; Yes? Set bit in A	A787 1D B6 B9                 ...
+:  	dex             			;			A78A CA                       .
+	bpl     :--				; Next X		A78B 10 F6                    ..
+;-------------------------------------------------------------------------------
+; End of Inner Loop
+;-------------------------------------------------------------------------------
+
+;LB9BE:	.byte	$00,$00,$00,$01,$01,$01,$02,$02
+;	.byte	$03,$03,$04,$04,$04,$05,$05,$05
+
+	pha             			; Stash current bitfield into stack A78D 48                       H
+	lda     LB9BE,Y 			; Get $00..$05 from lookup table A78E B9 BE B9                 ...
+	sty     VAR     			; Stash outer loop index into VAR A791 84 D8                    ..
+	tay             			; Move index from lookup table into Y A793 A8                       .
+	pla             			; Restore current bitfield from stack A794 68                       h
+	ora     (SUM),Y				; Merge current bitfield with A
+	sta     (SUM),Y				; Save 5x6 bitfield to bitmap
+	ldy     VAR     			; Restore outer loop index into Y A799 A4 D8                    ..
 	dey             			; A79B 88                       .
-	bpl     LA777   			; A79C 10 D9                    ..
+	bpl     LA777   			; Next Y A79C 10 D9                    ..
+;-------------------------------------------------------------------------------
+; End of Outer Loop
+;-------------------------------------------------------------------------------
+
 	bvc     LA7AD   			; A79E 50 0D                    P.
+
+;-------------------------------------------------------------------------------
+; Loop 6 times
+;-------------------------------------------------------------------------------
 	ldy     #$05    			; A7A0 A0 05                    ..
-LA7A2:  lda     (SUMLO),y
+@LOOP:	lda     (SUM),Y
 	eor     #$FF    			; A7A4 49 FF                    I.
-	and     #$F8    			; A7A6 29 F8                    ).
-	sta     (SUMLO),y
+	and     #$F8    			; last 3 bits unused in 5x6 A7A6 29 F8                    ).
+	sta     (SUM),Y				; Save bitfield for 5x6
 	dey             			; A7AA 88                       .
-	bpl     LA7A2   			; A7AB 10 F5                    ..
-LA7AD:  ldy     #$02    			; A7AD A0 02                    ..
-	sty     Y1LO     			; A7AF 84 EE                    ..
-	iny             			; A7B1 C8                       .
-	sty     X1LO     			; A7B2 84 EC                    ..
-LA7B4:  ldy     X1LO     			; A7B4 A4 EC                    ..
-	lda     (YOUT),y
-	ldy     Y1LO     			; A7B8 A4 EE                    ..
-	bvc     LA7C0   			; A7BA 50 04                    P.
-	and     (YOUT),y
-	bvs     LA7C2   			; A7BE 70 02                    p.
-LA7C0:  ora     (YOUT),y
-LA7C2:  sta     (YOUT),y
+	bpl     @LOOP				; Next Y --> A7AB 10 F5                    ..
+;-------------------------------------------------------------------------------
+; End of Loop
+;-------------------------------------------------------------------------------
+
+;-------------------------------------------------------------------------------
+; Scrunch 8x16 bitmap to 8x12
+;-------------------------------------------------------------------------------
+LA7AD:  ldy     #$02    			; Let Y    = 2		A7AD A0 02                    ..
+	sty     Y1LO     			; Let Y1LO = 2		A7AF 84 EE                    ..
+
+	iny             			; Let Y    = 3		A7B1 C8                       .
+	sty     X1LO     			; Let X1LO = 3		A7B2 84 EC                    ..
+
+LA7B4:  ldy     X1LO     			; Let Y =  X1LO		A7B4 A4 EC                    ..
+	lda     (YOUT),Y			; Get source bitfield 
+
+; if TMP < 54 then ORA else AND
+	ldy     Y1LO     			; Let Y = Y1LO
+	bvc     :+				; TMP < 54? --> A7BA 50 04                    P.
+	and     (YOUT),Y			; Replace target with source bitfield
+	bvs     :++				; A7BE 70 02                    p.
+:	ora     (YOUT),Y			; Merge target with source bitfield
+:	sta     (YOUT),Y			; Write target bitfield to memory
+
+; Roll the next 2 bitfields up
 	ldx     #$02    			; A7C4 A2 02                    ..
-LA7C6:  inc     Y1LO     			; A7C6 E6 EE                    ..
-	inc     X1LO     			; A7C8 E6 EC                    ..
+@LOOP:	inc     Y1LO     			; 2 -> 3 A7C6 E6 EE                    ..
+	inc     X1LO     			; 3 -> 4 A7C8 E6 EC                    ..
 	ldy     X1LO     			; A7CA A4 EC                    ..
+; Quit if we've processed 16 
 	cpy     #$10    			; A7CC C0 10                    ..
-	bcs     LA7DD   			; A7CE B0 0D                    ..
-	lda     (YOUT),y
+	bcs     LA7DD   			; Quit loop A7CE B0 0D                    ..
+; Otherwise...
+	lda     (YOUT),Y			; Read from X1LO
 	ldy     Y1LO     			; A7D2 A4 EE                    ..
-	sta     (YOUT),y
+	sta     (YOUT),Y			; Write to Y1LO
 	dex             			; A7D6 CA                       .
-	bpl     LA7C6   			; A7D7 10 ED                    ..
-	inc     X1LO     			; A7D9 E6 EC                    ..
-	bne     LA7B4   			; A7DB D0 D7                    ..
+	bpl     @LOOP				; Next X A7D7 10 ED                    ..
+
+	inc     X1LO     			; Next X1LO A7D9 E6 EC                    ..
+	bne     LA7B4   			; --> A7DB D0 D7                    ..
+
+;-------------------------------------------------------------------------------
+; Advance pointer to next location for 8x12 bitmap
+;-------------------------------------------------------------------------------
 LA7DD:  lda     #$0C    			; A7DD A9 0C                    ..
 	clc             			; A7DF 18                       .
-	adc     YOUT
+	adc     YOUT				; 
 	sta     YOUT
-	bcc     LA7E8   			; A7E4 90 02                    ..
+	bcc     :+				; A7E4 90 02                    ..
 	inc     YOUT+1
-LA7E8:  clc             			; A7E8 18                       .
-	lda     SUMLO
+
+;-------------------------------------------------------------------------------
+; Advance pointer to next location for 5x6 bitmap
+
+;-------------------------------------------------------------------------------
+:	clc             			; A7E8 18                       .
+	lda     SUM
 	adc     #$06    			; A7EB 69 06                    i.
-	sta     SUMLO
+	sta     SUM
 	bcc	:+
-	inc     SUMHI
+	inc     SUM+1
+
+;-------------------------------------------------------------------------------
+; Clear working variables and RTS
+;-------------------------------------------------------------------------------
 :	jmp     LA673   			; A7F3 4C 73 A6                 Ls.
 
 ;*******************************************************************************
@@ -3815,12 +4130,13 @@ send_to_plato2:					; AB54
 ;*                                                                             *
 ;*                                print_char2                                  *
 ;*                                                                             *
-;*                 Entry point #2 for draw character on the screen             *
+;*                PLATO host sent US - Selects alpha mode (mode 3)             *
 ;*                                                                             *
 ;*******************************************************************************
 ; DESCRIPTION
 ; Same as print_char except char is what was received from PLATO
 print_char2:					; AB5A
+plot_alpha:					; AB5A
 	lda     SERIN_BUF   			; Char from PLATO
 
 ;*******************************************************************************
@@ -4463,7 +4779,7 @@ draw_bitmap:					; AD3A
 ; displays. COMPR is meant to skip the zoomed display on machines having less
 ; than 48K but does not function properly.
 ;
-; YOUT is the 
+; YOUT is the TODO
 get_pfaddr:					; AD8E
 	bit     COMPR     			; Do we skip zoomed display logic?
 	bvs     :+				; Full screen only? -->
@@ -4531,7 +4847,7 @@ get_pfaddr:					; AD8E
 ;*                                                                             *
 ;*******************************************************************************
 
-; DESCRIPTION
+; DESCRIPTION TODO (This is not fully baked) TODO
 ;
 ;   0123456701234567012345670123456701234567012345670123456701234567 
 ;   +-------+-------+-------+-------+-------+-------+-------+--------+
@@ -4630,6 +4946,7 @@ create_masks:					; ADCB
 ;
 ;-------------------------------------------------------------------------------
 sub_adf1:
+draw_line:					; ADF1
 	jsr     get_tek_vects
 	lda     IS_16K     			; Memory constrained?
 	sta     COMPR     			; If so, only 1 pass as full-screen.
@@ -5081,7 +5398,7 @@ plot:						; B004
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                  sub_b013                                   *
+;*                               vbi_handler                                   *
 ;*                                                                             *
 ;*                           deferred VBI handler                              *
 ;*                                                                             *
@@ -5134,22 +5451,22 @@ plot:						; B004
 ; least significant bits in register RTCLOK+2 which increments with each 
 ; vertical blank.
 
-sub_b013:
+vbi_handler:					; B013
 	sec             			; 
 	lda     UI_MODE				; 
 	sbc     #$02    			; using joystick-mapped function keys?
 	bne     :+				; no, skip ahead.
 
 ;** In joystick-mapped mode. Skip polling if a delay is active *****************
-	ldx     JSTICK_TR_DLY   			; is delay active?
+	ldx     JSTICK_TR_DLY   		; is delay active?
 	bne     :++				; yes, skip polling
 
 ;** Poll joystick trigger ******************************************************
 :	lda     STRIG0				; is joystick trigger pressed?
-	bne     LB02D   			; no, skip ahead.
+	bne     :++				; no, skip ahead.
 
 ;** Trigger pressed and a delay is active, skip joystick direction logic *******
-	ldx     JSTICK_TR_DLY   			; 
+	ldx     JSTICK_TR_DLY   		; 
 	bne     LB045   			; 
 
 ;** Trigger pressed and a delay is not active. Initialize a new delay. *********
@@ -5158,7 +5475,7 @@ sub_b013:
 :	sta     JSTICK_TR 			; $00->{pressed,joystick mapped mode} $FF->not pressed
 
 ;** Poll joystick direction ****************************************************
-LB02D:  ldx     STICK0				; Read joystick 0
+:	ldx     STICK0				; Read joystick 0
 	lda     tab_stick_x,x 			; Get X-axis unit vector
 	sta     JSTICK_X                        ; Save X vector
 	lda     tab_stick_y,x 			; Get Y-axis unit vector
@@ -5173,11 +5490,11 @@ LB02D:  ldx     STICK0				; Read joystick 0
 
 ;** Decrement delay counter if a delay is active *******************************
 LB045:  ldx     JSTICK_TR_DLY     		; Don't decrement delay counter
-	beq     LB04B   			; if we've reached 0.
+	beq     :+				; if we've reached 0.
 	dec     JSTICK_TR_DLY  			; otherwise 
 
 ;** Check for SELECT press every 16 VBLANKS (0.27 secs) ************************
-LB04B:  lda     RTCLOK+2     			; Get current jiffy
+:	lda     RTCLOK+2     			; Get current jiffy
 	and     #$0F    			; Skip unless lower nybble...
 	bne     LB087   			; ...of clock is 0
 
@@ -5208,11 +5525,11 @@ LB04B:  lda     RTCLOK+2     			; Get current jiffy
 	plp             			; restore processor flags
 LB076:  sta     COLOR2  			; save new hue + luminance to...
 	sta     COLOR4  			; ...background and border registers
-	bcc     LB085   			; skip if current display mode is zoomed
+	bcc     :+				; skip if current display mode is zoomed
 	sta     BG_COLOR_DL1    		; current display is full-screen. save color
 	jsr     set_pm_colors			; change missile color, too
 	bmi     LB087   			; returns with N flag set to force jump to XITBV
-LB085:  sta     BG_COLOR_DL2    		; current display mode is zoomed, save color
+:	sta     BG_COLOR_DL2    		; current display mode is zoomed, save color
 LB087:  jmp     XITVBV				; Call OS VBI Deferred Exit and RTI
 
 ;** Change forground luminance *************************************************
@@ -7304,11 +7621,16 @@ tab_ch_mem_DL1:					; B9AE
 
 LB9B6:	.byte	$08,$10,$10,$20,$20,$40,$80,$80
 
+; Table - Given 16-pixel tall character bitmap, which
+; pixels survive into 6-pixel tall character???? TODO
 LB9BE:	.byte	$00,$00,$00,$01,$01,$01,$02,$02
 	.byte	$03,$03,$04,$04,$04,$05,$05,$05
 
+; Table - Given 8-pixel wide character bitmap, which 
+; pixels survive into 5-pixel wide character???? TODO
 LB9CE:	.byte	$00,$00,$01,$02,$02,$03,$03,$04
 
+; Table - 5 x 6 bitmap = 30 pixels ??? TODO
 LB9D6:  .byte   $03,$02,$03,$03,$02		;  0..4
 	.byte	$03,$02,$03,$03,$02		;  5..9
 	.byte	$02,$01,$02,$02,$01		; 10..14
@@ -7614,32 +7936,52 @@ JUMTAB:						; BA6F
 	jt1	set_load_echo			; 59 ESC Y -> Load Echo command
 	jt1	set_margin			; 50 ESC Z -> Set margin
 
-LBACA:	.byte	>(DLOAD-1)			; Download character set
-	.byte	>(sub_a448-1)
-	.byte	$00
-	.byte	$00
-	.byte	>(sub_a682-1)
-	.byte	>(sub_adf1-1)
-	.byte	$00
-	.byte   >(print_char2-1)		; sub_ab5a
+;*******************************************************************************
+;*                                                                             *
+;*                             tab_data_mode_HI                                *
+;*                             tab_data_mode_LO                                *
+;*                                                                             *
+;*                 Jump table to subroutines for data modes                    *
+;*                                                                             *
+;*******************************************************************************
 
-LBAD2:	.byte	<(DLOAD-1)			; Download character set
-	.byte	<(sub_a448-1)
-	.byte	$00
-	.byte	$00
-	.byte	<(sub_a682-1)
-	.byte	<(sub_adf1-1)
-	.byte	$00
-	.byte	<(print_char2-1)		; sub_ab5a
+; DESCRIPTION
+;-------------------------------------------------------------------------------
+; The set_data_mode routine is called when certain control codes or escape 
+; sequences are received from the PLATO host dealing with data modes. The 
+; set_data_mode routine eventally uses this table to get the address of the 
+; requested subroutine. The data modes affect how data received from the host 
+; should be interpretted. Is it a printable character (alpha mode), is it a set
+; of coordinates describing a line (draw line mode), etc.
+;-------------------------------------------------------------------------------
+tab_data_mode_HI:				; BACA
+	.byte	>(load_memory-1)		; data mode 2->Load memory
+	.byte	>(draw_block-1)			; data mode 4->block write/erase mode
+	.byte	$00				; unused
+	.byte	$00				; unused
+	.byte	>(plot_point-1)			; data mode 0->point-plot mode
+	.byte	>(draw_line-1)			; data mode 1->draw line mode
+	.byte	$00				; unused
+	.byte   >(plot_alpha-1)			; data mode 3->alpha mode
 
-LBADA:	
+tab_data_mode_LO:				; BAD2
+	.byte	<(load_memory-1)		; data mode 2->Load memory
+	.byte	<(draw_block-1)			; data mode 4->block write/erase mode
+	.byte	$00				; unused
+	.byte	$00				; unused
+	.byte	<(plot_point-1)			; data mode 0->point-plot mode
+	.byte	<(draw_line-1)			; data mode 1->draw line mode
+	.byte	$00				; unused
+	.byte	<(plot_alpha-1)			; data mode 3->alpha mode
+
+tab_data_mode_id:				; BADA
 	.byte	$03				; data mode 2->Load memory 
 	.byte	$80				; data mode 4->block write/erase mode
-	.byte	$00
-	.byte	$00
+	.byte	$00				; unused
+	.byte	$00				; unused
 	.byte	$80				; data mode 0->point-plot mode
 	.byte	$80				; data mode 1->draw line mode
-	.byte	$00
+	.byte	$00				; unused
 	.byte	$01				; data mode 3->alpha mode
 
 LBAE2:	.byte	>(get_tek_vects-1)		; byte_B4 = 1 
