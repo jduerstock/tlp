@@ -278,7 +278,9 @@ XDLO		:= $00D4			; TODO Delta X when calculating slope?
 XDHI		:= $00D5
 YDLO		:= $00D6			; TODO Delta Y when calculating slope?
 YDHI		:= $00D7
+CURR_WORD	:= $00D8			; Index of current 16 bit word while scaling fonts in load_memory
 VAR		:= $00D8			; temporaries
+PIX_CNT		:= $00D9			; Number of pixels set in 8x16 programmable character bitmap
 TMP		:= $00D9
 byte_DA		:= $00DA
 PLATO_WORD	:= $00DB			; 16-bit PLATO word (See s0ascers 3.1.2.4.2)
@@ -287,14 +289,17 @@ JSTICK_X	:= $00DD			; VBI: Current joystick direction X-axis (-1=left +1=right)
 JSTICK_Y	:= $00DE			; VBI: Current joystick direction Y-axis (-1=up   +1=down)
 DL2_TEMP	:= $00DF			; Pointer used while deriving display list #2
 DL2_WIND	:= $00E1			; Pointer into 24K frame buffer for origin (0,0) of zoomed display
+BIT_8x16	:= $00E3			; Pointer to 8x16 character bitmap during load_memory
 YOUT		:= $00E3			; absolute display address 00->TODO, $40->TODO, $80->TODO, $C0->TODO
 CNUM		:= $00E5			; 16-bit address to bitmap of character to be drawn on screen
 PLATO_CHAR	:= $00E7			; PLATO/ASCII character code to be sent to PLATO
 CHSET_BASE 	:= $00E8			; current character set base (full-screen display)
 CHSET_BASE2	:= $00EA			; current character set base (zoomed)
 off_EC		:= $00EC
+SRC_ROW		:= $00EC			; index used during load_memory (source row)
 X1LO		:= $00EC			; Line endpoint X1
 X1HI		:= $00ED
+TAR_ROW		:= $00EE			; index used during load_memory (target row)
 Y1LO		:= $00EE			; Line endpoint Y1
 Y1HI		:= $00EF
 X0LO		:= $00F0			; Line endpoint X0
@@ -305,6 +310,7 @@ Y0HI		:= $00F3			;
 TCRSX		:= $00F0			; block erase cursor position
 TCRSY		:= $00F2			; block erase cursor position
 
+BIT_5x6		:= $00F4			; Pointer to 5x6 character bitmap during load_memory
 SUM		:= $00F4			; vector draw work variables
 SUMLO		:= $00F4			; 
 SUMHI		:= $00F5			; 
@@ -348,6 +354,7 @@ word_1351	:= $1351
 CURRENT_ECHO	:= $1353			; $00->local echo $80->remote echo
 CURRENT_SELECT	:= $1355			; Which color aspect is modified with SELECT ($00->c, $80->b, $C0->t)
 L2000           := $2000
+PIX_WEIGHTS	:= $3E10			; Table of pixel weights used to scale 8x16 bitmap to 5x6
 L3E2E		:= $3E2E
 SERIN_BUF	:= $3E2E			; Buffer for characters received from PLATO
 L3E33           := $3E33
@@ -2403,10 +2410,8 @@ proc_echo:					; A5FF
 ; PLATO_WORD (16-bit address)
 ;
 ; Upon return: 
-; SUM:	16-bit address for pending 5x6 character bitmap for full-screen display
-; YOUT: 16-bit address for pending 8x12 character bitmap for zoomed display
-;
-; Note: this subroutine temporarily re-purposes the variables YOUT, SUM.
+; BIT_5x6: 16-bit address for pending 5x6 character bitmap for full-screen display
+; BIT_8x16: 16-bit address for pending 8x12 character bitmap for zoomed display
 ;
 ;-------------------------------------------------------------------------------
 ; (excerpt from 3.2.3.1.5)
@@ -2440,12 +2445,12 @@ load_mem_addr:					; A640
 ; lower nybble is always $x0 and there's no loss of precision with the shifts.
 ;------------------------------------------------------------------------------
 	lsr     A       			; Divide MSB by 2, remainder into carry
-	sta     YOUT+1				; Save divide by 2 for later
+	sta     BIT_8x16+1			; Save divide by 2 for later
 	sta     PLATO_WORD+1   			; 
 
 	txa             			; 
 	ror     A       			; Divide LSB by 2, carry included
-	sta     YOUT				; Save divide by 2 for later
+	sta     BIT_8x16			; Save divide by 2 for later
 
 ;-------------------------------------------------------------------------------
 ; Divide again by 2, effectively divide by 4 so far. (16/4)
@@ -2464,47 +2469,47 @@ load_mem_addr:					; A640
 	lsr     PLATO_WORD+1   			; Divide MSB by 2, remainder into carry
 	ror     A       			; Divide LSB by 2, carry included
 	adc     VAR+1	 			; 6 = 16/8 + 16/4 
-	sta     SUM				; LSB of address to DL1 character
+	sta     BIT_5x6				; LSB of address to DL1 character
 
 ;-------------------------------------------------------------------------------
 ; Derive MSB of address to full-screen display character (6 bytes/character)
-; SUM contains 16-bit address for pending 5x6 character bitmap.
+; BIT_5x6 contains 16-bit address for pending 5x6 character bitmap.
 ;-------------------------------------------------------------------------------
 	lda     #(>ch_mem_m2_DL1) 		; Get MSB to character set base
 	adc     VAR     			; Add MSB offset
-	sta     SUM+1				; MSB of address to DL1 character
+	sta     BIT_5x6+1			; MSB of address to DL1 character
 
 ;-------------------------------------------------------------------------------
 ; Derive LSB of address to zoomed display character (12 bytes/character)
 ;-------------------------------------------------------------------------------
-	lda     YOUT				; Get LSB divide by 2 from earlier
+	lda     BIT_8x16			; Get LSB divide by 2 from earlier
 	adc     VAR+1	 			; Add LSB divide by 4 from earlier
-	sta     YOUT				; 12 = 16/2 + 16/4
+	sta     BIT_8x16			; 12 = 16/2 + 16/4
 
 ;-------------------------------------------------------------------------------
 ; Derive MSB of address to zoomed display character (12 bytes/character)
-; YOUT contains 16-bit address for pending 8x12 character bitmap.
+; BIT_8x16 contains 16-bit address for pending scaled-down 8x12 character bitmap.
 ;-------------------------------------------------------------------------------
-	lda     YOUT+1				; Get MSB divide by 2 from earlier
+	lda     BIT_8x16+1			; Get MSB divide by 2 from earlier
 	adc     VAR     			; Add MSB divide by 4 from earlier
 	adc     #(>ch_mem_m2_DL2) 		; Add MSB to character set base
-	sta     YOUT+1				; 12 = 16/2 + 16/4
+	sta     BIT_8x16+1			; 12 = 16/2 + 16/4
 
 ;-------------------------------------------------------------------------------
-; Clear working variables
+; Initialize working variables to be used in load_memory routine
 ;-------------------------------------------------------------------------------
 LA673:  lda     #$00    			; 
-	sta     VAR+1	 			; 
-	sta     VAR     			;
+	sta     PIX_CNT 			; Number of pixels set in 8x16
+	sta     CURR_WORD     			; Which of (8) 16-bit words
 
 ;-------------------------------------------------------------------------------
-; Clear buffer for transforming bitmap of 5 x 6 character???? TODO
+; Clear buffer to hold pixel weights calculated in load_memory routine
 ;-------------------------------------------------------------------------------
-	ldx     #$1D    			; A679 A2 1D                    ..
-@LOOP:	sta     $3E10,x 			; A67B 9D 10 3E                 ..>
-	dex             			; A67E CA                       .
-	bpl     @LOOP
-	rts             			; A681 60                       `
+	ldx     #29				; Loop 30 times (5x6)
+@LOOP:	sta     PIX_WEIGHTS,X 			; Initialize to 0
+	dex             			; 
+	bpl     @LOOP				; Next X
+	rts             			; 
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -2639,12 +2644,12 @@ LA6EC:  .byte	$18         			; to $0082
 
 ; The first operation is to transpose the 16x8 bitmap to an 8x16 bitmap. The
 ; lowest pixel is shifted to the carry register. If the pixel is unset, then the 
-; loop skips to its next iteration. Otherwise the corresponding bit is set in
+; loop skips to its next iteration. Otherwise the appropriate bit is set in array
 ; (YOUT),Y using the mask table MTAB to first unset the one pixel for the current
-; bitfield (row) and later the table BTAB to set the one pixel.
+; bitfield (row) and later the mask table BTAB to set the one pixel.
 ; 
 ;
-;                                                           (YOUT),Y      
+;                                                          (BIT_8x16),Y      
 ;                                                X -->   7 6 5 4 3 2 1 0  
 ;                                                       +-+-+-+-+-+-+-+-+ 
 ;                                                Y--> F | | | | | | | |o| 
@@ -2665,62 +2670,96 @@ LA6EC:  .byte	$18         			; to $0082
 ;                                                     0 |o|o|o|o|o|o| | | 
 ;                                                       +-+-+-+-+-+-+-+-+ 
 ;
-; During the transposition process, a sequence of table lookups are used to 
-; define groupings of pixels (illustrated below in the (YOUT,Y) table). The number
-; of pixels found in each grouping is tallied and stored in the table at $3E10.
+; During the transposition process, a sequence of table lookups is used to 
+; define groupings of pixels (illustrated below in the (YOUT,Y) table). The 
+; number of pixels found in each grouping is weighed and stored in the table at
+; PIX_WEIGHTS.
 ;
-; A lookup table at $LB9D6 contains a threshold for each pixel group. If the 
-; tally for the source pixel group is greater than or equal to the corresponding
-; threshold then a pixel is set in the resulting 5x6 bitmap.
+; The lookup table PIX_THRESH contains a threshold for each pixel group. If the
+; weight for the source pixel group is greater than or equal to the 
+; corresponding threshold then a pixel is set in the resulting 5x6 bitmap.
 ;
-;               (YOUT,Y)                        
+;              (BIT_8x16,Y)                        
 ;      Table   Groupings of    
-;  Y   LB9BE,Y orig PLATO       
-;  |     |     8x16 bitmap        LB9F4,X (X=LB9BE,Y)                       
+;  Y TAB_0_5,Y orig PLATO            TAB_0_25,X (X=TAB_0_5,Y)                       
+;  |     |     8x16 bitmap              |
 ;  v     v   7 6 5 4 3 2 1 0            |   Table               Table       
-;           +---+-+---+---+-+           |   $3E10,X             LB9D6,X     
-;  F     5  |   | |   |   |o|           |      (X=LB9F4,X + LB9CE,X (0..29))        
-;  E     5  |   | |   |   |o|           |                                   
-;  D     5  |   | |   |  o|o|           |   Tallies           Thresholds    
-;           +---+-+---+---+-+           v  4 3 2 1 0           4 3 2 1 0    
-;  C     4  |   | |   |  o|o|             +-+-+-+-+-+         +-+-+-+-+-+   
-;  B     4  |   | |   |o o|o|           0 |0|0|0|1|3|       0 |3|2|3|3|2|   
-;  A     4  |   | |   |o o|o|             +-+-+-+-+-+         +-+-+-+-+-+   
+;           +---+-+---+---+-+           | PIX_WEIGHTS,X      PIX_THRESH,X     
+;  0     0  |   | |   |   |o|           |      (X=TAB_0_25,X + TAB_0_4,X (0..29))        
+;  1     0  |   | |   |   |o|           |                                   
+;  2     0  |   | |   |  o|o|           |   Weights           Thresholds    
+;           +---+-+---+---+-+           v  0 1 2 3 4           0 1 2 3 4    
+;  3     1  |   | |   |  o|o|             +-+-+-+-+-+         +-+-+-+-+-+   
+;  4     1  |   | |   |o o|o|           0 |0|0|0|1|3|       0 |3|2|3|3|2|   
+;  5     1  |   | |   |o o|o|             +-+-+-+-+-+         +-+-+-+-+-+   
 ;           +---+-+---+---+-+           5 |0|0|0|5|3|       5 |3|2|3|3|2|   
-;  9     3  |   | |  o|o o|o|             +-+-+-+-+-+         +-+-+-+-+-+   
-;  8     3  |   | |  o|o o|o|          10 |0|0|2|4|2|  >=? 10 |2|1|2|2|1|   
+;  6     2  |   | |  o|o o|o|             +-+-+-+-+-+         +-+-+-+-+-+   
+;  7     2  |   | |  o|o o|o|          10 |0|0|2|4|2|  >=? 10 |2|1|2|2|1|   
 ;           +---+-+---+---+-+             +-+-+-+-+-+         +-+-+-+-+-+   
-;  7     2  |   | |o o|o o|o|          15 |0|0|4|4|2|      15 |2|1|2|2|1|   
-;  6     2  |   | |o o|o o|o|             +-+-+-+-+-+         +-+-+-+-+-+   
+;  8     3  |   | |o o|o o|o|          15 |0|0|4|4|2|      15 |2|1|2|2|1|   
+;  9     3  |   | |o o|o o|o|             +-+-+-+-+-+         +-+-+-+-+-+   
 ;           +---+-+---+---+-+          20 |1|3|6|6|2|      20 |3|2|3|3|2|   
-;  5     1  |   |o|o o|o o|o|             +-+-+-+-+-+         +-+-+-+-+-+   
-;  4     1  |   |o|o o|o o|o|          25 |5|3|6|4|0|      25 |3|2|3|3|2|   
-;  3     1  |  o|o|o o|o o| |             +-+-+-+-+-+         +-+-+-+-+-+   
+;  A     4  |   |o|o o|o o|o|             +-+-+-+-+-+         +-+-+-+-+-+   
+;  B     4  |   |o|o o|o o|o|          25 |5|3|6|4|0|      25 |3|2|3|3|2|   
+;  C     4  |  o|o|o o|o o| |             +-+-+-+-+-+         +-+-+-+-+-+   
 ;           +---+-+---+---+-+             <-5 bytes->         <-5 bytes->   
-;  2     0  |  o|o|o o|o o| |                                               
-;  1     0  |o o|o|o o|o  | |                         | |
-;  0     0  |o o|o|o o|o  | |                        \| |/
+;  D     5  |  o|o|o o|o o| |                                               
+;  E     5  |o o|o|o o|o  | |                         | |
+;  F     5  |o o|o|o o|o  | |                        \| |/
 ;           +---+-+---+---+-+                         \ /
 ;           <--- 1 byte ---->                          v
 ;                                         
-;                                                   (SUM),Y                
+;                                                 (BIT_5x6),Y                
 ;                                                  Resulting               
 ;                                                 5x6 bitmap               
 ;                                               7 6 5 4 3 2 1 0            
 ;                                              +-+-+-+-+-+-+-+-+           
-;                                           5  | | | | |o| | | |           
+;                                           0  | | | | |o| | | |           
 ;                                              +-+-+-+-+-+-+-+-+           
-;                                           4  | | | |o|o| | | |           
-;                                              +-+-+-+-+-+-+-+-+           
-;                                           3  | | |o|o|o| | | |           
+;                                           1  | | | |o|o| | | |           
 ;                                              +-+-+-+-+-+-+-+-+           
 ;                                           2  | | |o|o|o| | | |           
 ;                                              +-+-+-+-+-+-+-+-+           
-;                                           1  | |o|o|o|o| | | |           
+;                                           3  | | |o|o|o| | | |           
+;                                              +-+-+-+-+-+-+-+-+           
+;                                           4  | |o|o|o|o| | | |           
 ;                                              +-+-+-+-+-+-+-+-+                                            
-;                                           0  |o|o|o|o| | | | |     
+;                                           5  |o|o|o|o| | | | |     
 ;                                              +-+-+-+-+-+-+-+-+     
 ;                                              <--- 1 byte ---->     
+;
+; To convert the original 8x16 bitmap to 8x12, 4 pairs of pixel rows are merged.
+;
+; Depending on the pixel density of the original bitmap, the merge is 
+; accomplished using a logical operation across the two rows.
+;
+; If the bitmap is densely packed with pixels (>= 85 pixels set), then the rows
+; are ANDed together. Otherwise, the two rows are ORed together.
+;
+;       Original 8x16                           Resulting 8x12
+;                                             (merged using ORs)
+;
+;        (BIT_8x16),Y                            (BIT_8x16),Y  
+;      7 6 5 4 3 2 1 0                         7 6 5 4 3 2 1 0 
+;     +-+-+-+-+-+-+-+-+                       +-+-+-+-+-+-+-+-+     
+;   0 | | | | | | | | |                     0 | | | | | | | | |     
+;   1 | | | | | | | |o|                     1 | | | | | | | |o|   
+;   2 | | | | | | |o|o| merged              2 | | | | | |o|o|o| merged
+;   3 | | | | | |o|o|o| merged              3 | | | | |o|o|o|o|   
+;   4 | | | | |o|o|o|o|                     4 | | | |o|o|o|o|o|   
+;   5 | | | |o|o|o|o|o|              \      5 | |o|o|o|o|o|o|o| merged
+;   6 | | |o|o|o|o|o|o| merged     ---\     6 |o|o|o|o|o|o|o|o|   
+;   7 | |o|o|o|o|o|o|o| merged         |    7 |o|o|o|o|o|o|o| |   
+;   8 |o|o|o|o|o|o|o|o|            ---/     8 |o|o|o|o|o| | | | merged
+;   9 |o|o|o|o|o|o|o| |              /      9 |o|o|o|o| | | | |   
+;   A |o|o|o|o|o|o| | | merged              A |o|o|o| | | | | |    
+;   B |o|o|o|o|o| | | | merged              B |o|o| | | | | | | merged
+;   C |o|o|o|o| | | | |                     C +-+-+-+-+-+-+-+-+   
+;   D |o|o|o| | | | | |                     D   
+;   E |o|o| | | | | | | merged              E      
+;   F |o| | | | | | | | merged              F 
+;     +-+-+-+-+-+-+-+-+                       
+;
 ;
 ;-------------------------------------------------------------------------------
 ; (excerpt from s0ascers 3.2.3.1.2.3)
@@ -2780,9 +2819,9 @@ LA6EC:  .byte	$18         			; to $0082
 load_memory:					; A6F6
 	jsr     unpack_word			; Get PLATO_WORD
 
-; Let X = current word being processed (8 16-bit words per character)
+; Let X = current word being processed of the (8) 16-bit words per characters.
 ; Let Y = loop for each bit in word
-	ldx     VAR     			; Get current word  A6F9 A6 D8                    ..
+	ldx     CURR_WORD     			; Which PLATO_WORD are we working on? (0..7)
 	ldy     #$0F    			; Loop for each bit in word A6FB A0 0F                    ..
 
 ;-------------------------------------------------------------------------------
@@ -2792,11 +2831,11 @@ load_memory:					; A6F6
 @DLX:	lsr     PLATO_WORD+1   			; 16-bit shift
 	ror     PLATO_WORD     			; Shift lowest bit into Carry
 
-; Use MTAB,X to clear the Xth bit in (YOUT),Y
-	lda     MTAB,X				; Get mask
-	and     (YOUT),Y			; Clear Xth bit. Leave others untouched.
-	bcc     @DL0				; No carry, no work --> A706 90 1E                    ..
-	inc     TMP	 			; Keep total number pixels set in 8x16 bitmap
+; Use MTAB,X to clear the Xth bit in (BIT_8x16),Y
+	lda     MTAB,X				; Get pixel mask from table
+	and     (BIT_8x16),Y			; Clear Xth bit. Leave others untouched.
+	bcc     @DL0				; No carry, no work -->
+	inc     PIX_CNT	 			; Keep total number pixels set in 8x16 bitmap
 	pha             			; Stash bitfield with cleared pixel
 
 ;-------------------------------------------------------------------------------
@@ -2804,29 +2843,29 @@ load_memory:					; A6F6
 ; in the 5x6 bitmap (0..30) using the current bit/location being processed in
 ; the 8x16 bitmap from PLATO.
 ;-------------------------------------------------------------------------------
-	lda     LB9BE,Y 			; Get value 0..5 using Y from table.
+	lda     TAB_0_5,Y 			; Return 0..5 given 0..15
 	tax             			; Use it as an index
 
-	lda     LB9F4,X 			; Get value 0..25 (multiples of 5) from table.
+	lda     TAB_0_25,X 			; Return 0..25 (by 5s) given 0..5
 	sta     LEND     			; Use it as base offset later.
 
-	ldx     VAR     			; Which PLATO_WORD are we on? 0..7
-	lda     LB9CE,X 			; Use it to get value 0..4 from table
+	ldx     CURR_WORD     			; Which PLATO_WORD are we on? 0..7
+	lda     TAB_0_4,X 			; Return 0..4 given 0..7
 
 	clc             			; Using 0..25 + 0..4 values...
 	adc     LEND     			; derive 0..29.
 	tax             			; Use it as an index.
 
-	inc     $3E10,X 			; Tally pixels set in current 5x6 grouping
+	inc     PIX_WEIGHTS,X 			; Increase weight for current 5x6 grouping
 
 ;-------------------------------------------------------------------------------
 ; Back to working on transposition of 16x8 bitmap to 8x16 bitmap.
 ; Save current bitfield to memory
 ;-------------------------------------------------------------------------------
 	pla             			; Retrieve bitfield with cleared pixel from earlier
-	ldx     VAR     			; Which PLATO_WORD are we on? 0..7
+	ldx     CURR_WORD     			; Which PLATO_WORD are we on? 0..7
 	ora     BTAB,X				; Set pixel using mask table
-@DL0:	sta     (YOUT),Y			; Save updated 8x16 bits
+@DL0:	sta     (BIT_8x16),Y			; Save updated 8x16 bits
 	dey             			; Next Y
 	bpl     @DLX				; 
 
@@ -2836,223 +2875,174 @@ load_memory:					; A6F6
 	inx             			; Next PLATO_WORD
 	cpx     #$08    			; Done yet?
 	bcs     :+   				; Not yet -->
-	stx     VAR     			; Let VAR = 8
+	stx     CURR_WORD     			; Let VAR = 8
 	rts             			; 
 
 ;-------------------------------------------------------------------------------
 ; Save data for 5x6 bitmap
-; Clear 6 byte array at (SUM) that will hold the 5x6 character bitmap
+; First, clear 6 byte array at (SUM) that will hold the 5x6 character bitmap
 ;-------------------------------------------------------------------------------
 :  	lda     #$00    			; Let A = 0
 	tax             			; Let X = 0
 	ldy     #$05    			; Let Y = 5
-:  	sta     (SUM),Y				; write zero
+:  	sta     (BIT_5x6),Y    			; Clear entire row
 	dey             			;
 	bpl     :-				; next Y
 
 ;-------------------------------------------------------------------------------
-; TMP contains number of pixels set in the 8x16 bitmap
+; PIX_CNT contains number of pixels set in the 8x16 bitmap
 ;-------------------------------------------------------------------------------
-	lda     TMP	 			; A73D A5 D9                    ..
-	cmp     #$36    			; 54 out of 128? 2/5? A73F C9 36                    .6
-	bcc     LA771   			; TMP < 54? --> A741 90 2E                    ..
-	
-	cmp     #$55    			; 85 out of 128? 2/3? A744 C9 55                    .U
-	bcs     LA771   			; TMP >= 85? --> A746 B0 29                    .)
+	lda     PIX_CNT	 			; Get number of pixels set in 8x16 bitmap
+	cmp     #$36    			; 54 out of 128? 2/5? 
+	bcc     ALG_B   			; PIX_CNT < 54? -->
+	dex
+	cmp     #$55    			; 85 out of 128? 2/3?
+	bcs     ALG_B   			; PIX_CNT >= 85? -->
 
 ;-------------------------------------------------------------------------------
-; TRACK A: Here if TMP >= 54 and TMP < 85
+; Algorithm A: Scale 8x16 bitmap to 5x6. 
+; Used when about 1/2 the pixels in the 8x16 bitmap are set (54 <= pixels < 85)
 ;-------------------------------------------------------------------------------
+	ldy     #$05    			; Outer loop over 6 rows
+@LOOPY: ldx     #$04    			; Inner loop over 5 pixels
+	stx     LEND     			; 
 
-;** Iterate over 6 rows of 5 pixels
-	ldy     #$05    			; A748 A0 05                    ..
-;-------------------------------------------------------------------------------
-; Outer Loop 6 times
-;-------------------------------------------------------------------------------
-@LOOPI: ldx     #$04    			; A74A A2 04                    ..
-	stx     LEND     			; A74C 86 AB                    ..
-
-;-------------------------------------------------------------------------------
-; Inner Loop 5 times
-;-------------------------------------------------------------------------------
-; LB9F4:  .byte   0,5,10,15,20,25
-; Let X = 25+4, 25+3, .., 25+0, 20+4, 20+3, .., 20+0, ..
-@LOOPJ: lda     LB9F4,Y 			; Get multiple of 5 for outer loop A74E B9 F4 B9                 ...
-	clc             			; A751 18                       .
-	adc     LEND     			; Add to inner loop index A752 65 AB                    e.
-	tax             			; Copy to X for index into lookup table A754 AA                       .
+@LOOPX: lda     TAB_0_25,Y 			; Return value 0..25 (by 5s) given Y
+	clc             			; 
+	adc     LEND     			; Add to inner loop index
+	tax             			; Copy to X for index into lookup table
 
 ; Use X as index into table
-; LB9D6:.byte   3,2,3,3,2		;  0..4
-; 	.byte	3,2,3,3,2		;  5..9
-; 	.byte	2,1,2,2,1		; 10..14
-; 	.byte   2,1,2,2,1		; 15..19
-; 	.byte   3,2,3,3,2		; 20..24
-; 	.byte	3,2,3,3,2		; 25..29
+	lda     PIX_THRESH,X 			; Get threshold from table 
+	cmp     PIX_WEIGHTS,X 			; Compare to pixel weight
+	bcc	:+				; Weight >= threshold? Set pixel -->
+	bne     :++   				; Weight < threshold? Skip pixel -->
 
-	lda     LB9D6,X 			; Get Lookup A755 BD D6 B9                 ...
-	cmp     $3E10,X 			; Compare to pixel weight A758 DD 10 3E                 ..>
-	bcc	:+				; Lookup <= weight? Set pixel -->
-	bne     :++   				; Lookup > weight? Skip pixel --> A75D D0 09                    ..
-
-; BTAB:	.byte   %10000000	; $80
-; 	.byte	%01000000	; $40
-; 	.byte	%00100000	; $20
-; 	.byte	%00010000	; $10
-; 	.byte	%00001000	; $08
-
-; Here if Lookup <= weight
 ; Set pixel in 5x6 bitmap.
-:	lda     (SUM),Y				; Get current bitfield
-	ldx     LEND     			; Get index (curr pixel) A761 A6 AB                    ..
-	ora     BTAB,X				; Set pixel A763 1D 42 B9                 .B.
-	sta     (SUM),Y				; Save updated bitfield
+:	lda     (BIT_5x6),Y			; Get current bitfield
+	ldx     LEND     			; Get index (curr pixel)
+	ora     BTAB,X				; Set pixel using mask table
+	sta     (BIT_5x6),Y			; Save updated bitfield
 
-; Here if Lookup != weight (or arriving from above)
-:  	dec     LEND     			; Next LEND A768 C6 AB                    ..
-	bpl     @LOOPJ
-	dey             			; Next Y A76C 88                       .
-	bpl     @LOOPI   			; A76D 10 DB                    ..
+:  	dec     LEND     			;
+	bpl     @LOOPX				; Next X
+	dey             			; 
+	bpl     @LOOPY   			; Next Y
 
-	bmi     LA7AD   			; Skip TRACK B --> A76F 30 3C                    0<
-
-;-------------------------------------------------------------------------------
-; TRACK B: Here if TMP < 54 or TMP >= 85
-; X=$00 -> TMP < 54
-; X=$FF -> TMP >= 85
-;-------------------------------------------------------------------------------
-LA771:  stx     TMP	 			; A771 86 D9                    ..
-	bit     TMP	 			; Set V if TMP >= 85 A773 24 D9                    $.
+	bmi     SCALE_8x12   			; Algorithm A done. Skip Algorithm B -->
 
 ;-------------------------------------------------------------------------------
-; Outer Loop 16 times
+; Algorithm B: Scale 8x16 bitmap to 5x6.
+; Used for sparsly or heavily populated bitmaps. (pixels < 54 or pixels >= 85) 
+; LA771:  
 ;-------------------------------------------------------------------------------
-	ldy     #$0F    			; Let Y = 16	A775 A0 0F                    ..
-LA777:  lda     (YOUT),Y			; Get original 8x16 PLATO bitfield
-	bvc     :+				; if TMP < 54 -->
-	eor     #$FF    			; if TMP >= 85 invert bits A77B 49 FF                    I.
-:	sta     VAR     			; VAR = curr row of 8x16 PLATO bitfield A77D 85 D8                    ..
+ALG_B:	stx     TMP	 			; Let TMP = $00->(PIX_CNT < 54), $FF->(PIX_CNT >= 85)
+	bit     TMP	 			; Set overflow if PIX_CNT >= 85
 
-;-------------------------------------------------------------------------------
-; Inner Loop 8 times 
-;-------------------------------------------------------------------------------
-	ldx     #$07    			; Iterate 8 times (for each row in bitmap) A77F A2 07                    ..
-	lda     #$00    			; A will hold bitfield. Start with clean slate.  A781 A9 00                    ..
-:  	rol     VAR     			; Pull leftmost bit off bitfield into Carry A783 26 D8                    &.
-	bcc     :+				; Is the bit set? No? --> A785 90 03                    ..
+	ldy     #$0F    			; Outer loop. Iterate over 16 rows
+@LOOPY: lda     (BIT_8x16),Y			; Get current row of PLATO 8x16 bitmap
+	bvc     :+				; PIX_CNT < 54? -->
+	eor     #$FF    			; PIX_CNT >= 85, invert bits (XOR'd again later)
+:	sta     VAR     			; 
 
-;LB9B6: .byte   %00001000 0
-;       .byte   %00010000 1
-;       .byte   %00010000 2
-;       .byte   %00100000 3
-;       .byte   %00100000 4
-;       .byte   %01000000 5
-;       .byte   %10000000 6
-;       .byte   %10000000 7
+; Set pixels in 5x6 bitmap.
+	ldx     #$07    			; Inner loop. Iterate over 8 bits in each row.
+	lda     #$00    			; A will hold bitfield. Start with clean slate.
+@LOOPX:	rol     VAR     			; Shift leftmost pixel into Carry.
+	bcc     :+				; Is pixel set? No? -->
+	ora     LB9B6,x 			; Set pixel using lookup table
+:  	dex             			; 
+	bpl     @LOOPX				; Next X
 
-	ora     LB9B6,x 			; Yes? Set bit in A	A787 1D B6 B9                 ...
-:  	dex             			;			A78A CA                       .
-	bpl     :--				; Next X		A78B 10 F6                    ..
-;-------------------------------------------------------------------------------
-; End of Inner Loop
-;-------------------------------------------------------------------------------
+; Target which row to assign current row of pixels
+	pha             			; Stash 5-pixel bitfield into stack
+	lda     TAB_0_5,Y 			; Get a value 0..5 from lookup table
+	sty     VAR     			; Stash outer loop index into VAR
+	tay             			; Copy 0..5 value to use as index
+	pla             			; Restore 5-pixel bitfield from stack
+	ora     (BIT_5x6),Y			; Merge current bitfield with A
+	sta     (BIT_5x6),Y			; Save bitfield to bitmap
+	ldy     VAR     			; Restore outer loop index into Y
+	dey             			; 
+	bpl     @LOOPY   			; Next Y
 
-;LB9BE:	.byte	$00,$00,$00,$01,$01,$01,$02,$02
-;	.byte	$03,$03,$04,$04,$04,$05,$05,$05
+; Skip code for densely populated bitmap
+	bvc     SCALE_8x12   			; PIX_CNT < 54? -->
 
-	pha             			; Stash current bitfield into stack A78D 48                       H
-	lda     LB9BE,Y 			; Get $00..$05 from lookup table A78E B9 BE B9                 ...
-	sty     VAR     			; Stash outer loop index into VAR A791 84 D8                    ..
-	tay             			; Move index from lookup table into Y A793 A8                       .
-	pla             			; Restore current bitfield from stack A794 68                       h
-	ora     (SUM),Y				; Merge current bitfield with A
-	sta     (SUM),Y				; Save 5x6 bitfield to bitmap
-	ldy     VAR     			; Restore outer loop index into Y A799 A4 D8                    ..
-	dey             			; A79B 88                       .
-	bpl     LA777   			; Next Y A79C 10 D9                    ..
-;-------------------------------------------------------------------------------
-; End of Outer Loop
-;-------------------------------------------------------------------------------
-
-	bvc     LA7AD   			; A79E 50 0D                    P.
-
-;-------------------------------------------------------------------------------
-; Loop 6 times
-;-------------------------------------------------------------------------------
-	ldy     #$05    			; A7A0 A0 05                    ..
-@LOOP:	lda     (SUM),Y
-	eor     #$FF    			; A7A4 49 FF                    I.
-	and     #$F8    			; last 3 bits unused in 5x6 A7A6 29 F8                    ).
-	sta     (SUM),Y				; Save bitfield for 5x6
-	dey             			; A7AA 88                       .
-	bpl     @LOOP				; Next Y --> A7AB 10 F5                    ..
-;-------------------------------------------------------------------------------
-; End of Loop
-;-------------------------------------------------------------------------------
+; Here if densely populated bitmap (PIX_CNT >= 85)
+	ldy     #$05    			; Iterate over 6 rows
+@LOOP:	lda     (BIT_5x6),Y			; Get existing row
+	eor     #$FF    			; Revert bits XOR'd earlier
+	and     #$F8    			; Clear last 3 bits (5 pixels wide)
+	sta     (BIT_5x6),Y			; Save bitfield for 5x6
+	dey             			; 
+	bpl     @LOOP				; Next Y
 
 ;-------------------------------------------------------------------------------
 ; Scrunch 8x16 bitmap to 8x12
+; Merge pairs of pixel rows together using AND or OR so that 12 rows remain
 ;-------------------------------------------------------------------------------
-LA7AD:  ldy     #$02    			; Let Y    = 2		A7AD A0 02                    ..
-	sty     Y1LO     			; Let Y1LO = 2		A7AF 84 EE                    ..
+SCALE_8x12:
+	ldy     #$02    			; Leave rows 0 and 1 untouched
+	sty     TAR_ROW     			; Initial target row to 2
+	iny             			; 
+	sty     SRC_ROW     			; Initial source row to 3
 
-	iny             			; Let Y    = 3		A7B1 C8                       .
-	sty     X1LO     			; Let X1LO = 3		A7B2 84 EC                    ..
+@LOOPY: ldy     SRC_ROW     			; Get index for source row
+	lda     (BIT_8x16),Y			; Get bitfield for source row
 
-LA7B4:  ldy     X1LO     			; Let Y =  X1LO		A7B4 A4 EC                    ..
-	lda     (YOUT),Y			; Get source bitfield 
+; if bitmap is densely packed with pixels then AND together 2 rows
+; otherwise merge together 2 rows using OR
+	ldy     TAR_ROW     			; Get index for target row
+	bvc     :+				; PIX_CNT < 85? -->
+	and     (BIT_8x16),Y			; (Dense bitmap) AND source and target rows
+	bvs     :++				; PIX_CNT >= 85? -->
+:	ora     (BIT_8x16),Y			; (Sparse bitmap) OR source and target rows
+:	sta     (BIT_8x16),Y			; 
 
-; if TMP < 54 then ORA else AND
-	ldy     Y1LO     			; Let Y = Y1LO
-	bvc     :+				; TMP < 54? --> A7BA 50 04                    P.
-	and     (YOUT),Y			; Replace target with source bitfield
-	bvs     :++				; A7BE 70 02                    p.
-:	ora     (YOUT),Y			; Merge target with source bitfield
-:	sta     (YOUT),Y			; Write target bitfield to memory
+; Pull next 3 rows up from below as we convert from 16 rows to 12 rows
+	ldx     #$02    			; Loop 3 times
+@LOOPX:	inc     TAR_ROW     			; Advance to next target row
+	inc     SRC_ROW     			; Advance to next source row
 
-; Roll the next 2 bitfields up
-	ldx     #$02    			; A7C4 A2 02                    ..
-@LOOP:	inc     Y1LO     			; 2 -> 3 A7C6 E6 EE                    ..
-	inc     X1LO     			; 3 -> 4 A7C8 E6 EC                    ..
-	ldy     X1LO     			; A7CA A4 EC                    ..
-; Quit if we've processed 16 
-	cpy     #$10    			; A7CC C0 10                    ..
-	bcs     LA7DD   			; Quit loop A7CE B0 0D                    ..
-; Otherwise...
-	lda     (YOUT),Y			; Read from X1LO
-	ldy     Y1LO     			; A7D2 A4 EE                    ..
-	sta     (YOUT),Y			; Write to Y1LO
-	dex             			; A7D6 CA                       .
-	bpl     @LOOP				; Next X A7D7 10 ED                    ..
+	ldy     SRC_ROW     			; 
+	cpy     #16				; Have we processed 16 rows?
+	bcs     :+				; Yes? Quit -->
 
-	inc     X1LO     			; Next X1LO A7D9 E6 EC                    ..
-	bne     LA7B4   			; --> A7DB D0 D7                    ..
+	lda     (BIT_8x16),Y			; Get data from source row
+	ldy     TAR_ROW     			; 
+	sta     (BIT_8x16),Y			; Save to target row
 
-;-------------------------------------------------------------------------------
-; Advance pointer to next location for 8x12 bitmap
-;-------------------------------------------------------------------------------
-LA7DD:  lda     #$0C    			; A7DD A9 0C                    ..
-	clc             			; A7DF 18                       .
-	adc     YOUT				; 
-	sta     YOUT
-	bcc     :+				; A7E4 90 02                    ..
-	inc     YOUT+1
+	dex             			; 
+	bpl     @LOOPX				; Next X
+
+	inc     SRC_ROW     			; Advance source row even further
+	bne     @LOOPY   			; Process next pair of rows -->
 
 ;-------------------------------------------------------------------------------
-; Advance pointer to next location for 5x6 bitmap
+; Advance pointer to next address for 8x12 bitmap
+;-------------------------------------------------------------------------------
+:	lda     #12				;
+	clc             			;
+	adc     BIT_8x16			; Increment by 12 bytes
+	sta     BIT_8x16			;
+	bcc     :+				; 
+	inc     BIT_8x16+1			;
 
 ;-------------------------------------------------------------------------------
-:	clc             			; A7E8 18                       .
-	lda     SUM
-	adc     #$06    			; A7EB 69 06                    i.
-	sta     SUM
-	bcc	:+
-	inc     SUM+1
+; Advance pointer to next address for 5x6 bitmap
+;-------------------------------------------------------------------------------
+:	clc             			; 
+	lda     BIT_5x6				;
+	adc     #6				; Increment by 6 bytes
+	sta     BIT_5x6				; 
+	bcc	:+				;
+	inc     BIT_5x6+1			;
 
 ;-------------------------------------------------------------------------------
 ; Clear working variables and RTS
 ;-------------------------------------------------------------------------------
-:	jmp     LA673   			; A7F3 4C 73 A6                 Ls.
+:	jmp     LA673   			; Quit
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -3249,9 +3239,9 @@ LA881:  rts             			; A881 60                       `
 ;*                      Return height for current font                         *
 ;*                                                                             *
 ;*******************************************************************************
-; if CA like x1xx xxxx
-; then A = 12 and D8 = 24
-; else A = 6  and D8 = 12
+; if $CA like x1xx xxxx
+; then A = 12 and $D8 = 24
+; else A = 6  and $D8 = 12
 get_font_hgt2:					; A882
 	lda     #$06    			; 
 	ldy     #$0C    			; Fall into get_font_hgt
@@ -7609,26 +7599,45 @@ tab_ch_mem_DL1:					; B9AE
 	.byte	>ch_mem_m0_DL1			; (M0) Standard ASCII font HI
 	.byte	>ch_mem_m1_DL1			; (M1) Extended PLATO font HI
 
-LB9B6:	.byte	$08,$10,$10,$20,$20,$40,$80,$80
+; Mask table for 5x6 character set bitmap
+LB9B6:	.byte	%00001000
+	.byte	%00010000
+	.byte	%00010000
+	.byte	%00100000
+	.byte	%00100000
+	.byte	%01000000
+	.byte	%10000000
+	.byte	%10000000
 
-; Table - Given 16-pixel tall character bitmap, which
-; pixels survive into 6-pixel tall character???? TODO
-LB9BE:	.byte	$00,$00,$00,$01,$01,$01,$02,$02
+; Table - Return value 0..5 given index 0..15
+; Used during scaling of 8x16 bitmap to 5x6 (see load_memory routine)
+LB9BE:	
+TAB_0_5:
+	.byte	$00,$00,$00,$01,$01,$01,$02,$02
 	.byte	$03,$03,$04,$04,$04,$05,$05,$05
 
-; Table - Given 8-pixel wide character bitmap, which 
-; pixels survive into 5-pixel wide character???? TODO
-LB9CE:	.byte	$00,$00,$01,$02,$02,$03,$03,$04
+; Table - Return value 0..4 given index 0..7
+; Used during scaling of 8x16 bitmap to 5x6 (see load_memory routine)
+LB9CE:	
+TAB_0_4:
+	.byte	$00,$00,$01,$02,$02,$03,$03,$04
 
-; Table - 5 x 6 bitmap = 30 pixels ??? TODO
-LB9D6:  .byte   $03,$02,$03,$03,$02		;  0..4
-	.byte	$03,$02,$03,$03,$02		;  5..9
-	.byte	$02,$01,$02,$02,$01		; 10..14
-	.byte   $02,$01,$02,$02,$01		; 15..19
-	.byte   $03,$02,$03,$03,$02		; 20..24
-	.byte	$03,$02,$03,$03,$02		; 25..30
+; Table - Thresholds for 5x6 pixel groupings when scaling an 8x16 bitmap to 5x6 
+; (see load_memory routine)
+LB9D6:  
+PIX_THRESH:
+	.byte   $03,$02,$03,$03,$02
+	.byte	$03,$02,$03,$03,$02
+	.byte	$02,$01,$02,$02,$01
+	.byte   $02,$01,$02,$02,$01
+	.byte   $03,$02,$03,$03,$02
+	.byte	$03,$02,$03,$03,$02
 
-LB9F4:  .byte   0,5,10,15,20,25
+; Table - Return value 0..25 in multiples of 5 given index 0..5
+; Used during scaling of 8x16 bitmap to 5x6 (see load_memory routine)
+LB9F4:  
+TAB_0_25:
+	.byte   0,5,10,15,20,25
 
 LB9FA:  .byte   $00,$00,$01,$01,$01,$01,$01,$02
 
