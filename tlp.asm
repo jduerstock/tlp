@@ -237,7 +237,7 @@ PLOT_MODE	:= $00B0			; char mode $00->mode rewrite,$40->inverse video screen mod
 CURRENT_BAUD	:= $00B1			; Current 850 baud rate: $FF->300 $00->1200
 byte_B2		:= $00B2			; Used during init
 IS_MPP		:= $00B2			; If Microbits 300 then 1 else 0
-byte_B3		:= $00B3			; 7 = print_char2
+byte_B3		:= $00B3			; 7 = plot_alpha
 byte_B4		:= $00B4			; $00->ESC {R,S,T,V} $01->ESC 2 (Load Coordinate) $02->ESC Q (SSF) $03->ESC Y (Load Echo commnd)  $04->ESC W (Load Memory Address command)  $05->ESC U (select mode 6) 
 byte_B5		:= $00B5			; 
 DATA_MODE	:= $00B5			; $80->graphic (point, line, or block) $01->text
@@ -279,9 +279,9 @@ XDHI		:= $00D5
 YDLO		:= $00D6			; TODO Delta Y when calculating slope?
 YDHI		:= $00D7
 CURR_WORD	:= $00D8			; Index of current 16 bit word while scaling fonts in load_memory
-VAR		:= $00D8			; temporaries
+VAR		:= $00D8			; working variable
 PIX_CNT		:= $00D9			; Number of pixels set in 8x16 programmable character bitmap
-TMP		:= $00D9
+TMP		:= $00D9			; working variable
 byte_DA		:= $00DA
 PLATO_WORD	:= $00DB			; 16-bit PLATO word (See s0ascers 3.1.2.4.2)
 off_DD		:= $00DD			; Temp variable
@@ -594,7 +594,7 @@ draw:						; A0A3
 	pha             			; 
 	rts             			; Goto vector
 
-:	ldx     byte_B3 			; Get jump table offset (7 = print_char2)
+:	ldx     byte_B3 			; Get jump table offset (7 = plot_alpha)
 	lda     tab_data_mode_HI,X 		; Get MSB of subroutine
 	beq     :+				; RTS to main loop if subroutine is undefined
 
@@ -696,7 +696,7 @@ proc_control_ch:				; A0F3
 ;** Lookup address for control char's subroutine from table ********************
 	clc             			; 
 	lda     #<(esc_seq_ff-1) 		; Lookup LSB for subroutine using
-	adc     JUMTAB,x 			; ...control code as offset into table.
+	adc     JUMTAB,X 			; ...control code as offset into table.
 	tay             			; Stash into Y
 
 	lda     #$00    			; 
@@ -1190,20 +1190,20 @@ display_title:					; A33D
 	sta     CURSOR1_X     			; Save X coordinate for full-screen display
 	sta     CURSOR2_X     			; Save X coordinate for zoomed display
 	ldy     #$1C    			; String length - 1
-	lda     #<LB8C2				; "WELCOME..."
-	ldx     #>LB8C2
-	jsr     print_string
-	jsr     proc_lf   			; A352 20 C2 A3                  ..
+	lda     #<LB8C2				; Address to "WELCOME..."
+	ldx     #>LB8C2				; 
+	jsr     print_string			; 
+	jsr     proc_lf   			; Print linefeed
 
 ;** (3) Print "COPYRIGHT 1984 ATARI" *******************************************
 	lda     #$67    			; Set X coordinate for text
 	sta     CURSOR1_X     			; Save X coordinate for full-screen display
 	sta     CURSOR2_X     			; Save X coordinate for zoomed display
 	ldy     #$13    			; String length - 1
-	lda     #<LB8AE				; "COPYRIGHT..."
-	ldx     #>LB8AE
-	jsr     print_string
-	jmp     proc_lf   			; A364 4C C2 A3                 L..
+	lda     #<LB8AE				; Address to "COPYRIGHT..."
+	ldx     #>LB8AE				;
+	jsr     print_string			;
+	jmp     proc_lf   			; Print linefeed
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -1286,8 +1286,7 @@ sel_data_mode:					; A36A
 ;** Clear TODO *****************************************************************
 	ldx     #$00    			; 
 	stx     $DA     			; Clear $DA
-
-	rts             			; A379 60                       `
+	rts             			; 
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -1531,7 +1530,7 @@ set_margin:					; A38E
 ;*                                                                             *
 ;*                                  proc_ht                                    *
 ;*                                                                             *
-;                  Received TAB character from PLATO host                      *
+;                       Tab. Moves one character width.                        *
 ;*                                                                             *
 ;*******************************************************************************
 
@@ -1545,13 +1544,13 @@ set_margin:					; A38E
 ; axis.  This function is like plotting an empty character.
 ;-------------------------------------------------------------------------------
 proc_ht:					; A3AF
-	jmp     LABD3   			; A3AF 4C D3 AB                 L..
+	jmp     advance_cursor 			; 
 
 ;*******************************************************************************
 ;*                                                                             *
 ;*                                  proc_cr                                    *
 ;*                                                                             *
-;*             Received Carriage Return character from PLATO host              *
+;*             Carriage Return. Set (X,Y) to margin of next line.              *
 ;*                                                                             *
 ;*******************************************************************************
 
@@ -1582,9 +1581,9 @@ proc_cr:					; A3B2
 ;*                                                                             *
 ;*                                  proc_lf                                    *
 ;*                                                                             *
-;*                Received Line Feed character from PLATO server               *
+;*                Linefeed. Moves one character height down.                   *
 ;*                                                                             *
-; *******************************************************************************
+;*******************************************************************************
 
 ; DESCRIPTION:
 ;-------------------------------------------------------------------------------
@@ -1598,14 +1597,14 @@ proc_cr:					; A3B2
 ; right one character height.
 ;-------------------------------------------------------------------------------
 proc_lf:					; A3C2
-	jsr     get_font_hgt2			; A3C2 20 82 A8                  ..
-	jmp     move_cur_dn   			; A3C5 4C 57 A8                 LW.
+	jsr     get_font_hgt2			; Get distance to move cursor
+	jmp     move_cur_dn   			; Move cursor and RTS
 
 ;*******************************************************************************
 ;*                                                                             *
 ;*                                  proc_ff                                    *
 ;*                                                                             *
-;*               Received Form Feed character from PLATO host.                 *
+;*               Form feed. Set (X,Y) position to top of page.                 *
 ;*                                                                             *
 ;*******************************************************************************
 
@@ -1658,7 +1657,7 @@ gen_rts:					; A3DD
 ;*                                                                             *
 ;*                                  proc_bs                                    *
 ;*                                                                             *
-;*                      Move one character width back.                         *
+;*                 Backspace. Move one character width back.                   *
 ;*                                                                             *
 ;*******************************************************************************
 
@@ -1666,7 +1665,7 @@ gen_rts:					; A3DD
 ; This subroutine is called when a control code $08 (BS) is received.
 
 proc_bs:					; A3DE
-	jsr     get_font_width
+	jsr     get_font_width		
 
 ;** Decrement full-screen cursor X by current font's character width ***********
 	sta     TMP	 			; A is 5 or 9 depending on character size
@@ -1702,12 +1701,12 @@ proc_bs:					; A3DE
 ;*                                                                             *
 ;*                                  proc_vt                                    *
 ;*                                                                             *
-;*                       Move one character height up.                         *
+;*                Vertical tab.  Moves one character height up.                *
 ;*                                                                             *
 ;*******************************************************************************
 proc_vt:
-	jsr     get_font_hgt2			; A40A 20 82 A8                  ..
-	jmp     move_cur_up   			; A40D 4C 2D A8                 L-.
+	jsr     get_font_hgt2			; Get distance to move cursor
+	jmp     move_cur_up   			; Move cursor and RTS
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -1859,7 +1858,7 @@ set_load_mem:					; A444
 ;*                                                                             *
 ;*                                draw_block                                   *
 ;*                                                                             *
-;*           PLATO host sent EM - Select block erase mode (mode 4)             *
+;*         PLATO host sent EM - Select block write/erase mode (mode 4)         *
 ;*                                                                             *
 ;*******************************************************************************
 
@@ -1869,18 +1868,23 @@ draw_block:					; A448
 	ldx     $DA     			; A44B A6 DA                    ..
 	bne     :++				; A44D D0 10                    ..
 
-
-	ldx     #$03    			; A44F A2 03                    ..
+;-------------------------------------------------------------------------------
+; Here if $DA = 0
+;-------------------------------------------------------------------------------
+	ldx     #$03    			; Iterate 4 times A44F A2 03                    ..
 :	lda     CURSOR1_X,x   			; save 1st X-Y pair
 	sta     CURSOR1_X_OLD,x   		; A453 95 A8                    ..
 	lda     CURSOR2_X,x   			; A455 B5 9C                    ..
 	sta     TCRSX,x   			; A457 95 F0                    ..
-	dex             			; A459 CA                       .
-	bpl     :-				; A45A 10 F5                    ..
+	dex             			; 
+	bpl     :-				; Next X
 
 	stx     $DA     			; A45C 86 DA                    ..
 	rts             			; A45E 60                       `
 
+;-------------------------------------------------------------------------------
+; Here if $DA <> 0
+;-------------------------------------------------------------------------------
 :	lda     IS_16K     			; A45F A5 BA                    ..
 	sta     COMPR     			; Compressed display (full screen)?
 	bne     :+				; Yes? -->
@@ -2933,7 +2937,7 @@ load_memory:					; A6F6
 
 ;-------------------------------------------------------------------------------
 ; Algorithm B: Scale 8x16 bitmap to 5x6.
-; Used for sparsly or heavily populated bitmaps. (pixels < 54 or pixels >= 85) 
+; Used for sparesly or heavily populated bitmaps. (pixels < 54 or pixels >= 85) 
 ; LA771:  
 ;-------------------------------------------------------------------------------
 ALG_B:	stx     TMP	 			; Let TMP = $00->(PIX_CNT < 54), $FF->(PIX_CNT >= 85)
@@ -2950,7 +2954,7 @@ ALG_B:	stx     TMP	 			; Let TMP = $00->(PIX_CNT < 54), $FF->(PIX_CNT >= 85)
 	lda     #$00    			; A will hold bitfield. Start with clean slate.
 @LOOPX:	rol     VAR     			; Shift leftmost pixel into Carry.
 	bcc     :+				; Is pixel set? No? -->
-	ora     LB9B6,x 			; Set pixel using lookup table
+	ora     LB9B6,X 			; Set pixel using lookup table
 :  	dex             			; 
 	bpl     @LOOPX				; Next X
 
@@ -3239,12 +3243,21 @@ LA881:  rts             			; A881 60                       `
 ;*                      Return height for current font                         *
 ;*                                                                             *
 ;*******************************************************************************
-; if $CA like x1xx xxxx
-; then A = 12 and $D8 = 24
-; else A = 6  and $D8 = 12
+
+; DESCRIPTION
+; This subroutine returns the number of scan lines needed for a character depending
+; on the CURRENT_SIZE setting. CURRENT_SIZE is 0 for normal text and $FF for 
+; double or bold text.
+;
+; Returns with A containing vertical spacing for the full screen display and
+; VAR containgin the vertical spacing for the zoomed display.
+;
+; If CURRENT_SIZE is normal return A = 6 (full screen) and VAR = 12 (zoomed)
+; If CURRENT_SIZE is double return A = 12 (full screen) and VAR = 16 (zoomed)
+
 get_font_hgt2:					; A882
-	lda     #$06    			; 
-	ldy     #$0C    			; Fall into get_font_hgt
+	lda     #$06    			; 6 pixels for full display
+	ldy     #$0C    			; 12 pixels for zoomed display
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -3254,14 +3267,13 @@ get_font_hgt2:					; A882
 ;*                                                                             *
 ;*******************************************************************************
 get_font_hgt:					; A886
-;** If bit 6 of $CA is clear then let leave A and VAR as-is ********************
-	bit     CURRENT_SIZE			; 
+	bit     CURRENT_SIZE			; $00->Normal $FF->Double/bold
 	sty     VAR     			; 
-	bvs     :+				; Bold? -->
-	rts             			; it isn't. leave now.
-;** Otherwise double A and VAR *************************************************
-:	asl     a       			; Double the height
-	bvs     :+				; and RTS
+	bvs     :+				; Double/bold? -->
+	rts             			; Normal? Quit
+
+:	asl     A       			; Double the height for full screen
+	bvs     :+				; Double/bold? --> 
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -3270,22 +3282,30 @@ get_font_hgt:					; A886
 ;*                       Return width for current font                         *
 ;*                                                                             *
 ;*******************************************************************************
-; 
-; if CA like x1xx xxxx 
-; then A = 9 and VAR = 16
-; else A = 5 and VAR = 8
+ 
+; DESCRIPTION
+; This subroutine returns the number of pixels needed for a character depending
+; on the CURRENT_SIZE setting. CURRENT_SIZE is 0 for normal text and $FF for 
+; double or bold text.
 ;
-sub_a890:  
+; If CURRENT_SIZE is normal return A = 5 (full screen) and VAR = 8 (zoomed)
+; If CURRENT_SIZE is double return A = 9 (full screen) and VAR = 16 (zoomed)
+
 get_font_width:					; A890
-;** If bit 6 of $CA is clear then let A = 5 and VAR = 8 ***********************
-	bit     CURRENT_SIZE 			; Test bits 7,6 in CURRENT_SIZE
-	lda     #$05    			; Let A = 5 pixels wide
-	ldy     #$08    			; 
-	sty     VAR     			; Let VAR = #$08
-	bvc     :++				; 
-;** Otherwise let A = 8 and VAR = 16 ******************************************
-	lda     #$09    			; Let A = 9 pixels wide
-:	asl     VAR     			; Let VAR = #$10
+	bit     CURRENT_SIZE 			; Overflow set if double/bold
+;-------------------------------------------------------------------------------
+; Normal font
+;-------------------------------------------------------------------------------
+	lda     #$05    			; Spacing for full screen display
+	ldy     #$08    			; Spacing for zoomed display
+	sty     VAR				; 
+	bvc     :++				; Normal text? skip ahead -->
+
+;-------------------------------------------------------------------------------
+; Doubled/bold font
+;-------------------------------------------------------------------------------
+	lda     #$09    			; Spacing for full screen display
+:	asl     VAR				; Spacing for zoomed display
 :	rts             			; 
 
 ;*******************************************************************************
@@ -3323,16 +3343,50 @@ print_string:					; A89F
 ;*******************************************************************************
 
 ; DESCRIPTION
+; This subroutine reads the (X,Y) coordinate stream from PLATO. For efficiency
+; sake, PLATO will not re-send redundant coordinates for if, say, the X 
+; coordinate is unchanged from a previous transmission. PLATO uses bits 7,6
+; of the coordinate data as a clever mechanism to denote what type of data
+; (X or Y) is arriving.
+;
+; After the raw PLATO (X,Y) coordinates are delivered, which each have a range
+; of 0 to 511, the (X,Y) coordinates must be scaled for the 512x192 zoomed
+; display and the 320x192 full screen display.
+;
+;-------------------------------------------------------------------------------
+; (excerpt from 3.1.2.4.3)  Coordinates
+;-------------------------------------------------------------------------------
+;
+; Coordinates are used to specify positions on the screen. They can be from one
+; to four bytes in length.  The point, line and block modes, as well as the load
+; coordinate command, accept data in coordinate format.
+;
+; The X and Y coordinates are converted to a sequence of four ASCII characters 
+; according to the following table:
+;
+;                bit 7   bit 6   bits 5 through 1
+;       high Y       0       1       5 MSB of Y coordinate
+;       low Y        1       1       5 LSB of Y coordinate
+;       high X       0       1       5 MSB of X coordinate
+;       low X        1       0       5 LSB of X coordinate
+;
+; (MSB = Most significant bits.  LSB = least significant bits. Note that the 
+; coordinate is actually 10 bits in width.  The top bit is always zero, always 
+; giving screen positions in ;  the range 0 to 511.)
+;-------------------------------------------------------------------------------
 GLOOP:						; A8B3
 get_tek_vects:					; A8B3
-	jsr     fetch_serin_ch			; Get character
+	jsr     fetch_serin_ch			; Returns with A
 
-	cmp     #$40    			; decode cord
-	bcs     parse_vec_coord 		; -->a low X or Y byte
-	jsr     LA8DC   			; must be hi Y
+	cmp     #$40    			; Test bits 7 and 6
+	bcs     LOWT				; -->a low X or Y byte
+
+; Here if character is MSB of Y coordinate
+; Return with PLATO_WORD+1,PLATO_WORD containing 000000XX XXX00000
+	jsr     HIRO				; Parse MSB of Y
 
 	lda     CORDY     			; hi X processed behind low Y
-	and     #$1F    			; 
+	and     #$1F    			; Strip off the highest 3 bits
 
 	ora     PLATO_WORD     			; A8C1 05 DB                    ..
 	sta     CORDY     			; A8C3 85 BD                    ..
@@ -3340,130 +3394,143 @@ get_tek_vects:					; A8B3
 	lda     PLATO_WORD+1   			; A8C5 A5 DC                    ..
 	sta     CORDY+1     			; A8C7 85 BE                    ..
 
-	bcc     get_tek_vects			; Get next coordinate
+	bcc     get_tek_vects			; Do next coordinate
 
-LA8CB:  
-HIX:						; hi X into CORDX pr
-	jsr     LA8DC   			; HIRO A8CB 20 DC A8                  ..
+;-------------------------------------------------------------------------------
+; hi X into CORDX pr (pair? TODO)
+;-------------------------------------------------------------------------------
+HIX:						; A8CB
+	jsr     HIRO				; HIRO A8CB 20 DC A8                  ..
 	lda     CORDX     			; A8CE A5 BB                    ..
-	and     #$1F    			; A8D0 29 1F                    ).
-	ora     PLATO_WORD     			; A8D2 05 DB                    ..
-	sta     CORDX    			; A8D4 85 BB                    ..
+	and     #$1F    			; Strip off the highest 3 bits
+	ora     PLATO_WORD     			; Merge
+	sta     CORDX    			; Save 
 	lda     PLATO_WORD+1   			; A8D6 A5 DC                    ..
 	sta     CORDX+1     			; A8D8 85 BC                    ..
-	bcc     get_tek_vects			; GLOOP
+	bcc     get_tek_vects			; Do next coordinate
 
-;*******************************************************************************
-;*                                                                             *
-;*                               ?????????????                                 *
-;*                                                                             *
-;*                           ?????????????????????                             *
-;*                                                                             *
-;*******************************************************************************
-; DESCRIPTION
-;
-LA8DC:  
-HIRO:
+; shift MSB bits for hi Y or hi X
+HIRO:						; A8DC
 	and     #$1F    			; Save 5-bits of 1st byte
 	sta     PLATO_WORD+1   			; 
 
-;** Shift bits 2..0 from PLATO_WORD+1 to bits 7..5 of A ************************
+; Shift bits 2..0 from PLATO_WORD+1 to bits 7..5 of A
 	lda     #$00    			; Clear
-	lsr     PLATO_WORD+1   			; Shift bit to A using C
-	ror     A       			; A8E4 6A                       j
-	lsr     PLATO_WORD+1   			; A8E5 46 DC                    F.
-	ror     A       			; A8E7 6A                       j
-	lsr     PLATO_WORD+1   			; A8E8 46 DC                    F.
-	ror     A       			; A8EA 6A                       j
+	lsr     PLATO_WORD+1   			; Shift bits to A via Carry
+	ror     A       			;
+	lsr     PLATO_WORD+1   			;
+	ror     A       			;
+	lsr     PLATO_WORD+1   			;
+	ror     A       			;
 
-;** Save 
-	sta     PLATO_WORD     			; A8EB 85 DB                    ..
-	rts             			; A8ED 60                       `
-
-;*******************************************************************************
-;*                                                                             *
-;*                              parse_vec_coord                                *
-;*                                                                             *
-;*                  Parse Tektronix-format vector coordinates                  *
-;*                                                                             *
-;*******************************************************************************
-; DESCRIPTION
-;
-; A8EE
-LOWY:
-:	and     #$1F    			; low Y byte
-	sta     PLATO_WORD     			; A8F0 85 DB                    ..
-
-	lda     CORDY     			; A8F2 A5 BD                    ..
-	and     #$E0    			; A8F4 29 E0                    ).
-	ora     PLATO_WORD     			; A8F6 05 DB                    ..
-	sta     CORDY    			; A8F8 85 BD                    ..
-
-	jsr     fetch_serin_ch			; get next byte
-	cmp     #$40    			; a hi X byte?
-	bcc     HIX				; -->a not low X nor Y byte
-LOWT:
-parse_vec_coord:				; A901
-	cmp     #$60    			; A901 C9 60                    .`
-	bcs     :-				; --> low Y byte
-	and     #$1F    			; low X byte
+; Return with PLATO_WORD+1,PLATO_WORD containing 000000XX XXX00000
 	sta     PLATO_WORD     			; 
+	rts             			;
 
-	lda     CORDX     			; 
-	and     #$E0    			; 
-	ora     PLATO_WORD     			; 
-	sta     CORDX     			; low X ends cord sequence
+;-------------------------------------------------------------------------------
+; Process LSB of Y coordinate
+;-------------------------------------------------------------------------------
+LOWY:
+	and     #$1F    			; Strip off 3 highest bits
+	sta     PLATO_WORD     			; Stash
 
-;** Update the working display cursor ******************************************
-	ldx     #$03    			; 
-:	lda     CORDX,x   			; 
-	sta     CURSOR2_X,x   			; A915 95 9C                    ..
-	dex             			; A917 CA                       .
-	bpl     :-				; A918 10 F9                    ..
+	lda     CORDY     			; Get MSB of Y retrieved earlier
+	and     #$E0    			; Strip off lowest 5 bits
+	ora     PLATO_WORD     			; Merge MSB and LSB of Y
+	sta     CORDY    			; Save Y coordinate
 
-;** Zoomed display *************************************************************
-	lda     CURSOR2_X+1
-	lsr     A       			; shift hibyte into carry
-	lda     CURSOR2_X
-	sta     VAR     			; 
-	ror     A       			; 9th bit into A
-	sta     TMP	 			; save 1/2 in TMP
-	lsr     A       			; 
-	lsr     A       			; div by 8
-	bcs     :+				; 
-	lsr     VAR     			; A928 46 D8                    F.
-:	adc     TMP	 			; (1/2)+(1/8) CURSX
-	sta     CURSOR1_X     			; A92C 85 A4                    ..
+	jsr     fetch_serin_ch			; Get next byte
+	cmp     #$40    			; Is it an MSB of X?
+	bcc     HIX				; MSB of X -->
+						; must be LSB of X or Y. Fall through.
 
-	ldx     #$00    			; A92E A2 00                    ..
-	stx     CURSOR1_X+1    			; A930 86 A5                    ..
-	bcc     :+				; A932 90 02                    ..
-	inc     CURSOR1_X+1    			; A934 E6 A5                    ..
-:	lda     CURSOR2_Y			; A936 A5 9E                    ..
-	and     #$07    			; A938 29 07                    ).
-	tax             			; A93A AA                       .
-	lsr     CURSOR2_Y+1			; A93B 46 9F                    F.
-	lda     CURSOR2_Y			; A93D A5 9E                    ..
-	ror     A       			; A93F 6A                       j
-	sta     VAR     			; A940 85 D8                    ..
-	lsr     A       			; A942 4A                       J
-	sta     TMP	 			; A943 85 D9                    ..
-	lsr     A       			; A945 4A                       J
-	clc             			; A946 18                       .
-	adc     LB9FA,x 			; A947 7D FA B9                 }..
-	adc     TMP	 			; A94A 65 D9                    e.
-	cmp     #$C0    			; A94C C9 C0                    ..
-	bcc     :+				; A94E 90 02                    ..
-	lda     #$BF    			; A950 A9 BF                    ..
-:	sta     CURSOR1_Y			; A952 85 A6                    ..
-	lda     CURSOR2_Y			; A954 A5 9E                    ..
-	and     #$03    			; A956 29 03                    ).
-	cmp     #$01    			; A958 C9 01                    ..
-	lda     VAR     			; A95A A5 D8                    ..
-	adc     TMP	 			; A95C 65 D9                    e.
-	sta     CURSOR2_Y			; A95E 85 9E                    ..
-	rol     CURSOR2_Y+1			; A960 26 9F                    &.
-:	rts             			; A962 60                       `
+;-------------------------------------------------------------------------------
+; Entry point for LSB of X or Y coordinate
+;-------------------------------------------------------------------------------
+LOWT:	cmp     #$60    			; Is it an LSB of Y?
+	bcs     LOWY				; --> LSB of Y
+						; must be LSB of X. Fall through.
+
+;-------------------------------------------------------------------------------
+; Process LSB of X coordinate
+;-------------------------------------------------------------------------------
+	and     #$1F    			; Strip off 3 highest bits
+	sta     PLATO_WORD     			; Stash
+
+	lda     CORDX     			; Get MSB of X retrieved earlier
+	and     #$E0    			; Strip off lowest 5 bits
+	ora     PLATO_WORD     			; Merge MSB and LSB of X
+	sta     CORDX     			; Save X coordinate. End coordinate sequence.
+
+;-------------------------------------------------------------------------------
+; Coordinate sequence complete. Save to the raw PLATO (X,Y) coordinates
+;-------------------------------------------------------------------------------
+	ldx     #$03    			; Iterate over the 4 bytes of (X,Y)
+:	lda     CORDX,X   			; Get a coordinate's byte
+	sta     CURSOR2_X,X   			; Save to cursor's byte
+	dex             			; 
+	bpl     :-				; Next X
+
+;-------------------------------------------------------------------------------
+; Scale LSB of X coordinate for the full screen display
+; X coordinate multiplied by by 5/8 (or X/2 + X/8) to get from 00..511 to 00..319
+; Consider CURSOR2_X = 40.   40/2 + 40/8 = 20 + 5 = 25 = CURSOR1_X
+;-------------------------------------------------------------------------------
+	lda     CURSOR2_X+1			; Start with MSB of X coordinate
+	lsr     A       			; Shift 9th bit into Carry
+	lda     CURSOR2_X			; 
+	sta     VAR     			; Keep orig for fine coordinate TODO
+	ror     A       			; X/2 - pull 9th bit from Carry
+	sta     TMP	 			; Keep X/2 for later 
+	lsr     A       			; X/4
+	lsr     A       			; X/8
+	bcs     :+				; Any bit in Carry? Yes?-->
+	lsr     VAR     			; 
+:	adc     TMP	 			; (X/2)+(X/8) CURSX
+	sta     CURSOR1_X     			; Save LSB for full screen X
+
+;-------------------------------------------------------------------------------
+; Scale MSB of X coordinate for the full screen display
+;-------------------------------------------------------------------------------
+	ldx     #$00    			; A92E 
+	stx     CURSOR1_X+1    			; Initialize MSB
+	bcc     :+				; --> No overflow from (X/2)+(X/8)
+	inc     CURSOR1_X+1    			; Overflow. 255 <= Cursor1_X < 311
+
+;-------------------------------------------------------------------------------
+; Scale MSB of Y coordinate for full screen display 0..511 -> 0..191 (3/8) 
+;-------------------------------------------------------------------------------
+:	lda     CURSOR2_Y			; Get the LSB of PLATO Y coordinate
+	and     #$07    			; Mod 8 for table lookup later
+	tax             			; Save lookup table index
+
+	lsr     CURSOR2_Y+1			; Shift 9th bit into Carry
+	lda     CURSOR2_Y			; 
+	ror     A       			; Y/2 using Carry
+	sta     VAR     			; Keep Y/2 
+	lsr     A       			; Y/4
+	sta     TMP	 			; Keep Y/4
+	lsr     A       			; Y/8
+
+	clc             			; 
+	adc     LB9FA,X 			; Add lookup value (0..2)
+	adc     TMP	 			; to Y/4
+	cmp     #192    			; Y > 192?
+	bcc     :+				; No. Skip -->
+	lda     #191    			; Force Y = 191
+:	sta     CURSOR1_Y			; Store Y coord (191 max so no MSB)
+
+;-------------------------------------------------------------------------------
+; Scale MSB and LSB of Y coordinate for zoomed display 0..511 -> 0..311 (5/8)
+;-------------------------------------------------------------------------------
+	lda     CURSOR2_Y			; Get Y
+	and     #$03    			; Mod 4 on Y
+	cmp     #$01    			; Set carry for mod 4 in {2,3}
+	lda     VAR     			; Get Y/2
+	adc     TMP	 			; Add Y/4 (with carry)
+	sta     CURSOR2_Y			; Save LSB of Y
+	rol     CURSOR2_Y+1			; Save (MSB of Y) / 2
+:	rts             			; 
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -4108,16 +4175,17 @@ send_to_plato2:					; AB54
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                print_char2                                  *
+;*                                plot_alpha                                   *
 ;*                                                                             *
 ;*                PLATO host sent US - Selects alpha mode (mode 3)             *
 ;*                                                                             *
 ;*******************************************************************************
+
 ; DESCRIPTION
 ; Same as print_char except char is what was received from PLATO
-print_char2:					; AB5A
 plot_alpha:					; AB5A
-	lda     SERIN_BUF   			; Char from PLATO
+	lda     SERIN_BUF   			; Get char from PLATO 
+						; and fall into print_char
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -4132,26 +4200,33 @@ plot_alpha:					; AB5A
 print_char:					; AB5D
 	sta     PLATO_CHAR     			; Character to be displayed
 
-	sec             			; Test to see if non-printing character 
-	sbc     #$20    			; CTRL codes?
-	bcs     :+				; >=32, a good char-->
-	rts             			; bad, CTRL char, exit
-
+;-------------------------------------------------------------------------------
+; Test whether printing or non-printing character
+;-------------------------------------------------------------------------------
+	sec             			; 
+	sbc     #$20    			; CTRL code? $20 is <space>
+	bcs     :+				; >=$20, a printable char-->
+	rts             			; non-printable char, exit
 :	pha             			; Stash character-#$20
+
 	ldx     IS_16K     			; 1->Memory-constrained system
 	stx     COMPR     			; Compressed display
 	bne     :+				; Full screen only? -->
 
-;** Zoomed display *************************************************************
-	stx     CNUM+1     			; Let $E6 = 0 TODO
-	stx     VAR     			; Let VAR = 0 TODO
-	jsr	OUTPT
+;-------------------------------------------------------------------------------
+; Zoomed display 
+;-------------------------------------------------------------------------------
+	stx     CNUM+1     			; If here, X is 0
+	stx     VAR     			; 
+	jsr	OUTPT				; 
 
-	dec     COMPR     			; AB73 C6 C9                    ..
-	ldx     COMPR     			; AB75 A6 C9                    ..
+	dec     COMPR     			; let COMP = $FF
+	ldx     COMPR     			; let X = $FF
 
-;** Full screen display ********************************************************
-:	pla             			; AB77 68                       h
+;-------------------------------------------------------------------------------
+; Full screen display 
+;-------------------------------------------------------------------------------
+:	pla             			; Retrieve character-#$20
 	inx             			; After this op, 2->Full-screen 1->Zoomed
 	stx     CNUM+1     			; 
 
@@ -4164,7 +4239,7 @@ print_char:					; AB5D
 	jsr     :+				; 
 	ldx     #$FF    			; Restore original value for bold,
 	stx     CURRENT_SIZE   			; ...modifed in previous pass.
-	bne     LABD3   			; Always -->
+	bne     advance_cursor   		; Always -->
 
 : 	inc     CURSOR1_X     			; Advance cursor LO
 	bne     :+				; if no roll-over, skip -->
@@ -4179,7 +4254,7 @@ print_char:					; AB5D
 ;-------------------------------------------------------------------------------
 :  	jsr     plot_char_5x6  			; AB94 20 05 AD                  ..
 	bit     PLOT_MODE			; $C0->mode erase
-	bvs     LABD3   			; erase + inverse mode? -->
+	bvs     advance_cursor   		; erase + inverse mode? -->
 
 ;** Get the byte offset from start of the scan line for 16-bit CURSOR2_X *******
 	jsr     div_cx2_by_8			; Offset saved to SUMLO
@@ -4219,51 +4294,64 @@ print_char:					; AB5D
 
 	lda     (YOUT),y			; 
 	cmp     #$20    			; ABCB C9 20                    . 
-	bne     LABD3   			; ABCD D0 04                    ..
+	bne     advance_cursor   		; ABCD D0 04                    ..
 	lda     #$5F    			; ABCF A9 5F                    ._
 
 :	sta     (YOUT),y
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                    ?????                                    *
+;*                              advance_cursor                                 *
 ;*                                                                             *
-;*                           ??????????????????????                            *
+;*               Move the cursor right by 1 character width                    *
 ;*                                                                             *
 ;*******************************************************************************
 
 ; DESCRIPTION
+; This subroutine moves the cursor right by the width of one character. The
+; width is determined by CURRENT_SIZE (normal or double/bold). If the cursor
+; exceeds the right boundary of the display (DL1->64 chars, DL2->512 pixels)
+; then the cursor X position is reset.
+;
 ; Parameters
-; A
-LABD3:  jsr     get_font_width
-	ldy     VAR     			; ABD6 A4 D8                    ..
+; A   = cursor width for full screen display
+; VAR = cursor width for zoomed display
+advance_cursor:					; ABD3
+	jsr     get_font_width			; Returns A, VAR. A = full screen 
+	ldy     VAR				; Width for zoomed display
 
-	clc             			; ABD8 18                       .
-	adc     CURSOR1_X     			; ABD9 65 A4                    e.
-	sta     CURSOR1_X     			; ABDB 85 A4                    ..
-	bcc     :+				; ABDD 90 02                    ..
-	inc     CURSOR1_X+1    			; ABDF E6 A5                    ..
-:	tya             			; ABE1 98                       .
+	clc             			; 
+	adc     CURSOR1_X     			; Advance cursor for full screen
+	sta     CURSOR1_X     			; 
+	bcc     :+				; 
+	inc     CURSOR1_X+1    			; 
 
-	clc             			; ABE2 18                       .
-	adc     CURSOR2_X     			; ABE3 65 9C                    e.
-	sta     CURSOR2_X     			; ABE5 85 9C                    ..
-	bcc     :+
-	inc     CURSOR2_X+1
+:	tya             			; Copy zoomed display font width to A
+	clc             			; 
+	adc     CURSOR2_X     			; Advance cursor for zoomed display
+	sta     CURSOR2_X     			;
+	bcc     :+				;
+	inc     CURSOR2_X+1			;
 
-:	lda     CURSOR2_X+1
-	cmp     #$02    			; ABED C9 02                    ..
-	bcc     @DONE   			; ABEF 90 0D                    ..
+;-------------------------------------------------------------------------------
+; Check if cursor reached right boundary of screen.
+;-------------------------------------------------------------------------------
+:	lda     CURSOR2_X+1			; screen width is 512 in DL2
+	cmp     #>(512)    			; Right boundary exceeded?
+	bcc     @DONE   			; No? -->
 
-	lda     CURSOR1_X     			; ABF1 A5 A4                    ..
-	sec             			; ABF3 38                       8
-	sbc     #$40    			; ABF4 E9 40                    .@
-	sta     CURSOR1_X     			; ABF6 85 A4                    ..
+;-------------------------------------------------------------------------------
+; Cursor moved too far right. Perform a carriage return.
+;-------------------------------------------------------------------------------
+	lda     CURSOR1_X     			; 
+	sec             			; 
+	sbc     #64				; Move DL1 cursor left by 64 
+	sta     CURSOR1_X     			; I assume this will be 0
 
-	lda     #$00    			; ABF8 A9 00                    ..
-	sta     CURSOR1_X+1    			; ABFA 85 A5                    ..
-	sta     CURSOR2_X+1    			; ABFC 85 9D                    ..
-@DONE:  rts             			; ABFE 60                       `
+	lda     #$00    			; 
+	sta     CURSOR1_X+1    			; Set DL2 cursor to 0
+	sta     CURSOR2_X+1    			; 
+@DONE:  rts             			; 
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -4885,9 +4973,9 @@ create_masks:					; ADCB
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                ???????????                                  *
+;*                                 draw_line                                   *
 ;*                                                                             *
-;*                       ?????????????????????????????                         *
+;*         Draw line between current and previous cursor coordinates           *
 ;*                                                                             *
 ;*******************************************************************************
 
@@ -7639,6 +7727,7 @@ LB9F4:
 TAB_0_25:
 	.byte   0,5,10,15,20,25
 
+; Table - Used while scaling Y coordinates from 0..511 to 0..311
 LB9FA:  .byte   $00,$00,$01,$01,$01,$01,$01,$02
 
 ; Double wide pixels for text size 2 (bold/double)
@@ -7987,13 +8076,13 @@ LBAE2:	.byte	>(get_tek_vects-1)		; byte_B4 = 1
 	.byte	>(proc_ssf-1)			; byte_B4 = 2 ESC Q (SSF)
 	.byte	>(proc_echo-1)			; byte_B4 = 3 ESC Y (load Echo)
 	.byte	>(load_mem_addr-1)		; byte_B4 = 4 ESC W (load Memory Address)
-	.byte	>(sub_a133-1)			; byte_B4 = 5 ESC U (select mode 6)
+	.byte	>(sel_mode_6-1)			; byte_B4 = 5 ESC U (select mode 6)
 
 LBAE7:	.byte   <(get_tek_vects-1)
 	.byte	<(proc_ssf-1)
 	.byte	<(proc_echo-1)
 	.byte	<(load_mem_addr-1)
-	.byte	<(sub_a133-1)
+	.byte	<(sel_mode_6-1)
 
 byte_BAEC:
 ch_mem_m1_DL2:
