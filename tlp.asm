@@ -1864,7 +1864,7 @@ set_load_mem:					; A444
 
 ; DESCRIPTION
 draw_block:					; A448
-	jsr     get_tek_vects
+	jsr     get_plato_vects
 	ldx     $DA     			; A44B A6 DA                    ..
 	bne     :++				; A44D D0 10                    ..
 
@@ -2536,7 +2536,7 @@ LA673:  lda     #$00    			;
 ; The current (X,Y) position is left at this location.
 ;-------------------------------------------------------------------------------
 plot_point:					; A682
-	jsr     get_tek_vects			; Get coordinate(s) for point(s)
+	jsr     get_plato_vects			; Get coordinate(s) for point(s)
 	lda     IS_16K     			; Get memory constraint flag
 	sta     COMPR     			; 1->16K 0->48K+
 	bne     :+				; Full screen only? -->
@@ -3336,27 +3336,42 @@ print_string:					; A89F
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                               get_tek_vects                                 *
+;*                              get_plato_vects                                *
 ;*                                                                             *
-;*                      TEKTRONIX-format vector handler                        *
+;*               Parse and scale PLATO coordinate sequences                    *
 ;*                                                                             *
 ;*******************************************************************************
 
 ; DESCRIPTION
-; This subroutine reads the (X,Y) coordinate stream from PLATO. For efficiency
-; sake, PLATO will not re-send redundant coordinates for if, say, the X 
-; coordinate is unchanged from a previous transmission. PLATO uses bits 7,6
-; of the coordinate data as a clever mechanism to denote what type of data
-; (X or Y) is arriving.
+; This subroutine reads the (X,Y) coordinate sequence from PLATO. For efficiency
+; sake, PLATO will not re-send redundant bytes. The details of this mechanism
+; is described in the excerpt below.
 ;
 ; After the raw PLATO (X,Y) coordinates are delivered, which each have a range
-; of 0 to 511, the (X,Y) coordinates must be scaled for the 512x192 zoomed
-; display and the 320x192 full screen display.
+; of 0 to 511, the (X,Y) coordinates must be scaled for the 320x192 full screen
+; display, and the Y coordinate must be scaled for the 512x384 display.
+;
+; If PLATO sent the maximum value of 511, the coordinate data structure in 
+; binary would be:
+; 
+;     b16 b15 b14 b13 b12 b11 b10  b9         b8  b7  b6  b5  b4  b3  b2  b1
+;       x   x   x   0   1   1   1   1          x   x   x   1   1   1   1   1
+;       P   0   1   <--bits 10 to 6->          P   0   1   <--bits 5 to 1-->
+;  
+; When unpacked and stored to the 16-bit PLATO_WORD, the data would look like:
+;
+;      b8  b7  b6  b5  b4  b3  b2  b1  b8  b7  b6  b5  b4  b3  b2  b1
+;       x   x   x   x   x   x   0   1   1   1   1   1   1   1   1   1
+;                               <--bits 10 to 6->   <--bits 5 to 1-->
+;      <-------- PLATO_WORD -------->  <------ PLATO_WORD+1 -------->
+;
+; Note that only 2 bits of PLATO_WORD+1 are necessary to hold the largest value
+; and 3 of the high bits are stored in PLATO_WORD+1. This will help 
+; understanding the bitwise gymnastics done later.
 ;
 ;-------------------------------------------------------------------------------
 ; (excerpt from 3.1.2.4.3)  Coordinates
 ;-------------------------------------------------------------------------------
-;
 ; Coordinates are used to specify positions on the screen. They can be from one
 ; to four bytes in length.  The point, line and block modes, as well as the load
 ; coordinate command, accept data in coordinate format.
@@ -3372,73 +3387,121 @@ print_string:					; A89F
 ;
 ; (MSB = Most significant bits.  LSB = least significant bits. Note that the 
 ; coordinate is actually 10 bits in width.  The top bit is always zero, always 
-; giving screen positions in ;  the range 0 to 511.)
+; giving screen positions in the range 0 to 511.)
+;
+;       COORDINATE BYTE TRANSMISSION REQUIREMENTS
+;
+;       BYTES WHICH CHANGE           BYTE TRANSMISSION REQUIRED
+;  High Y  Low Y  High X  Low X    High Y  Low Y  High X  Low X
+;                            X                               X
+;                    X                       X       X       X
+;            X                               X               X
+;      X                             X                       X
+;                    X       X               X       X       X
+;            X               X               X               X
+;      X                     X       X                       X
+;            X       X                       X       X       X
+;      X             X               X       X       X       X
+;      X     X                       X       X               X
+;            X       X       X               X       X       X
+;      X             X       X       X       X       X       X
+;      X     X               X       X       X               X
+;      X     X       X               X       X       X       X
+;      X     X       X       X       X       X       X       X
+;  Sending Initial address           X       X       X       X
+;  Returning to remembered address                           X
+;
+; To save transmission time, not all the bytes are sent if certain requirements
+; are met.  The omitted bytes must be 'understood' by the terminal to be the 
+; same as the bytes of the last coordinate.  Since bits 6 and 7 uniquely 
+; identify the low Y and the low X, and the high Y and high X can be 
+; distinguished from each other by context, all four bytes of the coordinate 
+; will not be transmitted if a portion of the last coordinate matches the new 
+; coordinate.  For example, if the previous coordinate is (0,0), and the next 
+; coordinate is (10,0), only one byte (the byte describing the 5 lower bits of 
+; the new X coordinate) will be transmitted.  If the coordinate following that 
+; is (30,30), only two bytes (for low Y and low X) will be sent.
+;
+; The general rules are: 1) the order of the bytes is high Y, low Y, high X and
+; low X (the low X coordinate is always sent last to indicate the termination 
+; of the coordinate); and 2), if the high X coordinate is changed, at least one
+; of the Y coordinates is sent (so that the high X can be distinguished from the
+; high Y).
+;
+; For example, a load coordinate command (section 3.2.3.1.3) takes a coordinate
+; as data.  To set the (X,Y) position to (0,0), the sequence
+;
+;      ESC 2 SP ` SP @ (1B 32 20 60 20 40 hex)
+;
+; would be sent.  To move to (10,0) thereafter would be:
+;
+;      ESC 2 J  (1B 32 4A hex)
+;
+; and to move to (30,30) after that would be:
+;
+;      ESC 2 ~ ^  (1B 32 7E 5E hex)
 ;-------------------------------------------------------------------------------
-GLOOP:						; A8B3
-get_tek_vects:					; A8B3
+get_plato_vects:				; A8B3
 	jsr     fetch_serin_ch			; Returns with A
-
-	cmp     #$40    			; Test bits 7 and 6
+	cmp     #$40    			; Test bits 7 and 6 of coord
 	bcs     LOWT				; -->a low X or Y byte
 
-; Here if character is MSB of Y coordinate
-; Return with PLATO_WORD+1,PLATO_WORD containing 000000XX XXX00000
-	jsr     HIRO				; Parse MSB of Y
-
-	lda     CORDY     			; hi X processed behind low Y
-	and     #$1F    			; Strip off the highest 3 bits
-
-	ora     PLATO_WORD     			; A8C1 05 DB                    ..
-	sta     CORDY     			; A8C3 85 BD                    ..
-
-	lda     PLATO_WORD+1   			; A8C5 A5 DC                    ..
-	sta     CORDY+1     			; A8C7 85 BE                    ..
-
-	bcc     get_tek_vects			; Do next coordinate
+;-------------------------------------------------------------------------------
+; Here if character is hi Y
+; Concatenate 5 bits of hi Y and 5 bits of low Y and save to CORDY, CORDY+1
+;-------------------------------------------------------------------------------
+	jsr     HIRO				; Return with 3 of the hi Y bits in PLATO_WORD
+	lda     CORDY     			; Get the 5 low Y bits
+	and     #$1F    			; Make room for the 3 hi Y bits
+	ora     PLATO_WORD     			; Merge with the 5 low Y bits
+	sta     CORDY     			; Save
+	lda     PLATO_WORD+1   			; Get remaining 2 hi Y bits
+	sta     CORDY+1     			; Save
+	bcc     get_plato_vects			; Do next coordinate
 
 ;-------------------------------------------------------------------------------
-; hi X into CORDX pr (pair? TODO)
+; Here if character is hi X
+; Concatenate 5 bits of hi X and 5 bits of low X and save to CORDX, CORDX+1
 ;-------------------------------------------------------------------------------
-HIX:						; A8CB
-	jsr     HIRO				; HIRO A8CB 20 DC A8                  ..
-	lda     CORDX     			; A8CE A5 BB                    ..
-	and     #$1F    			; Strip off the highest 3 bits
-	ora     PLATO_WORD     			; Merge
+HIX:	jsr     HIRO				; Return with 3 of the hi X bits set in PLATO_WORD
+	lda     CORDX     			; Get the 5 low X bits
+	and     #$1F    			; Make room for the 3 hi X bits
+	ora     PLATO_WORD     			; Merge with the 5 low X bits
 	sta     CORDX    			; Save 
-	lda     PLATO_WORD+1   			; A8D6 A5 DC                    ..
-	sta     CORDX+1     			; A8D8 85 BC                    ..
-	bcc     get_tek_vects			; Do next coordinate
+	lda     PLATO_WORD+1   			; Get remaining 2 hi X bits
+	sta     CORDX+1     			; Save
+	bcc     get_plato_vects			; Do next coordinate
 
-; shift MSB bits for hi Y or hi X
-HIRO:						; A8DC
-	and     #$1F    			; Save 5-bits of 1st byte
+;-------------------------------------------------------------------------------
+; Here if character is hi X or Y
+; Return with 3 of the hi X bits set in PLATO_WORD
+;-------------------------------------------------------------------------------
+HIRO:	and     #$1F    			; Clear 3 highest bits
 	sta     PLATO_WORD+1   			; 
-
-; Shift bits 2..0 from PLATO_WORD+1 to bits 7..5 of A
-	lda     #$00    			; Clear
-	lsr     PLATO_WORD+1   			; Shift bits to A via Carry
-	ror     A       			;
+	lda     #$00    			; Clear bits
+	lsr     PLATO_WORD+1   			; Shift 3 of the 5 hi bits
+	ror     A       			; ...into A
 	lsr     PLATO_WORD+1   			;
-	ror     A       			;
-	lsr     PLATO_WORD+1   			;
-	ror     A       			;
-
-; Return with PLATO_WORD+1,PLATO_WORD containing 000000XX XXX00000
-	sta     PLATO_WORD     			; 
+	ror     A       			; Leaving 2 of the 5 bits
+	lsr     PLATO_WORD+1   			; in PLATO_WORD+1
+	ror     A       			; 
+	sta     PLATO_WORD     			; And save lower 8 bits.
 	rts             			;
 
 ;-------------------------------------------------------------------------------
-; Process LSB of Y coordinate
+; Process low Y. CORDY may contain a few bits of a redundant hi Y from an 
+; earlier transmission and the new low Y is overlayed.
 ;-------------------------------------------------------------------------------
-LOWY:
-	and     #$1F    			; Strip off 3 highest bits
+LOWY:	and     #$1F    			; Clear 3 highest bits
 	sta     PLATO_WORD     			; Stash
-
-	lda     CORDY     			; Get MSB of Y retrieved earlier
+	lda     CORDY     			; Get LSB of Y retrieved earlier
 	and     #$E0    			; Strip off lowest 5 bits
-	ora     PLATO_WORD     			; Merge MSB and LSB of Y
+	ora     PLATO_WORD     			; Overlay new 5 LSB of Y
 	sta     CORDY    			; Save Y coordinate
 
+;-------------------------------------------------------------------------------
+; There should be more data in the current coordinate sequence. See what it is.
+;-------------------------------------------------------------------------------
 	jsr     fetch_serin_ch			; Get next byte
 	cmp     #$40    			; Is it an MSB of X?
 	bcc     HIX				; MSB of X -->
@@ -3452,15 +3515,16 @@ LOWT:	cmp     #$60    			; Is it an LSB of Y?
 						; must be LSB of X. Fall through.
 
 ;-------------------------------------------------------------------------------
-; Process LSB of X coordinate
+; Process low X. CORDX may contain a few bits of a redundant hi X from an 
+; earlier transmission and the new low X is overlayed.
 ;-------------------------------------------------------------------------------
-	and     #$1F    			; Strip off 3 highest bits
+	and     #$1F    			; Clear 3 highest bits
 	sta     PLATO_WORD     			; Stash
-
-	lda     CORDX     			; Get MSB of X retrieved earlier
+	lda     CORDX     			; Get LSB of X retrieved earlier
 	and     #$E0    			; Strip off lowest 5 bits
-	ora     PLATO_WORD     			; Merge MSB and LSB of X
-	sta     CORDX     			; Save X coordinate. End coordinate sequence.
+	ora     PLATO_WORD     			; Overlay new 5 LSB of X
+	sta     CORDX     			; Save X coordinate.
+						; Coordinate sequence complete.
 
 ;-------------------------------------------------------------------------------
 ; Coordinate sequence complete. Save to the raw PLATO (X,Y) coordinates
@@ -3492,40 +3556,46 @@ LOWT:	cmp     #$60    			; Is it an LSB of Y?
 ;-------------------------------------------------------------------------------
 ; Scale MSB of X coordinate for the full screen display
 ;-------------------------------------------------------------------------------
-	ldx     #$00    			; A92E 
-	stx     CURSOR1_X+1    			; Initialize MSB
+	ldx     #$00    			; 
+	stx     CURSOR1_X+1    			; Initialize MSB to 0
 	bcc     :+				; --> No overflow from (X/2)+(X/8)
 	inc     CURSOR1_X+1    			; Overflow. 255 <= Cursor1_X < 311
 
 ;-------------------------------------------------------------------------------
-; Scale MSB of Y coordinate for full screen display 0..511 -> 0..191 (3/8) 
+; Scale Y coordinate for full screen display 0..511 -> 0..191 (3/8) 
+; Approximate 3/8 using Y>>2 + Y>>3 but will need lookup table to adjust for
+; fractional results.
 ;-------------------------------------------------------------------------------
-:	lda     CURSOR2_Y			; Get the LSB of PLATO Y coordinate
-	and     #$07    			; Mod 8 for table lookup later
-	tax             			; Save lookup table index
+:	lda     CURSOR2_Y			; Mod 8 of LSB of PLATO Y coord
+	and     #$07    			; ...used for table lookup later.
+	tax             			; Save lookup table index to X
 
 	lsr     CURSOR2_Y+1			; Shift 9th bit into Carry
-	lda     CURSOR2_Y			; 
-	ror     A       			; Y/2 using Carry
-	sta     VAR     			; Keep Y/2 
+	lda     CURSOR2_Y			; Get lower 8 bits of Y
+	ror     A       			; Y/2 (Pull bit from Carry)
+	sta     VAR     			; Stash Y/2 
 	lsr     A       			; Y/4
-	sta     TMP	 			; Keep Y/4
-	lsr     A       			; Y/8
-
+	sta     TMP	 			; Stash Y/4
+	lsr     A       			; A = Y/8
 	clc             			; 
-	adc     LB9FA,X 			; Add lookup value (0..2)
-	adc     TMP	 			; to Y/4
-	cmp     #192    			; Y > 192?
-	bcc     :+				; No. Skip -->
+	adc     TAB_Y_ADJ,X 			; Get fractional adjustment
+	adc     TMP	 			; Add Y/4
+	cmp     #192    			; Edge case: 511 * 3/8 = 192 (bad)
+	bcc     :+				; Y < 192? Skip -->
 	lda     #191    			; Force Y = 191
 :	sta     CURSOR1_Y			; Store Y coord (191 max so no MSB)
 
 ;-------------------------------------------------------------------------------
-; Scale MSB and LSB of Y coordinate for zoomed display 0..511 -> 0..311 (5/8)
+; Scale MSB and LSB of Y coordinate for zoomed display 0..511 -> 0..384 (3/4)
+; First, create a fractional adjustment and store it in the carry bit.
 ;-------------------------------------------------------------------------------
 	lda     CURSOR2_Y			; Get Y
 	and     #$03    			; Mod 4 on Y
-	cmp     #$01    			; Set carry for mod 4 in {2,3}
+	cmp     #$01    			; Set carry when mod 4 in {1,2,3}
+
+;-------------------------------------------------------------------------------
+; Scale Y by 3/4 by using Y>>1 + Y>>2 + carry (fractional adjustment).
+;-------------------------------------------------------------------------------
 	lda     VAR     			; Get Y/2
 	adc     TMP	 			; Add Y/4 (with carry)
 	sta     CURSOR2_Y			; Save LSB of Y
@@ -5015,7 +5085,7 @@ create_masks:					; ADCB
 ;-------------------------------------------------------------------------------
 sub_adf1:
 draw_line:					; ADF1
-	jsr     get_tek_vects
+	jsr     get_plato_vects
 	lda     IS_16K     			; Memory constrained?
 	sta     COMPR     			; If so, only 1 pass as full-screen.
 	bne     :+				; 
@@ -7727,8 +7797,56 @@ LB9F4:
 TAB_0_25:
 	.byte   0,5,10,15,20,25
 
-; Table - Used while scaling Y coordinates from 0..511 to 0..311
-LB9FA:  .byte   $00,$00,$01,$01,$01,$01,$01,$02
+; ------------------------------------------------------------------------------
+; Table - Adjustments used while scaling Y coordinates from 0..511 to 0..191
+; ------------------------------------------------------------------------------
+; Scaling a PLATO Y coordinate in the domain 0.511 to the range 0..191 can be 
+; found by multiplying Y * 3/8. 
+;
+; An approximation can be cheaply derived on the 6502 by noting that
+; 3/8 = 1/4 + 1/8 
+
+; and further
+; Y * 1/4 can be approximated by 2 right shifts of Y
+; Y * 1/8 can be approximated by 3 right shifts of Y
+;
+; Example results for this approximation are found under column F below.
+; However, the results under column F do not provide a smooth gradient of 
+; values (34,36,36,...,37,37,39) due to the loss of precision from the shifts.
+;
+; The lookup table TAB_Y_ADJ is used to improve the distribution of results 
+; (column H). The index to the lookup table is derived from Y modulus 8.
+; 
+; A	B	C	D	E	F	G	H
+
+; Y	Y/4	Y>>1	Y>>2	Y>>3	D+E	Adj	F+G
+; ---	------	----	----	----	----	----	----
+; 95	35.625	47	23	11	34	2	36
+; 96	36.000	48	24	12	36	0	36
+; 97	36.375	48	24	12	36	0	36
+; 98	36.750	49	24	12	36	1	37
+; 99	37.125	49	24	12	36	1	37
+; 100	37.500	50	25	12	37	1	38
+; 101	37.875	50	25	12	37	1	38
+; 102	38.250	51	25	12	37	1	38
+; 103	38.625	51	25	12	37	2	39
+; 104	39.000	52	26	13	39	0	39
+; 105	39.375	52	26	13	39	0	39
+; 106	39.750	53	26	13	39	1	40
+; 107	40.125	53	26	13	39	1	40
+;						
+; 509	190.875	254	127	63	190	1	191
+; 510	191.250	255	127	63	190	1	191
+; 511	191.625	255	127	63	190	2	192
+TAB_Y_ADJ:  
+	.byte   $00				; 00
+	.byte	$00				; 01
+	.byte	$01				; 02
+	.byte	$01				; 03
+	.byte	$01				; 04
+	.byte	$01				; 05
+	.byte	$01				; 06
+	.byte	$02				; 07
 
 ; Double wide pixels for text size 2 (bold/double)
 LBA02:	
@@ -8072,13 +8190,13 @@ tab_data_mode_id:				; BADA
 	.byte	$00				; unused
 	.byte	$01				; data mode 3->alpha mode
 
-LBAE2:	.byte	>(get_tek_vects-1)		; byte_B4 = 1 
+LBAE2:	.byte	>(get_plato_vects-1)		; byte_B4 = 1 
 	.byte	>(proc_ssf-1)			; byte_B4 = 2 ESC Q (SSF)
 	.byte	>(proc_echo-1)			; byte_B4 = 3 ESC Y (load Echo)
 	.byte	>(load_mem_addr-1)		; byte_B4 = 4 ESC W (load Memory Address)
 	.byte	>(sel_mode_6-1)			; byte_B4 = 5 ESC U (select mode 6)
 
-LBAE7:	.byte   <(get_tek_vects-1)
+LBAE7:	.byte   <(get_plato_vects-1)
 	.byte	<(proc_ssf-1)
 	.byte	<(proc_echo-1)
 	.byte	<(load_mem_addr-1)
