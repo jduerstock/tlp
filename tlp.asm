@@ -93,13 +93,15 @@
 ;*******************************************************************************
 
 TSTDAT		:= $0007
+WARMST		:= $0008			; Warmstart flag. 0->Cold-started $FF->Warm-started
 POKMSK		:= $0010			; POKEY interrupt mask.
 RTCLOK		:= $0012			; RTCLOK+0: increments every 65536 VBLANKS (NTSC 18.2 minutes)
 						; RTCLOK+1: increments every 256 VBLANKS   (NTSC 4.27 seconds)
 						; RTCLOK+2: increments every VBLANK	   (NTSC 1/60 second)
 ICAX1Z		:= $002A
 ATRACT		:= $004D			; Attract mode timer and flag 
-VPRCED		:= $0202			; Vector to serial peripheral proceed line interrupt
+VPRCED		:= $0202			; Vector to serial peripheral proceed line vector
+VINTER		:= $0204			; Vector to serial peripheral interrupt vector
 VSERIN		:= $020A			; Vector to serial receive-data-ready interrupt
 VTIMR1		:= $0210			; Vector to POKEY timer 1 interrupt
 CDTMA1		:= $0226			; System timer one jump address
@@ -208,7 +210,7 @@ INPBUF		:= $0F00
 INPBFPT		:= $133E			; Used for offset to INPBUF
 BUFLEN		:= $133F
 OUTBFPT		:= $1340
-character	:= $1347                        ; placeholder for now TODO
+CHARACTER	:= $1347                        ; placeholder for now TODO
 INP		:= $1348
 OUTBUF		:= $1349
 OUTINT		:= $134A
@@ -217,8 +219,8 @@ ISTOP		:= $134C
 
 ; Other
 
-L0070           := $0070
-L0080           := $0080
+L0080           := $0080			; Address to store self-modifying code during init
+INIT_DL		:= $0080			; Address to store self-modifying code during init
 
 CURSOR2_X	:= $009C			; X coord for cursor (zoomed display) (0->left boundary, 511->right)
 CURSOR2_Y	:= $009E			; Y coord for cursor (zoomed display) (0->bottom of screen, 383->top)
@@ -228,6 +230,8 @@ CURSOR2_Y_OLD	:= $00A2
 CURSOR1_X	:= $00A4			; X coord for cursor (full screen display) (0->left boundary, 311->right, multiples of 5)
 CURSOR1_Y	:= $00A6			; Y coord for cursor (full screen display) (0->bottom of screen, 191->top, multiples of 6)
 REND		:= $00A7			; Right mask for BLOCK
+BLOCK1_X1	:= $00A8
+BLOCK1_Y1	:= $00AA
 CURSOR1_X_OLD	:= $00A8
 CURSOR1_Y_OLD	:= $00AA
 LEND		:= $00AB			; Left mask for BLOCK
@@ -237,16 +241,14 @@ PLOT_MODE	:= $00B0			; char mode $00->mode rewrite,$40->inverse video screen mod
 CURRENT_BAUD	:= $00B1			; Current 850 baud rate: $FF->300 $00->1200
 byte_B2		:= $00B2			; Used during init
 IS_MPP		:= $00B2			; If Microbits 300 then 1 else 0
-byte_B3		:= $00B3			; 7 = plot_alpha
-byte_B4		:= $00B4			; $00->ESC {R,S,T,V} $01->ESC 2 (Load Coordinate) $02->ESC Q (SSF) $03->ESC Y (Load Echo commnd)  $04->ESC W (Load Memory Address command)  $05->ESC U (select mode 6) 
-byte_B5		:= $00B5			; 
-DATA_MODE	:= $00B5			; $80->graphic (point, line, or block) $01->text
+DATA_MODE	:= $00B3			; 4->point,5->line,1->block,7->text,0->load mem
+ESC_CODE	:= $00B4			; $00->ESC {R,S,T,V} $01->ESC 2 (Load Coordinate) $02->ESC Q (SSF) $03->ESC Y (Load Echo commnd)  $04->ESC W (Load Memory Address command)  $05->ESC U (select mode 6)
+DATA_FRAME_SZ	:= $00B5			; Number of bytes expected in data frame (1->byte, 3->word, ?->coordinate TODO)
+GRAPHIC_FLG	:= $00B5			; $80->graphic (point, line, or block) $01->text
 SERIN_BUF_IDX	:= $00B6			; Index or count of characters received from PLATO
 CURRENT_CHSET	:= $00B7			; $00->M2 $01->M3 $02->M0 $03->M1
 CURRENT_DL	:= $00B8			; Current Display List (80 or FF = DL #1, 00 = DL #2)
-byte_B9		:= $00B9
 SEND_FLG	:= $00B9			; $00->Nothing to send
-byte_BA		:= $00BA			; 
 IS_16K		:= $00BA			; TODO Flag for system < 48K RAM? (no support for zoomed display)
 CORDX		:= $00BB			; 2-byte explicit X coordinate from PLATO
 CORDY		:= $00BD			; 2-byte explicit Y coordinate from PLATO
@@ -265,11 +267,11 @@ JSTICK_TR	:= $00C7			; State of joystick trigger ($00=pressed, $FF->clear)
 JSTICK_FN	:= $00C8			; Direction of joystick-mapped function keys: 0D->U(NEXT),02->D(BACK),0C->L(LAB),$12->R(DATA)
 COMPR		:= $00C9			; Compressed graphics mode flag (full screen display)
 CURRENT_SIZE	:= $00CA			; Character Size $00->size 0 (normal) $FF->size 2 (bold/doubled) [temporarily $7F->size 2 in full-screen]
-byte_CB		:= $00CB
-byte_CC		:= $00CC
+byte_CB		:= $00CB			; IRQ enable flag: 0->Enable Serial Out IRQs
+SEROUT_IRQ_FLG	:= $00CB			; VSEROR VSEROC IRQ enable flag: 0->Enable Serial Out IRQs
 SERIN_FLG	:= $00CC			; SERIN_FLG
 byte_CD		:= $00CD
-off_CE		:= $00CE
+MOD6_BUF	:= $00CE			; Mode 6 buffer
 FG_COLOR_DL2	:= $00D0			; Text luminance used in Display List #2 (zoomed)
 BG_COLOR_DL2	:= $00D1			; Background / border hue/luminance used in Display List #2
 FG_COLOR_DL1	:= $00D2			; Text luminance used in Display List #1 (small text)
@@ -282,7 +284,7 @@ CURR_WORD	:= $00D8			; Index of current 16 bit word while scaling fonts in load_
 VAR		:= $00D8			; working variable
 PIX_CNT		:= $00D9			; Number of pixels set in 8x16 programmable character bitmap
 TMP		:= $00D9			; working variable
-byte_DA		:= $00DA
+MODE_CHANGE	:= $00DA			; Flag set when change to current terminal mode (text, point, line, block, etc) $00->mode changed non-zero->continuation of current mode
 PLATO_WORD	:= $00DB			; 16-bit PLATO word (See s0ascers 3.1.2.4.2)
 off_DD		:= $00DD			; Temp variable
 JSTICK_X	:= $00DD			; VBI: Current joystick direction X-axis (-1=left +1=right)
@@ -290,15 +292,17 @@ JSTICK_Y	:= $00DE			; VBI: Current joystick direction Y-axis (-1=up   +1=down)
 DL2_TEMP	:= $00DF			; Pointer used while deriving display list #2
 DL2_WIND	:= $00E1			; Pointer into 24K frame buffer for origin (0,0) of zoomed display
 BIT_8x16	:= $00E3			; Pointer to 8x16 character bitmap during load_memory
-YOUT		:= $00E3			; absolute display address 00->TODO, $40->TODO, $80->TODO, $C0->TODO
+YOUT		:= $00E3			; Pointer to a byte in screen RAM. Used to plot new data to screen.
 CNUM		:= $00E5			; 16-bit address to bitmap of character to be drawn on screen
 PLATO_CHAR	:= $00E7			; PLATO/ASCII character code to be sent to PLATO
 CHSET_BASE 	:= $00E8			; current character set base (full-screen display)
 CHSET_BASE2	:= $00EA			; current character set base (zoomed)
-off_EC		:= $00EC
+OBFCODE_PTR	:= $00EC
+STR_PTR		:= $00EC			; String pointer during print_string
 SRC_ROW		:= $00EC			; index used during load_memory (source row)
 X1LO		:= $00EC			; Line endpoint X1
 X1HI		:= $00ED
+STR_LEN		:= $00EE			; String length during print_string
 TAR_ROW		:= $00EE			; index used during load_memory (target row)
 Y1LO		:= $00EE			; Line endpoint Y1
 Y1HI		:= $00EF
@@ -307,12 +311,11 @@ X0HI		:= $00F1			;
 Y0LO		:= $00F2			; Line endpoint Y0
 Y0HI		:= $00F3			; 
 
-TCRSX		:= $00F0			; block erase cursor position
-TCRSY		:= $00F2			; block erase cursor position
+BLOCK_X1	:= $00F0			; block erase cursor position (TCRSX in Atari code)
+BLOCK_Y1	:= $00F2			; block erase cursor position (TCRSY in Atari code)
 
 BIT_5x6		:= $00F4			; Pointer to 5x6 character bitmap during load_memory
-SUM		:= $00F4			; vector draw work variables
-SUMLO		:= $00F4			; 
+SUMLO		:= $00F4			; vector draw work variables
 SUMHI		:= $00F5			; 
 
 INDLO		:= $00F6
@@ -322,36 +325,46 @@ INVX		:= $00F8			; X0<X1 or X1<X0
 INVY		:= $00F9			; Y0<Y1 or Y1<Y0
 
 off_FA		:= $00FA
-CURSX		:= $00F8
-CURSY		:= $00FA
+
+BLOCK_X2	:= $00F8			; block erase cursor position (CURSX in Atari code)
+BLOCK_Y2	:= $00FA			; block erase cursor position (CURSY in Atari code)
 
 DELLO		:= $00FA			; 
 DELHI		:= $00FB
 YM		:= $00FC			; Which axis (X or Y) is the major axis between 2 coords (1->Y-axis, 0->X-axis)
 byte_FF		:= $00FF			; Modem buffer length
+MOD6_ACTION	:= $00FF			; Mode 6 Action code ($FF->Initial state, receive next action)
 
-byte_1310	:= $1310
+BUF32		:= $1310			; 32 byte buffer circular buffer
 byte_1330	:= $1330
+byte_1336	:= $1336
 byte_133a	:= $133A
-byte_133c	:= $133C
-byte_133d	:= $133D
+byte_133c	:= $133C			; Status byte? TODO
+byte_133d	:= $133D			; Status byte? TODO
 byte_133e	:= $133E
 byte_133f	:= $133F
 byte_1340	:= $1340
 byte_1341	:= $1341
-byte_1342	:= $1342
+BUF32_IDX	:= $1342			; Offset into circular 32 byte buffer
 byte_1343	:= $1343
 byte_1344	:= $1344
-byte_1345	:= $1345
+TIMER_EVENT	:= $1345			; System Timer Flag: 0->timer expired (triggered IRQ)
 byte_1346	:= $1346			; Handler Device Type (R:)???
 byte_1347	:= $1347
 byte_1348	:= $1348
 byte_134c	:= $134C
-off_134d	:= $134D
-byte_134f	:= $134F
-byte_1350	:= $1350
-word_1351	:= $1351
+;off_134d	:= $134D
+
+;byte_134f	:= $134F
+;byte_1350	:= $1350
+;word_1351	:= $1351
+MOD6A		:= $134D			; Mode 6 - Pointer to Mode 6 subroutine. Address received from PLATO host.
+MOD6_D1		:= $134F			; Mode 6 - Flag
+MOD6_1ST	:= $1350			; Mode 6 - Flag for 1st pass ($FF = 1st pass)
+MOD6_N		:= $1351			; Mode 6 - Number of bytes expected for download into MOD6_BUF
+
 CURRENT_ECHO	:= $1353			; $00->local echo $80->remote echo
+DATA_FRAME_SZ2	:= $1354			; Previous data frame size - used to restore previous state
 CURRENT_SELECT	:= $1355			; Which color aspect is modified with SELECT ($00->c, $80->b, $C0->t)
 L2000           := $2000
 PIX_WEIGHTS	:= $3E10			; Table of pixel weights used to scale 8x16 bitmap to 5x6
@@ -387,30 +400,31 @@ key_p		= $0A
 key_s		= $3E
 key_t		= $2D
 key_z		= $17
-key_apos	= $73					; apostrophe / single-quote
-key_at		= $75					; '@'
-key_hash	= $5A					; '#'
-key_amper	= $5B					; '&'
+key_apos	= $73				; apostrophe / single-quote
+key_at		= $75				; '@'
+key_hash	= $5A				; '#'
+key_amper	= $5B				; '&'
 key_tab		= $2C
-key_backs	= $34					; backspace
+key_backs	= $34				; backspace
 key_return	= $0C
 key_space	= $21
-key_equal	= $0F					; '='
-key_pipe	= $4F					; '='
-key_gt		= $37					; '>'
-key_lt		= $36					; '<'
-key_plus	= $06					; '+'
+key_equal	= $0F				; '='
+key_pipe	= $4F				; '='
+key_gt		= $37				; '>'
+key_lt		= $36				; '<'
+key_plus	= $06				; '+'
 key_bkslash	= $46
-key_minus 	= $0E					; '-'
-key_mult	= $07					; '*'
+key_minus 	= $0E				; '-'
+key_mult	= $07				; '*'
 key_caret	= $47
-key_div		= $26					; '/'
-key_caps	= $3C					; 'CAPS/LOWR'
-key_atari	= $27					; '/|\'
+key_div		= $26				; '/'
+key_caps	= $3C				; 'CAPS/LOWR'
+key_atari	= $27				; '/|\'
 
-mod_shift	= $40
-mod_ctrl	= $80
+mod_shift	= $40				; modifier when SHIFT key is held
+mod_ctrl	= $80				; modifier when CTRL key is held
 
+	.org	$A000
 ;*******************************************************************************
 ;*                                                                             *
 ;*                                 cart_start                                  *
@@ -488,7 +502,7 @@ cart_start:					; A000
 kernel:						; A05E
 	jsr     proc_keyboard			; Process/send keyboard events
 	jsr     proc_joystick			; Process/send joystick events
-	jsr     send_data			; Send data to PLATO if any
+	jsr     send_mod6_data			; Send data to PLATO if any
 
 	lda     SERIN_FLG			; Any data received?
 	beq     kernel   			; No? -->
@@ -527,7 +541,7 @@ proc_serial_in:					; A079
 	and     #$7F    			; Remove/ignore parity bit
 
 ;** Process escape sequence ****************************************************
-	bit     byte_B3 			; Bit 7 set if prev char was ESC
+	bit     DATA_MODE 			; Bit 7 set if prev char was ESC
 	bmi     proc_esc_seq   			; 
 
 ;** Process control code *******************************************************
@@ -544,7 +558,7 @@ proc_serial_in:					; A079
 	inx             			; 
 	stx     SERIN_BUF_IDX  			; Increment index
 
-	ldy     DATA_MODE 			; Is mode currently $01->alpha?
+	ldy     GRAPHIC_FLG 			; Is mode currently $01->alpha?
 	bpl     :+				; Yes? skip ahead.
 
 ;** Here if data mode is $80->graphic. *****************************************
@@ -556,7 +570,7 @@ proc_serial_in:					; A079
 	rts             			; A09F 60                       `
 
 ;** Here if data mode is $01->alpha. Return to kernel with more work to do *****
-:	cpx     DATA_MODE 			; 
+:	cpx     GRAPHIC_FLG 			; 
 	rts             			; Return with carry set.
 
 ;*******************************************************************************
@@ -568,40 +582,48 @@ proc_serial_in:					; A079
 ;*******************************************************************************
 
 ; DESCRIPTION
+; This subroutine will jump to a Load or Mode command. 
+; Upon arrival, the overflow status bit is set if currently processing an Escape 
+; sequence.
+
 draw:						; A0A3
 	ldy     #$00    			; 
 	sty     SERIN_BUF_IDX    		; Clear 
-	bvc     :+++				; A0A7 50 1C                    P.
+	bvc     :+++				; Mode command? Skip ahead-->
 
-	ldy     byte_B4    			; 
+;-------------------------------------------------------------------------------
+; Here if prev char was ESC
+;-------------------------------------------------------------------------------
+	ldy     ESC_CODE    			; 
 	cpy     #$05    			; Mode 6?
 	beq     :+				; yes? skip to unpack_word.
+	jsr     restore_mode			; Restore previous data frame size
+	tya             			; Test ESC_CODE
+	bne     :+				; Not 0->set_mode_7? -->
+	rts             			; Yes 0->set_mode_7 (nothing to do?)
+:	dey             			; Decrement ESC_CODE to accomodate jump table index
+	beq     :+				; Was it 1->get_plato_coords? (not words) , skip unpack_word-->
+	jsr     unpack_word			; Unpack 3 byte data frame
 
-; Unstash $B5 from $1354, Unset bit 6 from $B3 *********************************
-	jsr     sub_a120   			; A0AF 20 20 A1                   .
-	tya             			; A0B2 98                       .
-	bne     :+				; A0B3 D0 01                    ..
-	rts             			; A0B5 60                       `
-:	dey             			; A0B6 88                       .
-	beq     :+				; A0B7 F0 03                    ..
-	jsr     unpack_word			;
-
-;** Trick RTS to jump to vector by pushing the MSB/LSB to the stack ***********
-:	lda     LBAE2,y 			; Get MSB of subroutine
+;-------------------------------------------------------------------------------
+; Jump to Load Subroutine using push/rts trick
+;-------------------------------------------------------------------------------
+:	lda     tab_esc_subs_HI,Y		; MSB of subroutine address
 	pha             			; 
-
-	lda     LBAE7,y 			; Get LSB of subroutine
+	lda     tab_esc_subs_LO,Y 		; LSB of subroutine address
 	pha             			; 
-	rts             			; Goto vector
+	rts             			; Trick RTS to 'return' to subroutine.
 
-:	ldx     byte_B3 			; Get jump table offset (7 = plot_alpha)
-	lda     tab_data_mode_HI,X 		; Get MSB of subroutine
-	beq     :+				; RTS to main loop if subroutine is undefined
-
-	pha             			; Otherwise trick RTS to return to 
-	lda     tab_data_mode_LO,X 		; jump table subroutine
+;-------------------------------------------------------------------------------
+; Jump to Data Mode Subroutine using push/rts trick
+;-------------------------------------------------------------------------------
+:	ldx     DATA_MODE 			; Get jump table offset (7 = plot_alpha)
+	lda     tab_mode_subs_HI,X 		; MSB of subroutine address
+	beq     :+				; RTS to kernel if subroutine is undefined
 	pha             			; 
-:	rts             			; 
+	lda     tab_mode_subs_LO,X 		; LSB of subroutine address
+	pha             			; Otherwise trick RTS to 'return' to 
+:	rts             			; subroutine
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -611,8 +633,8 @@ draw:						; A0A3
 ;*                                                                             *
 ;*******************************************************************************
 proc_esc_seq:					; A0D2
-	asl     byte_B3 			; Strip bit 7 flag that told us
-	lsr     byte_B3 			; ... prev char was ESC.
+	asl     DATA_MODE 			; Strip bit 7 flag that told us
+	lsr     DATA_MODE 			; ... prev char was ESC.
 	jsr     proc_esc_seq2			; 
 	clc             			; Clear carry to tell kernel
 :	rts             			; ...all pending work is done.
@@ -722,7 +744,7 @@ proc_control_ch:				; A0F3
 get_colorf:					; A185
 	ldx     #$02    			; Read 2 bytes
 	lda     #$00    			; and do nothing
-	beq     LA111   			; -->
+	beq     save_mode			; -->
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -734,205 +756,339 @@ get_colorf:					; A185
 
 ; DESCRIPTION
 load_coord:					; A10B
-	ror     byte_B5 			; Let $B5 = $B5 / 2
+	ror     DATA_FRAME_SZ 			; Let $B5 = $B5 / 2
 	lda     #$01    			; Let A = 1
 	bne     :+				; --> Save A to B4
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                ???????????                                  *
+;*                                  save_mode                                  *
 ;*                                                                             *
-;*                    ?????????????????????????????????                        *
+;*     Called when switching between data mode and esc code routines? (TODO)   *
 ;*                                                                             *
 ;*******************************************************************************
 
 ; DESCRIPTION
-; Stashes $B5 into $1354, Sets $B4 = A, $B5 = X, sets bit 6 in $B3
+; This subroutine stashes the current data frame size and sets a flag in 
+; DATA MODE.
 ;
 ; Parameters:
-; X = Number of bytes to read TODO?
-; A = index into jump table TODO?
-LA111:  ldy     byte_B5 			; 
-	sty     $1354   			; 
-	stx     byte_B5 			; 
-:	sta     byte_B4     			; 
+; X = Number of bytes to read
+; A = index into jump table
 
-	lda     byte_B3 			; 
-	ora     #$40    			; Set bit 6 of A and save in $B3
+; A  X 
+; -- -- 
+; 0  3   Set mode 7
+; 1  ?   Load Coord
+; 2  3   Select Special Function
+; 3  3   Load Echo
+; 4  3   Load Memory Address
+; 5  3   Set mode 6
+
+save_mode:
+	ldy     DATA_FRAME_SZ 			; Save current data mode frame size
+	sty     DATA_FRAME_SZ2 			; 
+	stx     DATA_FRAME_SZ 			; Save new data mode frame size
+:	sta     ESC_CODE    			; Save new data mode jump table index
+
+	lda     DATA_MODE 			; Set bit 6 in DATA_MODE index/flag
+	ora     #%01000000    			; 
 	bne     :+				; -->
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                ???????????                                  *
+;*                                restore_mode                                 *
 ;*                                                                             *
-;*                    ?????????????????????????????????                        *
+;*                Restores previous data frame size, sets flag                 *
 ;*                                                                             *
 ;*******************************************************************************
 
 ; DESCRIPTION
-; Unstashes $B5 from $1354, clears bit 6 in $B3
-sub_a120:  
-	lda     $1354   			; Let A = $1354
-	sta     byte_B5 			; Let $B5 = A
+; This subroutine restores the prevous data frame size and clears a flag in 
+; DATA MODE.
 
-	lda     byte_B3 			; Clear bit 6 of A and save in $B3
-	and     #$BF    			; Let $B3 = A && 1011 1111
-:	sta     byte_B3 			; Let $B3 = A
+restore_mode:					; A120
+	lda     DATA_FRAME_SZ2 			; Restore previous data frame size
+	sta     DATA_FRAME_SZ 			; 
+
+	lda     DATA_MODE 			; Clear bit 6 in DATA_MODE index/flag
+	and     #%10111111    			; 
+:	sta     DATA_MODE 			; 
 :	rts             			; 
 
-; ----------------------------------------------------------------------------
-send_data:					; A12C
+;*******************************************************************************
+;*                                                                             *
+;*                               send_mod6_data                                *
+;*                                                                             *
+;*          Launch point for sending Mode 6 data to the PLATO host             *
+;*                                                                             *
+;*******************************************************************************
+
+; DESCRIPTION
+; These's no evidence this is ever called.
+send_mod6_data:					; A12C
 	lda     SEND_FLG     			; Anything to send?
 	beq     :-				; No? Return to kernel
-	jmp     (off_134d)			; 
+	jmp     (MOD6A)				; Address received from PLATO host
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                sel_mode_6                                *
+;*                                proc_mode_6                                   *
 ;*                                                                             *
-;*                 ??????????????????????????????????????????                  *
+;* 	                       User Program Mode                               *
 ;*                                                                             *
 ;*******************************************************************************
-sub_a133:
-sel_mode_6:
-	ldy     PLATO_WORD+1  			; A133 A4 DC                    ..
-	lda     PLATO_WORD     			; A135 A5 DB                    ..
-	ldx     byte_FF 			; A137 A6 FF                    ..
-	bpl     :+++				; A139 10 10                    ..
 
-	iny             			; A13B C8                       .
-	bne     :+				; A13C D0 05                    ..
+; DESCRIPTION
+; This subroutine is curious in that it is likely never executed. Mode 6 is 
+; used for Micro PLATO to download and execute instructions from the PLATO host.
+; Such functionality for the 6502 is undocumented in s0ascers.
+; 
+; Action Description
+; -----  -----------
+; $FF    Initial state - Receive next action
+; $00    Send char at (MOD6_BUF),0 to PLATO
+; $01    Received data address (MOD6_BUF) from PLATO
+; $02    Received data from PLATO, save it to (MOD6_BUF),Y (up to 2 bytes per pass)
+; $03    Received subroutine address (MOD6A) from PLATO, Save it.
+; $04    Received subroutine address (MOD6A) from PLATO, Run it.
+;
+;-------------------------------------------------------------------------------
+; excerpt from 3.2.3.1.2.6
+;-------------------------------------------------------------------------------
+; The user program mode is used to communicate with "user programs."  The main 
+; such user program is the Micro PLATO interpreter.  When the resident receives
+; data from the host in this mode it should call the routine whose address is 
+; stored in the memory location for this user mode.  The addresses for these 
+; routines are kept in the Micro PLATO variables MOD5A, MOD6A and MOD7A.  If the
+; interface to Micro PLATO is not implemented, data in this mode should be 
+; ignored.
+;
+; Mode five is selected by ESC T (1B 54 hex), mode six by ESC U (1B 55 hex) and
+; mode 7 by ESC V (1B 56 hex).  The host sends data in word format in this mode
+; (see section 3.1.2.4.2 for a description of word format).  The entire eighteen
+; bits of the word are passed to the user program.
+;
+; If the address stored in MODx is zero, then this data should be ignored and 
+; the resident should simply return.
+;
+; If the user program address is non-zero, it is a pointer to the routine to be
+; called.  The data is passed to the user program in the C, D and E registers on
+; the Z80.  Bits 1 through 8 are passed in E, 9 through 16 in D and 17 through
+; 18 in the lowest two bits of C.  See appendix C for the equivalent registers 
+; on other microprocessors.
+;-------------------------------------------------------------------------------
+proc_mode_6:					; A133
+	ldy     PLATO_WORD+1  			; 
+	lda     PLATO_WORD     			; 
+	ldx     MOD6_ACTION 			; $FF->Initial State
+	bpl     :+++				; Returning State? -->
 
-	tax             			; A13E AA                       .
-	bmi     :++				; A13F 30 03                    0.
+;-------------------------------------------------------------------------------
+; Initial pass for current transaction
+;-------------------------------------------------------------------------------
+	iny             			; Test PLATO_WORD+1
+	bne     :+				; PLATO_WORD+1 <> $FF? --> RTS
 
-	sta     byte_FF 			; A141 85 FF                    ..
-:	rts             			; A143 60                       `
+	tax             			; Test PLATO_WORD
+	bmi     :++				; PLATO_WORD >= $80? --> 
 
-:	inx             			; A144 E8                       .
-	stx     byte_134f
-	jmp     sub_a1fe
+	sta     MOD6_ACTION 			; PLATO_WORD contains next action
+:	rts             			; Quit
 
-:	bit     byte_134f
-	bpl     :+
-	rts             			; A150 60                       `
+;-------------------------------------------------------------------------------
+; Here if PLATO_WORD >= $80 and PLATO_WORD == $FF
+;-------------------------------------------------------------------------------
+:	inx             			; X is now 0
+	stx     MOD6_D1				; MOD6_D1 = 0
+	jmp     mod6_terminate			; Send ESC F h and RTS
 
-:	ldx     byte_FF 			; A151 A6 FF                    ..
-	beq     :+
+;-------------------------------------------------------------------------------
+; Here if MOD6_ACTION between $00 and $7F
+;-------------------------------------------------------------------------------
+:	bit     MOD6_D1				; 
+	bpl     :+				; 
+	rts             			;
 
-	dex             			; A155 CA                       .
-	beq     :++				; A156 F0 15                    ..
+;-------------------------------------------------------------------------------
+; Switch on MOD6_ACTION
+;-------------------------------------------------------------------------------
+:	ldx     MOD6_ACTION 			; 
+	beq     mod6_s0				; MOD6_ACTION = 0? -->
 
-	dex             			; A158 CA                       .
-	beq     LA18C   			; A159 F0 31                    .1
+	dex             			; 
+	beq     mod6_s1				; MOD6_ACTION = 1? -->
 
-	dex             			; A15B CA                       .
-	beq     :+++				; A15C F0 16                    ..
+	dex             			; 
+	beq     mod6_s2   			; MOD6_ACTION = 2? -->
 
-	dex             			; A15E CA                       .
-	beq     LA180   			; A15F F0 1F                    ..
-	rts             			; A161 60                       `
+	dex             			; 
+	beq	mod6_s3 			; MOD6_ACTION = 3? -->
 
-:	sty     off_CE+1
-	sta     off_CE
-	ldy     #$00    			; A166 A0 00                    ..
-	lda     (off_CE),y
-	jmp     LA1DD   			; A16A 4C DD A1                 L..
+	dex             			; 
+	beq     mod6_s4   			; MOD6_ACTION = 4? -->
 
-:	sty     off_CE+1
-	sta     off_CE
-	jmp     sub_a1fe
+	rts             			; Else Quit
 
-:	sty     off_134d+1
-	sta     off_134d
-	dex             			; A17A CA                       .
-	stx     SEND_FLG     			; A17B 86 B9                    ..
-	jmp     sub_a1fe
+;-------------------------------------------------------------------------------
+; MOD6_ACTION = 0 : Send data byte at (MOD6_BUF),0 to PLATO
+;-------------------------------------------------------------------------------
+mod6_s0:
+	sty     MOD6_BUF+1			; MOD6_BUF = PLATO_WORD
+	sta     MOD6_BUF			;
+	ldy     #$00    			; 
+	lda     (MOD6_BUF),Y			; Get MOD6_BUF[0]
+	jmp     send_mod6_char   		; Send MOD6_BUF[0] and RTS
 
-LA180:  sty     off_134d+1
-	sta     off_134d
-	jsr     sub_a1fe
-	jmp     (off_134d)
+;-------------------------------------------------------------------------------
+; MOD6_ACTION = 1 : Received data address from PLATO. Save address to pointer.
+;-------------------------------------------------------------------------------
+mod6_s1:
+	sty     MOD6_BUF+1			; MOD6_BUF = PLATO_WORD
+	sta     MOD6_BUF			;
+	jmp     mod6_terminate			; Send response and RTS
 
-LA18C:  bit     byte_1350
-	bmi     :+
-	sta     word_1351
-	sty     word_1351+1
-	dex             			; A197 CA                       .
-	stx     byte_1350
-	rts             			; A19B 60                       `
+;-------------------------------------------------------------------------------
+; MOD6_ACTION = 3 : Received subroutine address from PLATO. Save address to pointer.
+;-------------------------------------------------------------------------------
+mod6_s3:	
+	sty     MOD6A+1				; MOD6A = PLATO_WORD
+	sta     MOD6A				;
+	dex             			; X = $FF
+	stx     SEND_FLG     			; SEND_FLG = $FF (Yes send something)
+	jmp     mod6_terminate			; Send response and RTS
 
-:	tya             			; A19C 98                       .
-	ldy     #$00    			; A19D A0 00                    ..
-	sta     (off_CE),y
-	iny             			; A1A1 C8                       .
-	dec     word_1351   			; A1A2 CE 51 13                 .Q.
-	bne     :+				; A1A5 D0 09                    ..
-	tya             			; A1A7 98                       .
-	ldx     word_1351+1
-	beq     LA1C8   			; A1AB F0 1B                    ..
-	dec     word_1351+1
-:	lda     $DB     			; A1B0 A5 DB                    ..
-	sta     (off_CE),y
-	dec     word_1351
-	bne     :++				; A1B7 D0 0B                    ..
-	ldx     word_1351+1
-	beq     :+
-	dec     word_1351+1
-	bvs     :++				; A1C1 70 01                    p.
-:	clv             			; A1C3 B8                       .
-:	lda     #$02    			; A1C4 A9 02                    ..
-	bne     :+				; A1C6 D0 01                    ..
-LA1C8:  clv             			; A1C8 B8                       .
-:	php             			; A1C9 08                       .
-	clc             			; A1CA 18                       .
-	adc     off_CE
-	sta     off_CE
-	bcc     :+
-	inc     off_CE+1
-:	plp             			; A1D3 28                       (
-	bvs     :+				; A1D4 70 06                    p.
-	jsr     sub_a1fe
-	inc     byte_1350
-:	rts             			; A1DC 60                       `
+;-------------------------------------------------------------------------------
+; MOD6_ACTION = 4 : Received call address from PLATO. Save it & run it
+;-------------------------------------------------------------------------------
+mod6_s4:  
+	sty     MOD6A+1				; MOD6A = PLATO_WORD
+	sta     MOD6A				;
+	jsr     mod6_terminate			; Send response and...
+	jmp     (MOD6A)				; Run it (and presumably RTS)
 
-; ----------------------------------------------------------------------------
-LA1DD:  lda     #$1B    			; Send ESC
+;-------------------------------------------------------------------------------
+; MOD6_ACTION = 2 : Save PLATO_WORD to MOD6_BUF (up to 2 bytes at a time)
+; Subsequent visits append to buffer.
+;-------------------------------------------------------------------------------
+mod6_s2:  
+	bit     MOD6_1ST			; Overflow tripped if not first visit.
+	bmi     :+				; $FF? Yes -->
+
+	; First visit. PLATO_WORD contains expected count. Save it to MOD6_N.
+	sta     MOD6_N				; MOD6_N = PLATO_WORD
+	sty     MOD6_N+1			; 
+	dex             			; X is now $FF
+	stx     MOD6_1ST			; $FF. Will trip Overflow next time. 
+	rts             			; Quit
+
+	; Subsequent visit. Save PLATO_WORD+1 to MOD6_BUF
+:	tya             			; A = PLATO_WORD+1
+	ldy     #$00    			; Y = 0
+	sta     (MOD6_BUF),Y			; Save PLATO_WORD+1 to MOD6_BUF[n]
+	iny             			; Y = 1
+
+	; Decrement MOD6_N
+	dec     MOD6_N   			; 
+	bne     :+				; 
+	tya             			; Advance pointer by 1
+	ldx     MOD6_N+1			; 
+	beq     mod6_fin   			; MOD6_N reached 0? -->
+	dec     MOD6_N+1			; 
+
+	; If expected count not to zero yet, then
+	; save PLATO_WORD to MOD6_BUF
+:	lda     PLATO_WORD     			; A = PLATO_WORD
+	sta     (MOD6_BUF),Y			; Save PLATO_WORD to MOD6_BUF[n+1]
+
+	; Decrement MOD6_N
+	dec     MOD6_N				;
+	bne     :++				; 
+	ldx     MOD6_N+1			;
+	beq     :+				;
+	dec     MOD6_N+1			;
+	bvs     :++				; 
+
+:	clv             			; CLV if MOD6_N reached 0.
+:	lda     #$02    			; Advance pointer by 2
+	bne     :+				; Always-->
+
+mod6_fin:  
+	clv             			; Clear overflow->'end reached'
+
+	; Increment 16-bit MOD6_BUF pointer
+:	php             			; Save Overflow flag
+	clc             			; Clear overflow->'end reached'
+	adc     MOD6_BUF			; Advance pointer by A (1 or 2)
+	sta     MOD6_BUF			;
+	bcc     :+				;
+	inc     MOD6_BUF+1			;
+:	plp             			; Restore Overflow flag
+	bvs     :+				; More expected -->
+	jsr     mod6_terminate			; Send response
+	inc     MOD6_1ST			; MOD6_1ST = $00. Next visit will start new.
+:	rts             			; Quit
+
+;*******************************************************************************
+;*                                                                             *
+;*                              send_mod6_char                                 *
+;*                                                                             *
+;*                           Sends ESC char ESC F h                            *
+;*                                                                             *
+;*******************************************************************************
+
+; DESCRIPTION
+; This subroutine packs PLATO_CHAR into a PLATO word and sends it to the PLATO
+; host as part of an escape sequence.
+send_mod6_char:					; A1DD
+	lda     #$1B    			; Send ESC
 	jsr     send_to_plato2			;
 
-	ldy     #$00    			; A1E2 A0 00                    ..
-	sty     PLATO_CHAR     			; A1E4 84 E7                    ..
+	ldy     #$00    			;
+	sty     PLATO_CHAR     			; Clear bits in PLATO_CHAR
 
-	lda     (off_CE),y
-	tay             			; Stash A
+	lda     (MOD6_BUF),Y			; 
+	tay             			; Stash original byte
 
-	asl     a       			; A1E9 0A                       .
-	rol     PLATO_CHAR     			; A1EA 26 E7                    &.
-	asl     a       			; A1EC 0A                       .
-	rol     PLATO_CHAR     			; A1ED 26 E7                    &.
+	asl     A       			; Shift 2 high bits
+	rol     PLATO_CHAR     			; from data byte to
+	asl     A       			; variable.
+	rol     PLATO_CHAR     			;
 
-	tya             			; Restore A
-	and     #$3F    			; Clear bits 7,6
-	ora     #$40    			; Force bit 6
+	tya             			; Original data byte value.
+	and     #$3F    			; Clear the top 2 bits.
+	ora     #$40    			; Set protocol bit.
+	jsr     send_to_plato2			; Send
+
+	lda     PLATO_CHAR     			; Send 2 high bits 
+	ora     #$68    			; Set protocol bits.
+	jsr     send_to_plato2			; Send 
+						; Fall through to end mode 6
+
+;*******************************************************************************
+;*                                                                             *
+;*                               mod6_terminate                                  *
+;*                                                                             *
+;*                         Sends ESC F h to PLATO host                         *
+;*                                                                             *
+;*******************************************************************************
+
+; DESCRIPTION
+; This subroutine sends an escape sequence to the PLATO host to signify
+; the completion of a Mode 6 transaction.
+mod6_terminate:					; A1FE
+	jsr     restore_mode			; 
+
+	lda     #$FF    			; Reset to initial state
+	sta     MOD6_ACTION 			; 
+
+	lda     #$1B    			; ESC
 	jsr     send_to_plato2
 
-	lda     PLATO_CHAR     			; A1F7 A5 E7                    ..
-	ora     #$68    			; A1F9 09 68                    .h
+	lda     #$46    			; F
 	jsr     send_to_plato2
 
-sub_a1fe:
-	jsr     sub_a120   			; A1FE 20 20 A1                   .
-
-	lda     #$FF    			; A201 A9 FF                    ..
-	sta     byte_FF 			; A203 85 FF                    ..
-
-	lda     #$1B    			; A205 A9 1B                    ..
-	jsr     send_to_plato2
-
-	lda     #$46    			; A20A A9 46                    .F
-	jsr     send_to_plato2
-
-	lda     #$68    			; A20F A9 68                    .h
+	lda     #$68    			; h
 	jmp     send_to_plato2
 
 ;*******************************************************************************
@@ -981,14 +1137,14 @@ init_graphics:					; A214
 
 ;** (n) Clear RAM at 0080-00FF and  0580-05FF **********************************
 	ldx     #$7F    			; Clear 128 bytes at ...
-:       sta     $0580,x 			; 0580-05FF and ...
-	sta     L0080,x 			; 0080-00FF 
+:       sta     $0580,X 			; 0580-05FF and ...
+	sta     INIT_DL,X 			; 0080-00FF 
 	dex             			; 
 	bpl     :-      			; End Loop
 
 ;** (n) Initialize some variables while we have X = 0 **************************
 	stx     CURRENT_DL			; display list for full-screen
-	stx     byte_FF 			; TODO WHat is it?
+	stx     MOD6_ACTION 			; Initial Mode 6 State = $FF
 
 ;** (n) Prepare values for head of display lists *******************************
 	lda     #$70                            ;
@@ -1096,9 +1252,9 @@ init_graphics:					; A214
 	stx     TOUCH_Y 			; position to 16
 
 	ldx     #$07    			; Load bitmaps for missiles.
-	stx     byte_B3 			; 
-:       lda     LBA67,x 			; One is a large 'F' and the ...
-	sta     $058C,x 			; ...other is a cross-shaped cursor.
+	stx     DATA_MODE 			; 
+:       lda     PM_BITMAPS,X 			; One is a large 'F' and the ...
+	sta     $058C,X 			; ...other is a cross-shaped cursor.
 	dex             			;
 	bpl     :-      			; 
 
@@ -1107,7 +1263,7 @@ init_graphics:					; A214
 ;** (n) Set default background and border color for Display List #1 *************
 	lda     #$01    			; Set initial Y location for touch screen 
 	sta     CROSS_Y 			; cross-shaped cursor.
-	sta     DATA_MODE 			; Initialize PLATO data mode to alpha
+	sta     GRAPHIC_FLG 			; Initialize PLATO data mode to alpha
 	sta     GPRIOR  			; Set priority for screen objects: 0000 0001 = Player 0-3, Playfied 0-3, BAK
 	lda     #$16				; $10 = rust + $06 luminance
 	sta     COLOR4  			; for the border and background
@@ -1276,16 +1432,16 @@ sel_data_mode:					; A36A
 ;** Convert control codes to an 0-7 index and save to byte_B3 ******************
 	txa             			; Let A = original control code
 	and     #$07    			; Modulus 8 to use as index
-	sta     byte_B3 			; Save index (4->point,5->line,1->block,7->text,0->load mem)
+	sta     DATA_MODE 			; Save index (4->point,5->line,1->block,7->text,0->load mem)
 
 ;** Use index into table *******************************************************
 	tax             			; Use index to get another value from lookup
-	lda     tab_data_mode_id,X 		; ...table ($80->graphic, $01->text)
-	sta     DATA_MODE 			; Save lookup value to B5
+	lda     tab_mode_subs_id,X 		; ...table ($80->graphic, $01->text)
+	sta     GRAPHIC_FLG 			; Save lookup value to B5
 
 ;** Clear TODO *****************************************************************
 	ldx     #$00    			; 
-	stx     $DA     			; Clear $DA
+	stx     MODE_CHANGE    			; Note switch to new mode 
 	rts             			; 
 
 ;*******************************************************************************
@@ -1768,9 +1924,9 @@ sel_char_set:					; A410
 ; starting an escape sequence. Another routine will examine this flag and 
 ; branch accordingly.
 set_esc:					; A42B
-	asl     byte_B3 			; Shift bits left
+	asl     DATA_MODE 			; Shift bits left
 	sec             			; Set carry
-	ror     byte_B3 			; Rotate carry onto value
+	ror     DATA_MODE 			; Rotate carry onto value
 	rts             			; and return.
 
 ;*******************************************************************************
@@ -1782,11 +1938,19 @@ set_esc:					; A42B
 ;*******************************************************************************
 
 ; DESCRIPTION
-; Set the index for a jump table to process a Select Mode 7 command
+
+; Set the index for a jump table for the following escape codes. In the end, 
+; each of these functions are ignored by the Atari.
+;
+; ESC R     External data.
+; ESC S     Load memory (mode 2 data).
+; ESC T     Select mode 5.
+; ESC V     Select mode 7.
+;
 set_mode_7:					; A431
-	lda     #$00    			; A431 A9 00                    ..
-LA433:  ldx     #$03    			; A433 A2 03                    ..
-	jmp     LA111   			; A435 4C 11 A1                 L..
+	lda     #$00    			; Index into jump table
+LA433:  ldx     #$03    			; Number of bytes in data packet
+	jmp     save_mode   			; 
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -1799,8 +1963,8 @@ LA433:  ldx     #$03    			; A433 A2 03                    ..
 ; DESCRIPTION
 ; Set the index for a jump table to process a Select Mode 6 command
 set_mode_6:					; A438
-	lda     #$05    			; A438 A9 05                    ..
-	bne     LA433   			; A43A D0 F7                    ..
+	lda     #$05    			; Index into jump table
+	bne     LA433   			; 
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -1823,8 +1987,8 @@ set_mode_6:					; A438
 ; are used.
 ;-------------------------------------------------------------------------------
 set_ssf:					; A43C
-	lda     #$02    			; A43C A9 02                    ..
-	bne     LA433   			; A43E D0 F3                    ..
+	lda     #$02    			; Index into jump table
+	bne     LA433   			;
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -1837,8 +2001,8 @@ set_ssf:					; A43C
 ; DESCRIPTION
 ; Set the index for a jump table to process a Load Echo command
 set_load_echo:					; A440
-	lda     #$03    			; A440 A9 03                    ..
-	bne     LA433   			; A442 D0 EF                    ..
+	lda     #$03    			; Index into jump table
+	bne     LA433   			;
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -1851,8 +2015,8 @@ set_load_echo:					; A440
 ; DESCRIPTION
 ; Set the index for a jump table to process a Load Memory Address command
 set_load_mem:					; A444
-	lda     #$04    			; 
-	bne     LA433   			; Always -->
+	lda     #$04    			; Index into jump table
+	bne     LA433   			;
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -1863,220 +2027,320 @@ set_load_mem:					; A444
 ;*******************************************************************************
 
 ; DESCRIPTION
+;
+;-------------------------------------------------------------------------------
+; Excerpt from (3.2.3.1.2.5)
+;-------------------------------------------------------------------------------
+; Block mode is selected with EM (19 hex).  In block mode (also known as mode 4)
+; the host sends down pairs of screen coordinates which indicate opposite end 
+; points of a rectangular area on the screen to be drawn.  In monochrome mode 
+; write and mode rewrite cause all dots inclusive of the specified area to be 
+; turned on; modes erase and inverse cause the area to be turned off (erased). 
+; In color, modes write and rewrite cause the area to be set to the foreground 
+; color while modes erase and inverse set it to the background color.
+;
+; Once in block mode, subsequent pairs of coordinates indicate areas to be 
+; drawn.  The coordinate pairs are each one to four bytes in the format 
+; specified in section 3.1.2.4.3.  No assumptions should be made on the order 
+; of the coordinates received (i.e., the upper left hand corner of the rectangle
+; is not always sent first).
+;
+; The current (X,Y) position after each block is drawn should be set to the 
+; first coordinate pair (call it (X1,Y1)) minus 15 dots in the vertical 
+; direction (that is, (X1,Y1-15)).
+;-------------------------------------------------------------------------------
 draw_block:					; A448
-	jsr     get_plato_vects
-	ldx     $DA     			; A44B A6 DA                    ..
-	bne     :++				; A44D D0 10                    ..
+	jsr     get_plato_coords
+	ldx     MODE_CHANGE    			; First call since switching to mode 4?
+	bne     :++				; No. -->
 
 ;-------------------------------------------------------------------------------
-; Here if $DA = 0
+; First call since switching to mode 4
+; Save (X,Y) coordinates of 1st corner for both full screen and zoomed displays
 ;-------------------------------------------------------------------------------
-	ldx     #$03    			; Iterate 4 times A44F A2 03                    ..
-:	lda     CURSOR1_X,x   			; save 1st X-Y pair
-	sta     CURSOR1_X_OLD,x   		; A453 95 A8                    ..
-	lda     CURSOR2_X,x   			; A455 B5 9C                    ..
-	sta     TCRSX,x   			; A457 95 F0                    ..
+	ldx     #$03    			; Iterate through (X,Y) coordinates
+
+:	lda     CURSOR1_X,X   			; Full screen display coordinates
+	sta     BLOCK1_X1,X			; 
+
+	lda     CURSOR2_X,X   			; Zoomed display coordinates
+	sta     BLOCK_X1,X   			; 
+
 	dex             			; 
 	bpl     :-				; Next X
 
-	stx     $DA     			; A45C 86 DA                    ..
-	rts             			; A45E 60                       `
+	stx     MODE_CHANGE    			; Non-zero->No longer 1st call to mode 4
+	rts             			; Need 2nd corner before anything can be done.
 
 ;-------------------------------------------------------------------------------
-; Here if $DA <> 0
+; Subsequent call in mode 4. Save 2nd corner of block.
 ;-------------------------------------------------------------------------------
-:	lda     IS_16K     			; A45F A5 BA                    ..
+:	lda     IS_16K     			; 
 	sta     COMPR     			; Compressed display (full screen)?
-	bne     :+				; Yes? -->
+	bne     :+				; Full screen only? -->
 
-;** Zoomed display *************************************************************
-	lda     CURSOR2_Y+1			; A465 A5 9F                    ..
-	sta     CURSY+1     			; A467 85 FB                    ..
+; Zoomed display coordinates
+	lda     CURSOR2_Y+1			; 
+	sta     BLOCK_Y2+1    			; 
 
-	lda     CURSOR2_X     			; A469 A5 9C                    ..
-	ldx     CURSOR2_X+1    			; A46B A6 9D                    ..
-	ldy     CURSOR2_Y			; A46D A4 9E                    ..
+	lda     CURSOR2_X     			; Set draw params for 2nd corner
+	ldx     CURSOR2_X+1    			; for zoomed display
+	ldy     CURSOR2_Y			; 
 
-	jsr     :++				; Process zoomed display then
-	dec     COMPR     			; ...return to do full screen
+	jsr     :++				; Draw block in zoomed display
+	dec     COMPR     			; COMPR = $FF. 
+						; Fall through to draw block for full screen display
 
-;** Full screen: Copy old CURSOR (X,Y) to TCRS(X,Y)
+; Full screen coordinates
 :	ldx     #$04    			; 
-@LOOP2: lda     CURSOR1_Y_OLD-3,x  		; 
-	sta     TCRSY-3,x   			; 
+@LOOP2: lda     BLOCK1_Y1-3,X			; 
+	sta     BLOCK_Y1-3,X			; 
 	dex             			; 
 	bne     @LOOP2  			; 
 
-	stx     CURSY+1     			; 0: Full screen < 192
-	stx     TCRSY+1    			; 0: Full screen < 192
-	stx     $DA     			; TODO A481 86 DA                    ..
+	stx     BLOCK_Y2+1    			; 0
+	stx     BLOCK_Y1+1    			; 0
+	stx     MODE_CHANGE    			; 0->Next call is start of new mode 4 block
 
-	lda     CURSOR1_X     			; A483 A5 A4                    ..
-	ldx     CURSOR1_X+1    			; A485 A6 A5                    ..
-	ldy     CURSOR1_Y     			; A487 A4 A6                    ..
+	lda     CURSOR1_X     			; Set draw params for 2nd corner
+	ldx     CURSOR1_X+1    			; ...for full screen display
+	ldy     CURSOR1_Y     			; 
 
-;** Full Screen and Zoomed displays *********************************************
-:	sta     CURSX     			; A489 85 F8                    ..
-	stx     CURSX+1    			; A48B 86 F9                    ..
-	sty     CURSY     			; A48D 84 FA                    ..
+; Both full screen and zoomed displays
+:	sta     BLOCK_X2     			; Write params to memory
+	stx     BLOCK_X2+1    			; 
+	sty     BLOCK_Y2     			; 
 
-	cpx     TCRSX+1     			; A48F E4 F1                    ..
-	bcc     :++				; A491 90 12                    ..
-	bne     :+				; A493 D0 04                    ..
+;-------------------------------------------------------------------------------
+; Compare X1 and X2. Normalize so X1 >= X2.
+;-------------------------------------------------------------------------------
+	cpx     BLOCK_X1+1     			; X2 - X1 (high byte)
+	bcc     :++				; X2 < X1? -->
+	bne     :+				; X2 > X1? -->
 
-	cmp     TCRSX     			; A495 C5 F0                    ..
-	bcc     :++				; A497 90 0C                    ..
+	cmp     BLOCK_X1     			; X2 - X1 (low byte)
+	bcc     :++				; X2 < X1? -->
+						; X2 >= X1. Fall through to swap.
 
-:	ldy     TCRSX+1     			; A499 A4 F1                    ..
-	stx     TCRSX+1     			; A49B 86 F1                    ..
-	sty     CURSX+1     			; A49D 84 F9                    ..
+;-------------------------------------------------------------------------------
+; Swap X1 and X2 when X1 < X2
+;-------------------------------------------------------------------------------
+:	ldy     BLOCK_X1+1     			; 
+	stx     BLOCK_X1+1     			; BLOCK_X1+1 = BLOCK_X2+1
+	sty     BLOCK_X2+1     			; BLOCK_X2+1 = BLOCK_X1+1
 
-	ldy     TCRSX     			; A49F A4 F0                    ..
-	sta     TCRSX     			; A4A1 85 F0                    ..
-	sty     CURSX     			; A4A3 84 F8                    ..
+	ldy     BLOCK_X1     			; 
+	sta     BLOCK_X1     			; BLOCK_X1 = BLOCK_X2
+	sty     BLOCK_X2     			; BLOCK_X2 = BLOCK_X1
 
-:	lda     CURSY     			; A4A5 A5 FA                    ..
-	ldx     TCRSY+1    			; A4A7 A6 F3                    ..
-	cpx     CURSY+1     			; A4A9 E4 FB                    ..
-	bcc     :++				; A4AB 90 12                    ..
-	bne     :+				; A4AD D0 04                    ..
+;-------------------------------------------------------------------------------
+; Compare Y1 and Y2. Normalize so Y2 >= Y1.
+;-------------------------------------------------------------------------------
+:	lda     BLOCK_Y2     			; 
+	ldx     BLOCK_Y1+1    			; 
+	cpx     BLOCK_Y2+1     			; Y1 - Y2 (high byte)
+	bcc     :++				; Y1 < Y2? -->
+	bne     :+				; Y1 > Y2? -->
 
-	cmp     TCRSY     			; A4AF C5 F2                    ..
-	bcs     :++				; A4B1 B0 0C                    ..
+	cmp     BLOCK_Y1     			; Y2 - Y1 (high byte)
+	bcs     :++				; Y1 <= Y2 -->
+						; otherwise Y1 > Y2. Fall through to swap
 
-:	ldy     CURSY+1     			; A4B3 A4 FB                    ..
-	stx     CURSY+1     			; A4B5 86 FB                    ..
-	sty     TCRSY+1     			; A4B7 84 F3                    ..
+;-------------------------------------------------------------------------------
+; Swap Y1 and Y2 when Y1 > Y2
+;-------------------------------------------------------------------------------
+:	ldy     BLOCK_Y2+1     			; 
+	stx     BLOCK_Y2+1     			; BLOCK_Y2+1 = BLOCK_Y1+1
+	sty     BLOCK_Y1+1     			; BLOCK_Y1+1 = BLOCK_Y2+1
 
-	ldy     TCRSY     			; A4B9 A4 F2                    ..
-	sta     TCRSY     			; A4BB 85 F2                    ..
-	sty     CURSY     			; A4BD 84 FA                    ..
+	ldy     BLOCK_Y1     			; 
+	sta     BLOCK_Y1     			; BLOCK_Y1 = BLOCK_Y2
+	sty     BLOCK_Y2     			; BLOCK_Y2 = BLOCK_Y1
 
+;-------------------------------------------------------------------------------
+; Copy BLOCK_(X,Y)2 to CURSOR2_(X,Y)
+;-------------------------------------------------------------------------------
 :	ldx     #$03    			; 
 	bit     COMPR     			; Are we currently full-screen?
-@LOOP3:	lda     $F8,x   			; 
-	bvs     :+				; Yes? skip zoomed logic 
-	sta     CURSOR2_X,x   			; Copy from $F8,x
-	ldy     #$40    			; 64 bytes per scan line
+@LOOP3:	lda     BLOCK_X2,X   			; 
+	bvs     :+				; Full screen? skip zoomed logic 
+; Zoomed display
+	sta     CURSOR2_X,X   			; Copy from $F8,x
+	ldy     #64				; 64 bytes per scan line
 	bvc     :++				; If zoomed skip full screen logic.
-:	sta     CURSOR1_X,x   			; Copy from $F8,x
-	ldy     #$28    			; 40 bytes per scan line
+; Full screen display
+:	sta     CURSOR1_X,X   			; Copy from $F8,x
+	ldy     #40				; 40 bytes per scan line
 :	dex             			; 
-	bpl     @LOOP3				; 
+	bpl     @LOOP3				; Next X
 
 	sty     TMP	 			; Store bytes per scan line (64 or 40)
-	bvs     :+				; Is currently full screen? Skip
-	bit     IS_16K     			; Running on 48K RAM?
-	bpl     :+				; Yes? Skip.
-	rts             			; 
+	bvs     B00				; Working on full screen? Draw block in full screen
 
-:	jsr     get_pfaddr			; set YOUT to upper left corner
+; Zoomed display
+	bit     IS_16K     			; Running on 48K RAM?
+	bpl     B00				; Yes? Draw block in zoomed display
+	rts             			; No zoomed display, return.
+
+;-------------------------------------------------------------------------------
+; Get left and right masks for block pixels
+;-------------------------------------------------------------------------------
+B00:	jsr     get_pfaddr			; set YOUT to upper left corner
 	bit     PLOT_MODE			; Which mode are we in?
-	lda     $F8     			; A4E2 A5 F8                    ..
-	and     #$07    			; Get modulus 8 and use as index
-	tax             			; A4E6 AA                       .
-	lda     LTAB,x				; A4E7 BD 4E B9                 .N.
+
+; Left mask
+	lda     BLOCK_X2     			; find pixel offset in byte
+	and     #$07    			; use mod 8 as index
+	tax             			; 
+	lda     LTAB,X				; Get left side of pixels
 	beq     :++				; no lmask --> no round up byte count
 	bvc     :+				; not erase + inverse mode ->
-	eor     #$FF    			; else invert bits
+	eor     #$FF    			; else invert bits to erase playfield
 :	inc     SUMLO				; points to next whole byte boundary
-:	sta     LEND     			; A4F2 85 AB                    ..
-	lda     TCRSX+1     			; right whole byte boundry
-	lsr     A       			; A4F6 4A                       J
-	lda     TCRSX     			; A4F7 A5 F0                    ..
-	ror     A       			; A4F9 6A                       j
-	lsr     A       			; A4FA 4A                       J
-	lsr     A       			; A4FB 4A                       J
-	sta     SUMHI     			; A4FC 85 F5                    ..
-	lda     TCRSX     			; get right mask
-	and     #$07    			; A500 29 07                    ).
-	tax             			; A502 AA                       .
-	lda     RTAB,x				; A503 BD 56 B9                 .V.
-	bne     :+
-	inc     SUMHI     			; A508 E6 F5                    ..
-:	ldy     #$FF    			; A50A A0 FF                    ..
-	bvc     :+
-	iny             			; A50E C8                       .
-	tax             			; A50F AA                       .
-	beq     :+
-	eor     #$FF    			; A512 49 FF                    I.
-:	sta     REND     			; A514 85 A7                    ..
-	sty     PLATO_CHAR     			; A516 84 E7                    ..
-	sec             			; get Y delta: # of scan lines
-	lda     CURSY				; cursy >= tcrsy
-	sbc     TCRSY     			; 
-	eor     #$FF    			; 
+:	sta     LEND     			; Left mask
+
+; Find byte offset from start of scan line to right edge of block
+	lda     BLOCK_X1+1     			; right whole byte boundry
+	lsr     A       			; shift lowest bit into Carry
+	lda     BLOCK_X1     			; 
+	ror     A       			; Div by 2 (pull high bit from Carry)
+	lsr     A       			; Div by 4
+	lsr     A       			; Div by 8
+	sta     SUMHI     			; byte offset from start of scan line
+
+; Right mask
+	lda     BLOCK_X1     			; get right mask
+	and     #$07    			; user mod 8 as index
+	tax             			; 
+	lda     RTAB,X				; Get right edge for pixels
+	bne     :+				; 
+	inc     SUMHI     			; bump byte offset
+:	ldy     #$FF    			; 
+	bvc     :+				; not erase + inverse mode --> TODO?
+
+; Erase + inverse mode
+	iny             			; Y = 0
+	tax             			; Try to trip Z flag
+	beq     :+				; RTAB,X all zeroes? --> 
+	eor     #$FF    			; else invert bits to erase playfield TODO?
+
+:	sta     REND     			; Save right mask
+	sty     PLATO_CHAR     			; $FF->draw mode $00->erase/inverse mode
+
+; Get Y delta; # of scan lines
+	sec             			; normalized earlier Y2 >= Y1
+	lda     BLOCK_Y2			; low byte
+	sbc     BLOCK_Y1     			; 
+	eor     #$FF    			; Invert so we count up later
 	sta     INDLO     			; C flag intact thru EOR
-	lda     CURSY+1
-	sbc     TCRSY+1     			; A523 E5 F3                    ..
-	eor     #$FF    			; A525 49 FF                    I.
-	sta     INDHI     			; A527 85 F7                    ..
-	lda     SUMHI     			; A529 A5 F5                    ..
-	sec             			; A52B 38                       8
-	sbc     SUMLO
-	sta     SUMLO
+	lda     BLOCK_Y2+1			; high byte
+	sbc     BLOCK_Y1+1     			; 
+	eor     #$FF    			; Invert so we count up later
+	sta     INDHI     			; 
+
+; Get X delta; # of whole bytes wide (not pixels)
+	lda     SUMHI     			; Whole byte offset left side
+	sec             			; 
+	sbc     SUMLO				; Whole byte offset right side
+	sta     SUMLO				; 
 	bmi     LA565   			; not on boundary special case
+
+;-------------------------------------------------------------------------------
+; Block plotting loop
+;-------------------------------------------------------------------------------
 BLOOP:	bit     PLOT_MODE			; check need for complement
 	ldy     #$00    			; init displacement reg
-	lda     LEND     			; do left edge
+
+; Left edge of block
+	lda     LEND     			; 
 	beq     :+				; lmask=0 --> skip
-	jsr     sub_a596
-:	ldx     SUMLO
-	beq     :++				; A53F F0 08                    ..
-	lda     PLATO_CHAR     			; A541 A5 E7                    ..
-:	jsr     sub_a596
-	dex             			; A546 CA                       .
-	bne     :-				; A547 D0 FA                    ..
-:	lda     REND     			; A549 A5 A7                    ..
-	beq     :+				; A54B F0 03                    ..
-	jsr     sub_a596
-:	inc     INDLO     			; A550 E6 F6                    ..
-	bne     :+				; A552 D0 04                    ..
-	inc     INDHI    			; A554 E6 F7                    ..
-	beq     :++				; A556 F0 1B                    ..
-:	lda     TMP	 			; A558 A5 D9                    ..
-	clc             			; A55A 18                       .
-	adc     YOUT
-	sta     YOUT
-	bcc     BLOOP   			; A55F 90 D1                    ..
-	inc     YOUT+1
-	bne     BLOOP   			; A563 D0 CD                    ..
+	jsr     plot_mask_byte			;
+
+; Middle of block
+:	ldx     SUMLO				; Get X delta in whole bytes
+	beq     :++				; Is block <= 8 pixels wide? no Middle -->
+	lda     PLATO_CHAR     			; All pixels on or all off depending on draw mode
+:	jsr     plot_mask_byte			;
+	dex             			; 
+	bne     :-				; Next byte of middle pixels
+
+; Right edge of block
+:	lda     REND     			; Get right side mask
+	beq     :+				; rmask=0 --> skip
+	jsr     plot_mask_byte			;
+
+; Increment scan line counter (0 = done)
+:	inc     INDLO     			; 
+	bne     :+				; 
+	inc     INDHI    			; 
+	beq     :++				; Zero? Quit loop -->
+
+; Point to screen byte on next scan line
+:	lda     TMP	 			; Bytes per scan line
+	clc             			; 
+	adc     YOUT				; Next screen byte (low)
+	sta     YOUT				; 
+	bcc     BLOOP   			; 
+	inc     YOUT+1				; Next screen byte (high)
+	bne     BLOOP   			; Process next block scan line
+
+;-------------------------------------------------------------------------------
+; Create special mask 
+;-------------------------------------------------------------------------------
 LA565:  lda     LEND     			; create special mask
-	ora     REND     			; A567 05 A7                    ..
-	sta     LEND     			; A569 85 AB                    ..
-	lda     #$00    			; A56B A9 00                    ..
-	sta     REND     			; A56D 85 A7                    ..
-	sta     SUMLO
-	beq     BLOOP   			; A571 F0 BF                    ..
-:	bit     COMPR     			; A573 24 C9                    $.
-	bvc     :++				; A575 50 15                    P.
-	lda     CURSOR2_Y			; A577 A5 9E                    ..
-	sec             			; A579 38                       8
-	sbc     #$0B    			; A57A E9 0B                    ..
-	sta     CURSOR2_Y			; A57C 85 9E                    ..
-	bcs     :+	   			; A57E B0 02                    ..
-	dec     CURSOR2_Y+1			; A580 C6 9F                    ..
-:	lda     CURSOR2_Y+1			; A582 A5 9F                    ..
-	lsr     A       			; A584 4A                       J
-	lda     CURSOR2_Y			; A585 A5 9E                    ..
-	ror     A       			; A587 6A                       j
-	adc     #$00    			; A588 69 00                    i.
-	sta     CURSOR1_Y     			; A58A 85 A6                    ..
+	ora     REND     			; merge with right mask
+	sta     LEND     			; save new mask
+	lda     #$00    			; 
+	sta     REND     			; clear right mask
+	sta     SUMLO				; whole byte width is 0
+	beq     BLOOP   			; Start drawing block
+
+;-------------------------------------------------------------------------------
+; The current (X,Y) position after each block is drawn should be set to the 
+; first coordinate pair (call it (X1,Y1)) minus 15 dots in the vertical 
+; direction (that is, (X1,Y1-15)).
+;-------------------------------------------------------------------------------
+:	bit     COMPR     			; Full screen?
+	bvc     :++				; Skip on full screen (done during zoomed)
+
+; Zoomed display (384 scan lines)
+	lda     CURSOR2_Y			; Get current (X,Y) position
+	sec             			; 
+	sbc     #11				; minus 11 for 384 scan line (15/512 ~ 11/384)
+	sta     CURSOR2_Y			; low byte
+	bcs     :+	   			; 
+	dec     CURSOR2_Y+1			; high byte
+
+; Full screen display (192 scan lines)
+:	lda     CURSOR2_Y+1			; 192 is 1/2 of 384
+	lsr     A       			; 
+	lda     CURSOR2_Y			; 
+	ror     A       			; Divide by 2
+	adc     #$00    			; 
+	sta     CURSOR1_Y     			; Save full screen cursor Y
+
+; Check if running on ROM cartridge
 :	lda     #<(obf_code-1)			; Point to obfuscated code used...
 	ldy     #>(obf_code-1)			; ...for copy-protection check.
 	ldx     #$0C				; Init counter for 12 bytes of obfuscated code
 	jsr     check_if_pirated		; 
 	rts             			; 
 
-; ----------------------------------------------------------------------------
-sub_a596:
-	bvc     :+
-	and     (YOUT),y
+;*******************************************************************************
+;*                                                                             *
+;*                               plot_mask_byte                                *
+;*                                                                             *
+;*                  Write pixels to screen during draw_block                   *
+;*                                                                             *
+;*******************************************************************************
+plot_mask_byte:					; A596
+	bvc     :+				; not erase + inverse mode ->
+	and     (YOUT),y			; AND when mode erase/inverse
 	bvs     :++
-:  	ora     (YOUT),y
-:	sta     (YOUT),y
-	iny             			; A5A0 C8                       .
-	rts             			; A5A1 60                       `
+:  	ora     (YOUT),y			; OR when mode write/rewrite
+:	sta     (YOUT),y			; write new screen byte to RAM
+	iny             			; Increment draw_block counter
+	rts             			; 
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -2117,8 +2381,8 @@ div_cx2_by_8:					; A5AA
 	lsr     A       			; Divide by 2
 	lda     CURSOR2_X     			; 
 :	ror     A       			; Divide by 2
-	lsr     A       			; Divide by 2
-	lsr     A       			; Divide by 2
+	lsr     A       			; Divide by 4
+	lsr     A       			; Divide by 8
 	sta     SUMLO				; Save the whole byte boundary offset
 	rts             			; 
 
@@ -2536,7 +2800,7 @@ LA673:  lda     #$00    			;
 ; The current (X,Y) position is left at this location.
 ;-------------------------------------------------------------------------------
 plot_point:					; A682
-	jsr     get_plato_vects			; Get coordinate(s) for point(s)
+	jsr     get_plato_coords			; Get coordinate(s) for point(s)
 	lda     IS_16K     			; Get memory constraint flag
 	sta     COMPR     			; 1->16K 0->48K+
 	bne     :+				; Full screen only? -->
@@ -2568,28 +2832,28 @@ clear_screen:					; A6A2
 	sty     SDMCTL  			; Turn off ANTIC
 
 ;** (n) Load self modifying code #1 into zero page RAM *************************
-	ldx     #$1B    			; Copy instructions from ROM to RAM
-:	lda     LA6D0,x 			; Must be self-modifying code
-	sta     a:L0080,x       		;
+	ldx     #$1B    			; Copy 28 bytes of code
+:	lda     LA6D0,X 			; ...from ROM address $A6D0
+	sta     A:INIT_DL,X       		; ...to zero page $80
 	dex             			;
-	bpl     :-				; End loop after 27 iterations
+	bpl     :-				; Next X
 
-;** (n) Run self modifying code #1 *******************************************
+;** (n) Run self modifying code #1 to create display list #2 *******************
 	tya             			; Let Y = $00. Used for background
-	bit     $BA     			; A6B3 24 BA                    $.
-	jsr     L0080   			; Run self-modifying code #1
+	bit     IS_16K     			; Set overflow to skip DL #2 in code
+	jsr     INIT_DL   			; Run self-modifying code #1
 
 ;** (n) Load self modifying code #2 into zero page RAM *************************
 	ldx     #$09    			; Copy instructions from ROM to RAM
-:	lda     LA6EC,x 			; Must be self-modifying code
-	sta     a:$82,x 			; Leave 'sta' instruction from code #1
+:	lda     LA6EC,X 			; Must be self-modifying code
+	sta     a:$82,X 			; Leave 'sta' instruction from code #1
 	dex             			; 
 	bpl     :-				; End loop after 9 iterations
 
 ;** (n) Run self modifying code #2 *******************************************
 	ldx     #$08    			; A6C3 A2 08                    ..
 	lda     #$20    			; A6C5 A9 20                    . 
-	jsr     L0080   			; self-modifying code #2
+	jsr     INIT_DL   			; Execute self-modifying code #2
 
 ;** (n) Turn ANTIC back on and restore previous playfield/dma settings *******
 	lda     #$26    			;
@@ -2598,33 +2862,34 @@ clear_screen:					; A6A2
 
 ; ----------------------------------------------------------------------------
 ; Self-modifying code #1 to be copied from ROM to RAM
+; This code creates a list of screen addresses used for display list #2
 ; ----------------------------------------------------------------------------
-LA6D0:  sta     L2000,y 			; A6D0 99 00 20                 .. 
-	bvs     :+
-	sta     SCREEN_DL2,y			; A6D5 99 00 40                 ..@
-	sta     SCREEN_DL2+$2000,y 		; A6D8 99 00 60                 ..`
-	sta     SCREEN_DL2+$4000,y 		; A6DB 99 00 80                 ...
-:	iny             			; A6DE C8                       .
-	bne     LA6D0   			; A6DF D0 EF                    ..
-	inc     $82     			; Self modifying code
-	inc     $87     			; Self modifying code
-	inc     $8D     			; Self modifying code
-	inc     $8A     			; Self modifying code
-	bpl	LA6D0				; points to L0080 at runtime
+LA6D0:  sta     L2000,Y 			; A6D0 99 00 20 
+	bvs     :+				; Is 16K system? Yes? Skip -->
+	sta     SCREEN_DL2,Y			; 
+	sta     SCREEN_DL2+$2000,Y 		;
+	sta     SCREEN_DL2+$4000,Y 		;
+:	iny             			; 
+	bne     LA6D0   			; Offset is back to $80 at runtime
+	inc     $82     			; Self modifying code. Increment pointers.
+	inc     $87     			;
+	inc     $8D     			; 
+	inc     $8A     			;
+	bpl	LA6D0				; Offset is back to $80 at runtime
 	rts
 
 ; ----------------------------------------------------------------------------
 ; Self-modifying code #2 to be copied from ROM to RAM
 ; ----------------------------------------------------------------------------
 ; LA6EC-2:					; first two bytes are reused from
-;	sta	L1800,y				; LA6D0 above when this is copied
+;	sta	L1800,Y				; $A6D0 above when this is copied
 LA6EC:  .byte	$18         			; to $0082
-	iny             			; A6ED C8                       .
-	bne     LA6EC-2   			; A6EE D0 FA                    ..
-	inc     $82     			; Self modifying code
-	dex             			; A6F2 CA                       .
-	bne     LA6EC-2   			; A6F3 D0 F5                    ..
-	rts             			; A6F5 60                       `
+	iny             			; 
+	bne     LA6EC-2   			; Offset is to $80 at runtime
+	inc     $82     			; Increment pointer
+	dex             			; 
+	bne     LA6EC-2   			; Offset is to $80 at runtime
+	rts             			; 
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -3055,11 +3320,14 @@ SCALE_8x12:
 ;*               Fetch char recvd from PLATO and advance index                 *
 ;*                                                                             *
 ;*******************************************************************************
+
+; DESCRIPTION
+;
 fetch_serin_ch:					; A7F6
-	ldx     SERIN_BUF_IDX  			; A7F6 A6 B6                    ..
-	lda     SERIN_BUF,x 			; A7F8 BD 2E 3E                 ..>
-	inc     SERIN_BUF_IDX  			; A7FB E6 B6                    ..
-	rts             			; A7FD 60                       `
+	ldx     SERIN_BUF_IDX  			; 
+	lda     SERIN_BUF,X 			;
+	inc     SERIN_BUF_IDX  			; Advance index
+	rts             			; 
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -3126,10 +3394,10 @@ unpack_word:					; A7FE
 ;** Concatontate 4 lowest bits of byte #3 to the 4 remaining bits of byte #2 ***
 	jsr     fetch_serin_ch			; Get byte #3
 
-	asl     a       			; Move the 4 lowest bits to 
-	asl     a       			; ...the upper nybble,
-	asl     a       			; ...leaving lower nybble
-	asl     a       			; ...clear.
+	asl     A       			; Move the 4 lowest bits to 
+	asl     A       			; ...the upper nybble,
+	asl     A       			; ...leaving lower nybble
+	asl     A       			; ...clear.
 
 	ora     PLATO_WORD+1   			; And merge with nybble 
 	sta     PLATO_WORD+1   			; ...left over from byte #2
@@ -3164,38 +3432,41 @@ move_cur_vert:					; A824
 ; VAR contains the distance in scan lines for zoomed display.
 move_cur_up:					; A82D
 ;** Full screen display ********************************************************
-	adc     CURSOR1_Y			; A82D 65 A6                    e.
-	sta     CURSOR1_Y			; A82F 85 A6                    ..
+	adc     CURSOR1_Y			; A already set
+	sta     CURSOR1_Y			;
 
 ;** Zoomed display *************************************************************
 	lda     VAR     			; Distance for zoomed
-	clc             			; A833 18                       .
-	adc     CURSOR2_Y			; A834 65 9E                    e.
-	sta     CURSOR2_Y			; A836 85 9E                    ..
-
+	clc             			; 
+	adc     CURSOR2_Y			; Increment by VAR
+	sta     CURSOR2_Y			; 
 	bcc     :+				; If no carry skip hi -->
 	inc     CURSOR2_Y+1			; 
 
-:	lda	CURSOR2_Y+1
-	cmp     #$01    			; A83E C9 01                    ..
+;-------------------------------------------------------------------------------
+; If new zoomed display cursor Y < 384, then done
+;-------------------------------------------------------------------------------
+:	lda	CURSOR2_Y+1			; Zoomed display Y
+	cmp     #$01    			; 
 	bcc     :+				; is cursor(hi)<#$01 --> RTS
 
-	lda     CURSOR2_Y			; A842 A5 9E                    ..
-	cmp     #$80    			; cursor < 
+	lda     CURSOR2_Y			; 
+	cmp     #$80    			; 
 	bcc     :+				; is cursor(lo)<#$80 --> RTS
 
-;** Zoomed display *************************************************************
-	sec             			; A848 38                       8
-	sbc     #$80    			; A849 E9 80                    ..
-	sta     CURSOR2_Y			; A84B 85 9E                    ..
-	lsr     CURSOR2_Y+1			; A84D 46 9F                    F.
+;-------------------------------------------------------------------------------
+; If new zoomed display cursor Y >= 384, then wrap around both full and zoomed.
+;-------------------------------------------------------------------------------
+	sec             			; 
+	sbc     #$80    			; Subtract 384 ($0180)
+	sta     CURSOR2_Y			; 
+	lsr     CURSOR2_Y+1			; Clears high byte 
 
-;** Full screen display ********************************************************
-	sec             			; A84F 38                       8
-	lda     CURSOR1_Y			; A850 A5 A6                    ..
-	sbc     #$C0    			; A852 E9 C0                    ..
-	sta     CURSOR1_Y			; A854 85 A6                    ..
-:	rts             			; A856 60                       `
+	sec             			; 
+	lda     CURSOR1_Y			; Full Screen Y
+	sbc     #$C0    			; Subtract 192
+	sta     CURSOR1_Y			; 
+:	rts             			; 
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -3211,30 +3482,43 @@ move_cur_up:					; A82D
 ; cursor down means *decreasing* the current cursor position.
 ; Register A contains the distance in scan lines to move
 move_cur_dn:					; A857
-	sta     TMP	 			; A857 85 D9                    ..
-	lda     CURSOR1_Y			; A859 A5 A6                    ..
-	sec             			; A85B 38                       8
-	sbc     TMP	 			; A85C E5 D9                    ..
-	sta     CURSOR1_Y			; A85E 85 A6                    ..
-	sec             			; A860 38                       8
-	lda     CURSOR2_Y			; A861 A5 9E                    ..
-	sbc     VAR     			; VAR contains current text size for zoomed display
-	sta     CURSOR2_Y			; A865 85 9E                    ..
-	bcs     LA86B   			; A867 B0 02                    ..
-	dec     CURSOR2_Y+1			; A869 C6 9F                    ..
-LA86B:  lda     CURSOR2_Y+1			; A86B A5 9F                    ..
-	bpl     LA881   			; A86D 10 12                    ..
-	lda     CURSOR2_Y			; A86F A5 9E                    ..
-	clc             			; A871 18                       .
-	adc     #$80    			; A872 69 80                    i.
-	sta     CURSOR2_Y			; A874 85 9E                    ..
-	lda     #$01    			; A876 A9 01                    ..
-	sta     CURSOR2_Y+1			; A878 85 9F                    ..
-	lda     CURSOR1_Y			; A87A A5 A6                    ..
-LA87C:  clc             			; A87C 18                       .
-	adc     #$C0    			; A87D 69 C0                    i.
-	sta     CURSOR1_Y			; A87F 85 A6                    ..
-LA881:  rts             			; A881 60                       `
+
+;-------------------------------------------------------------------------------
+; Full screen display
+;-------------------------------------------------------------------------------
+	sta     TMP	 			; A has number of scan lines
+	lda     CURSOR1_Y			; Full screen
+	sec             			; 
+	sbc     TMP	 			; 
+	sta     CURSOR1_Y			; 
+
+;-------------------------------------------------------------------------------
+; Zoomed display
+;-------------------------------------------------------------------------------
+	sec             			; 
+	lda     CURSOR2_Y			; 
+	sbc     VAR     			; VAR -> text size zoomed display
+	sta     CURSOR2_Y			; 
+	bcs     :+				; 
+	dec     CURSOR2_Y+1			; 
+:	lda     CURSOR2_Y+1			; 
+	bpl     :+				; If no wrap around --> RTS
+
+;-------------------------------------------------------------------------------
+; Wrap around both full screen and zoomed displays.
+;-------------------------------------------------------------------------------
+	lda     CURSOR2_Y			; Zoomed display Y
+	clc             			; 
+	adc     #$80    			; Add 384 ($0180)
+	sta     CURSOR2_Y			; 
+	lda     #$01    			; 
+	sta     CURSOR2_Y+1			; 
+
+	lda     CURSOR1_Y			; Full screen Y
+        clc             			; 
+	adc     #$C0    			; Add 192
+	sta     CURSOR1_Y			; 
+:	rts             			; 
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -3324,33 +3608,36 @@ get_font_width:					; A890
 ; X = LSB of address to text string
 ; Y = String length - 1
 print_string:					; A89F
-	sty     $EE     			; String length - 1
-	sta     off_EC				; Store MSB string address in ZP
-	stx     off_EC+1			; Store LSB string address in ZP
-:	ldy     $EE     			; Iterate through the characters
-	lda     (off_EC),y
-	jsr     print_char
-	dec     $EE     			; A8AC C6 EE                    ..
-	bpl     :-
-	jmp     proc_cr   			; A8B0 4C B2 A3                 L..
+	sty     STR_LEN     			; String length - 1
+	sta     STR_PTR				; Store MSB string address in ZP
+	stx     STR_PTR+1			; Store LSB string address in ZP
+:	ldy     STR_LEN     			; Get offest to character
+	lda     (STR_PTR),Y			;
+	jsr     print_char			; Print character to displays
+	dec     STR_LEN  			;
+	bpl     :-				; Iterate while STR_LEN >= 0
+
+	jmp     proc_cr   			; Perform carriage return
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                              get_plato_vects                                *
+;*                              get_plato_coords                                *
 ;*                                                                             *
 ;*               Parse and scale PLATO coordinate sequences                    *
 ;*                                                                             *
 ;*******************************************************************************
 
 ; DESCRIPTION
-; This subroutine reads the (X,Y) coordinate sequence from PLATO. For efficiency
-; sake, PLATO will not re-send redundant bytes. The details of this mechanism
-; is described in the excerpt below.
+; This subroutine reads the (X,Y) coordinate sequence from PLATO. After the raw
+; PLATO (X,Y) coordinates are received, which each have a range of 0 to 511, the
+; (X,Y) coordinates must be scaled for the 320x192 full screen display, and the 
+; Y coordinate must be scaled for the 512x384 display.
 ;
-; After the raw PLATO (X,Y) coordinates are delivered, which each have a range
-; of 0 to 511, the (X,Y) coordinates must be scaled for the 320x192 full screen
-; display, and the Y coordinate must be scaled for the 512x384 display.
+; Scaled coordinate pairs will be stored in :
+; CURSOR1_X, CURSOR1_Y (full screen display)
+; CURSOR2_X, CURSOR2_Y (zoomed display)
 ;
+; Example:
 ; If PLATO sent the maximum value of 511, the coordinate data structure in 
 ; binary would be:
 ; 
@@ -3365,9 +3652,8 @@ print_string:					; A89F
 ;                               <--bits 10 to 6->   <--bits 5 to 1-->
 ;      <-------- PLATO_WORD -------->  <------ PLATO_WORD+1 -------->
 ;
-; Note that only 2 bits of PLATO_WORD+1 are necessary to hold the largest value
-; and 3 of the high bits are stored in PLATO_WORD+1. This will help 
-; understanding the bitwise gymnastics done later.
+; Note that only 2 bits of PLATO_WORD is used and 3 remaining high bits are 
+; stored in PLATO_WORD+1. 
 ;
 ;-------------------------------------------------------------------------------
 ; (excerpt from 3.1.2.4.3)  Coordinates
@@ -3441,7 +3727,7 @@ print_string:					; A89F
 ;
 ;      ESC 2 ~ ^  (1B 32 7E 5E hex)
 ;-------------------------------------------------------------------------------
-get_plato_vects:				; A8B3
+get_plato_coords:				; A8B3
 	jsr     fetch_serin_ch			; Returns with A
 	cmp     #$40    			; Test bits 7 and 6 of coord
 	bcs     LOWT				; -->a low X or Y byte
@@ -3457,7 +3743,7 @@ get_plato_vects:				; A8B3
 	sta     CORDY     			; Save
 	lda     PLATO_WORD+1   			; Get remaining 2 hi Y bits
 	sta     CORDY+1     			; Save
-	bcc     get_plato_vects			; Do next coordinate
+	bcc     get_plato_coords		; Do next coordinate
 
 ;-------------------------------------------------------------------------------
 ; Here if character is hi X
@@ -3470,7 +3756,7 @@ HIX:	jsr     HIRO				; Return with 3 of the hi X bits set in PLATO_WORD
 	sta     CORDX    			; Save 
 	lda     PLATO_WORD+1   			; Get remaining 2 hi X bits
 	sta     CORDX+1     			; Save
-	bcc     get_plato_vects			; Do next coordinate
+	bcc     get_plato_coords			; Do next coordinate
 
 ;-------------------------------------------------------------------------------
 ; Here if character is hi X or Y
@@ -5085,7 +5371,7 @@ create_masks:					; ADCB
 ;-------------------------------------------------------------------------------
 sub_adf1:
 draw_line:					; ADF1
-	jsr     get_plato_vects
+	jsr     get_plato_coords
 	lda     IS_16K     			; Memory constrained?
 	sta     COMPR     			; If so, only 1 pass as full-screen.
 	bne     :+				; 
@@ -5164,7 +5450,7 @@ draw_line:					; ADF1
 ;** Both Full screen and zoomed displays ***************************************
 :	sta     Y1HI     			; Y1HI = 0 or 383 - CURSOR2_Y+1
 
-	lda     $DA     			; AE56 A5 DA                    ..
+	lda     MODE_CHANGE    			; AE56 A5 DA                    ..
 	bne     :+				; AE58 D0 03                    ..
 	jmp     LAF94   			; If compressed then set DA = 0, RTS
 
@@ -5422,7 +5708,7 @@ LAF94:  ldx     COMPR     			; Compressed display?
 	bne	:+				; yes -->
 	rts             			; 
 :	dex             			; Make it 0
-	stx     $DA     			; TODO AF9A 86 DA                    ..
+	stx     MODE_CHANGE   			; TODO AF9A 86 DA                    ..
 	rts             			; AF9C 60                       `
 
 ;-------------------------------------------------------------------------------
@@ -6149,7 +6435,6 @@ sub_b23a:
 	sta     ICCOM,x				; CIO close channel command
 	jmp     CIOV				; CIO will RTS
 
-; ----------------------------------------------------------------------------
 ;*******************************************************************************
 ;*                                                                             *
 ;*                                 test_baud                                   *
@@ -6307,311 +6592,504 @@ sub_b2c6:
 	inc     off_FA+1
 LB2F9:	rts             			; B2F9 60                       `
 
-; ----------------------------------------------------------------------------
-
-sub_b2fa:
+;*******************************************************************************
+;*                                                                             *
+;*                               t_handler_put                                 *
+;*                                                                             *
+;*                                   TODO                                      *
+;*                                                                             *
+;*******************************************************************************
+t_handler_put:					; B2FA
 	tsx             			; B2FA BA                       .
 	stx     byte_1344
 	sta     byte_1347
+
 	ldx     byte_1346
 	bne     :+
+
+;-------------------------------------------------------------------------------
+; Here if byte_1346 == 0
+;-------------------------------------------------------------------------------
 	ldx     TSTDAT
 	beq     LB353   			; B308 F0 49                    .I
+
 	lda     #$80    			; B30A A9 80                    ..
 	sta     byte_1346
-	ldy     #$01    			; B30F A0 01                    ..
-	rts             			; B311 60                       `
-:	bpl     :+
+
+	ldy     #$01    			; Return code 1
+	rts             			; 
+
+;-------------------------------------------------------------------------------
+; Here if byte_1346 <> 0
+;-------------------------------------------------------------------------------
+:	bpl     :+				; TSTDAT bit 7 clear? Yes? -->
+
+;-------------------------------------------------------------------------------
+; Here if TSTDAT bit 7 set
+;-------------------------------------------------------------------------------
 	lda     byte_1347
 	sta     byte_1343
+
 	tax             			; B31A AA                       .
 	lda     #$00    			; B31B A9 00                    ..
 	sta     byte_1346
 	beq     :++   				; -->
+
+;-------------------------------------------------------------------------------
+; Here if TSTDAT bit 7 clear
+;-------------------------------------------------------------------------------
 :	ldx     byte_1343
-:  	cpx     #$46    			; B325 E0 46                    .F
+
+;-------------------------------------------------------------------------------
+; 
+;-------------------------------------------------------------------------------
+:  	cpx     #$46    			; 'F' B325 E0 46                    .F
 	beq     :+   				; B327 F0 10                    ..
+
+;-------------------------------------------------------------------------------
+; Here if byte_1343 <> $46
+;-------------------------------------------------------------------------------
 	ldx     #$02    			; B329 A2 02                    ..
-	jsr     sub_b422
-	ori	byte_133c, $01
-	ldy     #$01    			; B336 A0 01                    ..
-	rts             			; B338 60                       `
-:  	lda     byte_133c   			; B339 AD 3C 13                 .<.
-	and     #$F1    			; B33C 29 F1                    ).
-	sta     DVSTAT+1
-	lda     byte_133d
-	and     #$F1    			; B344 29 F1                    ).
+	jsr     sub_b422			;
+
+	ori	byte_133c, $01			; Set bit 0 in status byte
+	ldy     #$01    			; Return code 1
+	rts             			;
+
+;-------------------------------------------------------------------------------
+; Here if byte_1343 == $46. Set status flags
+;-------------------------------------------------------------------------------
+:  	lda     byte_133c   			; clear bits 3-1
+	and     #%11110001    			; 1111 0001
+	sta     DVSTAT+1			;
+
+	lda     byte_133d			; clear bits 3-1
+	and     #%11110001    			; 1111 0001
 	sta     DVSTAT  			; B346 8D EA 02                 ...
+
 	ldy     #$00    			; B349 A0 00                    ..
-	sty     DVSTAT+3
-	sty     byte_133d
-	iny             			; B351 C8                       .
-	rts             			; B352 60                       `
+	sty     DVSTAT+3			;
+	sty     byte_133d			;
 
-; ----------------------------------------------------------------------------
-LB353:  lda     byte_1340
-	cmp     #$1F    			; B356 C9 1F                    ..
-	bcs     LB353   			; B358 B0 F9                    ..
-	sei             			; B35A 78                       x
-	jsr     sub_b369
-	lda     $CB     			; B35E A5 CB                    ..
-	bne     :+
-	jsr     sub_b545			; Enable serial out and timer IRQs
-:	cli             			; B365 58                       X
-	ldy     #$01    			; B366 A0 01                    ..
-	rts             			; B368 60                       `
-
-; ----------------------------------------------------------------------------
-; store character into some sort of buffer
-sub_b369:
-	ldy     byte_1342   			; some sort of buffer offset
-	lda     character                       ; load character  byte_1347
-	sta     byte_1310,y 			; store character into some sort of buffer
-	jsr     sub_b55c                        ; let buffer offset = (buffer offset + 1) && $1F
-	sta     byte_1342   			; 
-	inc     OUTBFPT				; increment output buffer pointer
+	iny             			; Return code 1
 	rts             			; 
 
-; ----------------------------------------------------------------------------
+;-------------------------------------------------------------------------------
+; Wait if OUTBFPT is full (32 bytes)
+;-------------------------------------------------------------------------------
+LB353:  lda     OUTBFPT				; 
+	cmp     #31				; 
+	bcs     LB353   			; wait while OUTBFPT >= 31
 
-sub_b37c:
-	tsx             			; B37C BA                       .
-	stx     byte_1344
-:	cli             			; B380 58                       X
-	sei             			; B381 78                       x
-	ldy     BUFLEN  			; B382 AC 3F 13                 .?.
-	cpy     INPBFPT  
-	beq     :-
+;-------------------------------------------------------------------------------
+; 
+;-------------------------------------------------------------------------------
+	sei             			; Inhibit IRQ
+	jsr     put_outbuf			; 
+	lda     SEROUT_IRQ_FLG     		; 1->Skip enable serial out IRQs
+	bne     :+				; 
+	jsr     enable_serout_irqs		; Enable serial out IRQs
+
+:	cli             			; Enable IRQ
+	ldy     #$01    			; Return code = 1
+	rts             			; 
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                 sub_b39c                                    *
+;*                               put_outbuf                                *
 ;*                                                                             *
-;*                            RS232 Get Status???                              *
+;*                  Store character into an output buffer                      *
+;*                                                                             *
+;*******************************************************************************
+
+; DESCRIPTION
+put_outbuf:					; B369
+	ldy     BUF32_IDX   			; 
+	lda     CHARACTER                       ; load character
+	sta     BUF32,Y 			; store character into circular buffer
+	jsr     adv_buff_32_idx                 ; let buffer offset = (buffer offset + 1) && $1F
+	sta     BUF32_IDX   			; 
+	inc     OUTBFPT				; increment output buffer pointer
+	rts             			; 
+
+;*******************************************************************************
+;*                                                                             *
+;*                               t_handler_get                                 *
+;*                                                                             *
+;*                                   TODO                                      *
+;*                                                                             *
+;*******************************************************************************
+sub_b37c:
+t_handler_get:					; B37C
+	tsx             			; 
+	stx     byte_1344			;
+:	cli             			; Enable IRQs
+	sei             			; Inhibit IRQs
+	ldy     BUFLEN  			; Compare BUFLEN and INPBFPT
+	cpy     INPBFPT				; Anything received?
+	beq     :-				; No? Continue waiting -->
+
+;*******************************************************************************
+;*                                                                             *
+;*                                get_inpbuf                                   *
+;*                                                                             *
+;*                         Get char from input buffer                          *
 ;*                                                                             *
 ;*******************************************************************************
 
 ; DESCRIPTION
 ;
-; Get character from input buffer
+; Get character from input buffer. Save in CHARACTER.
 sub_b38a:  
-	lda     INPBUF,y 			; Get byte from buffer
-	and     #$7F    			; Strip off the PLATO parity bit?
-	sta     character                       ; Store character byte_1347
+get_inpbuf:
+	lda     INPBUF,Y 			; Get byte from buffer
+	and     #$7F    			; Strip off the PLATO parity bit.
+	sta     CHARACTER                       ; Store character
 	iny             			; 
 	sty     BUFLEN  			; Increment BUFLEN
-	dec     byte_CC                         ;
+	dec     SERIN_FLG                       ;
 	cli             			; Enable interrupts
 	ldy     #$01    			; Return success
 	rts             			;
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                 sub_b39c                                    *
+;*                               get_rs232_status                              *
 ;*                                                                             *
 ;*                            RS232 Get Status???                              *
 ;*                                                                             *
 ;*******************************************************************************
 
 sub_b39c:
-	cld             			; B39C D8                       .
-	tya             			; B39D 98                       .
-	pha             			; B39E 48                       H
-	lda     SERIN
-	jsr     sub_b3b9
-	lda     SKSTAT
-	sta     SKREST  			; B3A8 8D 0A D2                 ...
-	eor     #$FF    			; B3AB 49 FF                    I.
-	and     #$C0    			; B3AD 29 C0                    ).
-	ora     byte_133d
-	sta     byte_133d
-LB3B5:  pla             			; B3B5 68                       h
-	tay             			; B3B6 A8                       .
-	pla             			; B3B7 68                       h
-	rti             			; B3B8 40                       @
+get_rs232_status:				; B39C
+sub_vserin:					; B39C
+	cld             			; Assert binary mode
+	tya             			; Stash Y into stack
+	pha             			; 
+	lda     SERIN				; Get char received from serial
+	jsr     put_inpbuf			; Push char into INPBUF
 
+	lda     SKSTAT				; Serial port status
+	sta     SKREST  			; Reset serial port status
+	eor     #%11111111    			; Invert bits
+	and     #%11000000    			; AND 1100 0000
+	ora     byte_133d			;
+	sta     byte_133d			;
+
+;*******************************************************************************
+;*                                                                             *
+;*                               pull_and_rti                                  *
+;*                                                                             *
+;*             Pull Y and A from stack and Return from Interrupt               *
+;*                                                                             *
+;*******************************************************************************
+
+LB3B5:  
+pull_and_rti:					; B3B5
+	pla             			;
+	tay             			;
+	pla             			;
+	rti             			;
+
+;*******************************************************************************
+;*                                                                             *
+;*                              put_inpbuf                                 *
+;*                                                                             *
+;*               Append serial or MPP input to input buffer                    *
+;*                                                                             *
+;*******************************************************************************
 ; MPP Microbit 300 routine to write to Input Buffer?
 sub_b3b9:
-	ldy     INPBFPT				; 
-	sta     INPBUF,y 			; 
+put_inpbuf:
+	ldy     INPBFPT				; Offset in input buffer
+	sta     INPBUF,Y 			; 
 	iny             			; 
 	sty     INPBFPT				; Move pointer
-	inc     byte_CC				;
+	inc     SERIN_FLG			;
 	rts             			; 
 
-; ----------------------------------------------------------------------------
+;*******************************************************************************
+;*                                                                             *
+;*                                 ?????????                                   *
+;*                                                                             *
+;*             ?????????????????????????????????????????????????               *
+;*                                                                             *
+;*******************************************************************************
 sub_b3c6:
-	cld             			; B3C6 D8                       .
-	tya             			; B3C7 98                       .
-	pha             			; B3C8 48                       H
-	lda     OUTBFPT
-	bne     :+
+sub_vseror:
+sub_vseroc:					; B3C6
+	cld             			; Assert binary mode
+	tya             			; 
+	pha             			;
+	lda     OUTBFPT				;
+	bne     :+				;
 
+;-------------------------------------------------------------------------------
+; Nothing to do, return
+;-------------------------------------------------------------------------------
 	lda     #$E7    			; Set interrupt flags
 	and     POKMSK				;
 	jsr     sub_irqen			; Enable interrupts
-	jmp     LB3B5   			; Restore Y and return from interrupt
+	jmp     pull_and_rti   			; Return
 
-; ----------------------------------------------------------------------------
+;-------------------------------------------------------------------------------
+; Something to do.
+;-------------------------------------------------------------------------------
 :	jsr     sub_b3e7
 	sta     SEROUT
 
 :	lda     IRQST				; Wait for VSEROC to be re-enabled
 	and     #$08    			;
-	beq     :-
+	beq     :-				;
 
-	bne     LB3B5   			; Restore Y and return from interrupt
+	bne     pull_and_rti   			; Restore Y and return from interrupt
 
-; ----------------------------------------------------------------------------
+;*******************************************************************************
+;*                                                                             *
+;*                                 ?????????                                   *
+;*                                                                             *
+;*             ?????????????????????????????????????????????????               *
+;*                                                                             *
+;*******************************************************************************
 sub_b3e7:  
 	ldy     byte_1341   			; B3E7 AC 41 13                 .A.
-	lda     byte_1310,y 			; B3EA B9 10 13                 ...
+	lda     BUF32,Y 			; B3EA B9 10 13                 ...
 	pha             			; B3ED 48                       H
-	jsr     sub_b55c
+	jsr     adv_buff_32_idx
 	sta     byte_1341   			; B3F1 8D 41 13                 .A.
-	dec     byte_1340
+	dec     OUTBFPT
 	pla             			; B3F7 68                       h
 	rts             			; B3F8 60                       `
 
-; ----------------------------------------------------------------------------
+;*******************************************************************************
+;*                                                                             *
+;*                                sub_vprced                                   *
+;*                                                                             *
+;*             ?????????????????????????????????????????????????               *
+;*                                                                             *
+;*******************************************************************************
+sub_vprced:					; B3F9
+	cld             			; Assert binary mode
+	tya             			; Stash Y onto stack
+	pha             			; 
 
-sub_b3f9:
-	cld             			; B3F9 D8                       .
-	tya             			; B3FA 98                       .
-	pha             			; B3FB 48                       H
-	lda     $CB     			; B3FC A5 CB                    ..
-	beq     LB415   			; B3FE F0 15                    ..
-	lda     #$00    			; B400 A9 00                    ..
-	sta     $CB     			; B402 85 CB                    ..
-	beq     LB3B5   			; B404 F0 AF                    ..
+;-------------------------------------------------------------------------------
+; If Serial Output IRQs are currently enabled, then set status bits and RTI
+;-------------------------------------------------------------------------------
+	lda     SEROUT_IRQ_FLG     		; 
+	beq     :+				; 0->SEROUT IRQs currently enabled
 
-sub_b406:
-	cld             			; B406 D8                       .
-	tya             			; B407 98                       .
-	pha             			; B408 48                       H
-	lda     byte_133c   			; B409 AD 3C 13                 .<.
-	eor     #$80    			; B40C 49 80                    I.
-	sta     byte_133c   			; B40E 8D 3C 13                 .<.
-	and     #$80    			; B411 29 80                    ).
-	bne     LB3B5   			; B413 D0 A0                    ..
-LB415:  lda     byte_133c   			; B415 AD 3C 13                 .<.
-	and     #$3E    			; B418 29 3E                    )>
-	sta     byte_133c   			; B41A 8D 3C 13                 .<.
-	jmp     LB3B5   			; B41D 4C B5 B3                 L..
+;-------------------------------------------------------------------------------
+; Otherwise just enable Serial Output IRQs and RTI
+;-------------------------------------------------------------------------------
+	lda     #$00    			; Enable serial out IRQs
+	sta     SEROUT_IRQ_FLG     		; 
+	beq     pull_and_rti   			; Return
 
-; ----------------------------------------------------------------------------
+;*******************************************************************************
+;*                                                                             *
+;*                                sub_vinter                                   *
+;*                                                                             *
+;*             ?????????????????????????????????????????????????               *
+;*                                                                             *
+;*******************************************************************************
+sub_vinter:					; B406
+	cld             			; Assert binary mode
+	tya             			; 
+	pha             			; Stash Y
+
+;-------------------------------------------------------------------------------
+; Test bit 7 of byte_133c. If it was clear, rti.
+;-------------------------------------------------------------------------------
+	lda     byte_133c   			; 
+	eor     #%10000000   			; Flip bit 7
+	sta     byte_133c   			; 
+
+	and     #%10000000    			; Was bit 7 previously clear?
+	bne     pull_and_rti   			; Yes? --> RTI
+
+;-------------------------------------------------------------------------------
+; Set status bits and RTI
+;-------------------------------------------------------------------------------
+:	lda     byte_133c   			; 
+	and     #%0111110    			; Clear bits 7 and 0
+	sta     byte_133c   			; 
+	jmp     pull_and_rti   			; 
+
+;*******************************************************************************
+;*                                                                             *
+;*                                 ?????????                                   *
+;*                                                                             *
+;*             ?????????????????????????????????????????????????               *
+;*                                                                             *
+;*******************************************************************************
 sub_b420:
 	ldx     #$00    			; B420 A2 00                    ..
 
+;*******************************************************************************
+;*                                                                             *
+;*                                 ?????????                                   *
+;*                                                                             *
+;*             ?????????????????????????????????????????????????               *
+;*                                                                             *
+;*******************************************************************************
 sub_b422:
-	lda     $CB     			; 
-	bne     sub_b422			; Wait for $CB to be $00
-	jsr     sub_b53a
+	lda     SEROUT_IRQ_FLG     		; 
+	bne     sub_b422			; Wait for Serial Out IRQs to be enabled
+
+	jsr     wait_outbuf_to_empty			;
 
 :	lda     IRQST
-	and     #$08    			; Wait for VSEROC
+	and     #$08    			; Wait for VSEROC (output complete) to be enabled
 	bne     :-
 
-	lda     #$35    			; 
-	sta     PBCTL				; 
-	sta     $CB     			; Let $CB = $35
+	lda     #$35    			; Clear bit 3 enabled by OS IRQ code (normally $3C)
+	sta     PBCTL				; Bit 3 - Peripheral command identification (serial bus command)
+	sta     SEROUT_IRQ_FLG     			; Let $CB = $35
 
 	sei             			; Inhibit IRQs
-	jsr     sub_b369			; Store character in output buffer
+	jsr     put_outbuf			; Store character in output buffer
 	cli             			; Enable IRQs
-	jsr     sub_b53a
+	jsr     wait_outbuf_to_empty
 
+;*******************************************************************************
+;*                                                                             *
+;*                                 ?????????                                   *
+;*                                                                             *
+;*             ?????????????????????????????????????????????????               *
+;*                                                                             *
+;*******************************************************************************
 sub_b43f:
-	ldy     LB47A,x 			; B43F BC 7A B4                 .z.
+	ldy     LB47A,X 			; B43F BC 7A B4                 .z.
 	ldx     #$00    			; B442 A2 00                    ..
 	jsr     sub_b51f
-LB447:  lda     $CB     			; B447 A5 CB                    ..
-	beq     LB46B   			; B449 F0 20                    . 
-	lda     byte_1345
-	bne     LB447   			; B44E D0 F7                    ..
-	sta     byte_1346
-	sta     $CB     			; B453 85 CB                    ..
-	lda     #$3D    			; B455 A9 3D                    .=
-	sta     PBCTL
-	lda     byte_133a
-	and     #$10    			; B45D 29 10                    ).
-	beq     LB464   			; B45F F0 03                    ..
-	sec             			; B461 38                       8
-	bcs     LB471   			; B462 B0 0D                    ..
-LB464:  ldx     byte_1344
+
+;-------------------------------------------------------------------------------
+; Wait for TIMER_EVENT or Skip ahead if Serial Output IRQs are enabled
+;-------------------------------------------------------------------------------
+:	lda     SEROUT_IRQ_FLG     		; 0->Serial Output IRQs enabled
+	beq     :++				; Enabled? Yes? -->
+
+	lda     TIMER_EVENT			; 0->System Timer Expired/Triggered
+	bne     :-				; Wait for timer to expire -->
+
+;-------------------------------------------------------------------------------
+; Timer expired. 
+;-------------------------------------------------------------------------------
+	sta     byte_1346			; Let byte_1346 = 0
+	sta     SEROUT_IRQ_FLG     		; 0->Enable Serial Output IRQs
+
+	lda     #%00111101    			; Enable Port B IRQ
+	sta     PBCTL				; Port B Control
+
+;-------------------------------------------------------------------------------
+; Check status bit
+;-------------------------------------------------------------------------------
+	lda     byte_133a			; TODO
+	and     #%00010000    			; 
+	beq     :+				; Status bit clear? Yes? -->
+
+	sec             			; Set Carry (return code)
+	bcs     :+++				; -->
+
+; Here if byte_133a bit 4 is clear
+:	ldx     byte_1344
 	txs             			; B467 9A                       .
 	ldy     #$8B    			; B468 A0 8B                    ..
-	rts             			; B46A 60                       `
+	rts             			; Return Y
 
-; ----------------------------------------------------------------------------
-LB46B:  lda     #$3D    			; B46B A9 3D                    .=
-	sta     PBCTL
-	clc             			; B470 18                       .
-LB471:  lda     byte_133a
-	and     #$EF    			; B474 29 EF                    ).
+;-------------------------------------------------------------------------------
+; Serial Output IRQs were enabled, enable Port B IRQ
+;-------------------------------------------------------------------------------
+:	lda     #%00111101    			; Enable Port B IRQ
+	sta     PBCTL				; Port B Control
+	clc             			; Clear Carry (return code)
+
+; Here if byte_133a bit 4 is set
+:	lda     byte_133a
+	and     #%11101111    			; Clear status bit
 	sta     byte_133a
-	rts             			; B479 60                       `
+	rts             			; Carry flag is return code
 
-; ----------------------------------------------------------------------------
+;*******************************************************************************
+;*                                                                             *
+;*                                  ????????                                   *
+;*                                                                             *
+;*                            ???????????????????                              *
+;*                                                                             *
+;*******************************************************************************
 
-LB47A:  .byte   <$0008     			; B47A 08                       .
-	.byte   <$003C     			; B47B 3C                       <
-	.byte   <$00B4     			; B47C B4                       .
+LB47A:						; B47A
+	.byte   $08     			; 0000 1000
+	.byte   $3C     			; 0011 1100
+	.byte   $B4     			; 1011 1000
 
 ;*******************************************************************************
 ;*                                                                             *
 ;*                                  sub_b47d                                   *
 ;*                                                                             *
-;*                        Called during cart_init #1 ????                      *
+;*                            Called during cart_init                      *
 ;*                                                                             *
 ;*******************************************************************************
 
 sub_b47d:
-	sei             			; disable interrupts
-	jsr     sub_b4a5                        ; Initialize POKEY
+	sei             			; Inhibit interrupts
+	jsr     init_pokey                      ; Initialize POKEY
 
-; (n) Clear 8 bytes ************************************************************
-	ldy     #$07    			; 
+;-------------------------------------------------------------------------------
+; Initialize/clear status bytes and others
+;-------------------------------------------------------------------------------
+	ldy     #$07    			; Clear 8 bytes
 	lda     #$00    			;
-:	sta     byte_133c,y                     ; 
+:	sta     byte_133c,Y                     ; 
 	dey             			;
-	bpl     :-                              ; End loop after 8 iterations
+	bpl     :-                              ; Next Y
 
-; (n) Clear ********************************************************************
-	sta     TSTDAT                          ; Let TSTDAT    = 0
-	sta     byte_1346                       ; Let byte_1346 = 0
+	sta     TSTDAT                          ; Clear TSTDAT
+	sta     byte_1346                       ; Clear byte_1346
 
-; (n) Set serial interrupt flags ***********************************************
-	lda     #$C7    			; Disable serial input-data-ready,... 
-	and     POKMSK                          ; ...out-transmission-finished interrupts. 
-	ora     #$20    			; Enable serial output-data-required interrupt.
+;-------------------------------------------------------------------------------
+; Disable serial input-data-ready, output-data-req'd, out-transmission-finished
+; interrupts
+;-------------------------------------------------------------------------------
+	lda     #%11000111    			;
+	and     POKMSK                          ; Disable
+
+;-------------------------------------------------------------------------------
+; Enable serial-input-data-ready interrupt
+;-------------------------------------------------------------------------------
+	ora     #%00100000    			; Enable
 	jsr     sub_irqen                       ; Register new interrupt flags.
 
 	cli             			; Enable interrupts
 	rts             			; 
 
-; -----------------------------------------------------------------------------
+;*******************************************************************************
+;*                                                                             *
+;*                                tab_vserin                                   *
+;*                                tab_vprced                                   *
+;*                                                                             *
+;*                     Table of serial interrupt vectors                       *
+;*                                                                             *
+;*******************************************************************************
+tab_vserin:					; B49B
+	.addr	sub_vserin			; POKEY serial I/O bus receive data ready
+	.addr	sub_vseror			; POKEY serial I/O transmit ready
+	.addr	sub_vseroc			; POKEY serial I/O transmit complete
 
-; VSERIN vectors
-LB49B:
-	.addr	sub_b39c
-	.addr	sub_b3c6
-	.addr	sub_b3c6
-
-; VPRCED vectors
-LB4A1:
-	.addr	sub_b3f9
-	.addr	sub_b406
+tab_vprced:					; B4A1
+	.addr	sub_vprced			; Serial (peripheral) proceed line
+	.addr	sub_vinter			; Serial (peripheral) interrupt
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                 sub_b4a5                                    *
+;*                                init_pokey                                   *
 ;*                                                                             *
 ;*                              Initialize POKEY                               *
 ;*                                                                             *
 ;*******************************************************************************
 
-sub_b4a5:
+init_pokey:					; B4A5
 
 ;**(n) Turn off bits 3-7 in SKCTL (and its shadow SSKCTL) **********************
 	lda     #$07    			; Disable bits 3-7 on serial port control
@@ -6636,19 +7114,21 @@ sub_b4a5:
 
 ;** (n) Install 3 new Serial Data-Ready Input vector addresses *****************
 	ldx     #$05    			; 
-:	lda     VSERIN,x 			; Save current vector address
-	sta     byte_1330,x 			; to RAM
-	lda     LB49B,x 			; Load new vector address
-	sta     VSERIN,x 			; from cartridge ROM
+:	lda     VSERIN,X 			; Save current vector address
+	sta     byte_1330,X 			; to RAM
+	lda     tab_vserin,X 			; Load new vector address
+	sta     VSERIN,X 			; from cartridge ROM
 	dex             			; 
 	bpl     :-      			; End loop after 6 iterations
 
 ;** (n) Install 2 new Serial Proceed-Line vector addresses *********************
 	ldx     #$03    			; 
-:	lda     VPRCED,x 			; Save current vector address
-	sta     $1336,x 			; to RAM
-	lda     LB4A1,x 			; Load new vector address
-	sta     VPRCED,x 			; from cartridge ROM
+
+:	lda     VPRCED,X 			; Save current vector address
+	sta     byte_1336,X 			; to RAM
+
+	lda     tab_vprced,X 			; Load new vector address
+	sta     VPRCED,X 			; from cartridge ROM
 	dex             			; 
 	bpl     :-      			; End loop after 4 iterations
 
@@ -6656,28 +7136,50 @@ sub_b4a5:
 	ori	PACTL, $01
 	rts             			; 
 
-; ----------------------------------------------------------------------------
-sub_b4f7:
+;*******************************************************************************
+;*                                                                             *
+;*                               reg_ser_vects                                 *
+;*                                                                             *
+;*                     Register Serial-related IRQ vectors                     *
+;*                                                                             *
+;*******************************************************************************
+
+; DESCRIPTION
+
+reg_ser_vects:					; B4f7
 	sei             			; Inhibit IRQs
-
-	ldy     #$05    			; 
-:	lda     byte_1330,y 			; Install new vectors for ..
-	sta     VSERIN,y 			; VSERIN, VSEROR, VSEROC IRQs
+;-------------------------------------------------------------------------------
+; Register new vectors for serial receive/transmit ready/transmit complete
+;-------------------------------------------------------------------------------
+	ldy     #$05    			; Loop for (3) 16-bit addresses
+:	lda     byte_1330,Y 			; Install new vectors for ..
+	sta     VSERIN,Y 			; VSERIN, VSEROR, VSEROC IRQs
 	dey             			; 
-	bpl     :-      			; End loop
+	bpl     :-      			; Next Y
 
-	ldy     #$03    			; B503 A0 03                    ..
-:	lda     $1336,y 			; B505 B9 36 13                 .6.
-	sta     $0202,y 			; B508 99 02 02                 ...
-	dey             			; B50B 88                       .
-	bpl     :-				; B50C 10 F7                    ..
+;-------------------------------------------------------------------------------
+; Register new vectors for serial peripherals (proceeed line and interrupt)
+;-------------------------------------------------------------------------------
+	ldy     #$03    			; Loop for (2) 16-bit addresses
+:	lda     byte_1336,Y 			; Install new vectors for ...
+	sta     VPRCED,Y 			; VPRCED, VINTER
+	dey             			; 
+	bpl     :-				; Next Y
 
-	lda     PACTL
-	and     #$FE    			; B511 29 FE                    ).
-	sta     PACTL
+;-------------------------------------------------------------------------------
+; Configure Port A controller (disable Peripheral A IRQ)
+;-------------------------------------------------------------------------------
+	lda     PACTL				; Get current value
+	and     #$FE    			; Disable Peripheral A IRQ
+	sta     PACTL				; Save new value
+
+;-------------------------------------------------------------------------------
+; Register IRQ changes
+;-------------------------------------------------------------------------------
 	lda     #$C7    			; Disable VSERIN, VSEROR...
 	and     POKMSK				; ...VSEROC IRQs
 	jsr     sub_irqen			; Update the IRQ system
+
 	cli             			; Enable IRQs
 	rts             			; 
 
@@ -6691,17 +7193,17 @@ sub_b4f7:
 
 sub_b51f:
 	lda     #<sub_b534			; Point to code that runs on system timer IRQ
-	sta     CDTMA1
-	lda     #>sub_b534
-	sta     CDTMA1+1
+	sta     CDTMA1				;
+	lda     #>sub_b534			;
+	sta     CDTMA1+1			;
 
 	sei             			; Inhibit IRQs
-	lda     #$01    			; Set byte_1345 flag (timer event clears it)
-	sta     byte_1345
-	jsr	SETVBV
+	lda     #$01    			; Set TIMER_EVENT flag (timer event clears it)
+	sta     TIMER_EVENT			;
+	jsr	SETVBV				;
 	cli             			; Enable IRQs
 
-	rts
+	rts					;
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -6712,30 +7214,37 @@ sub_b51f:
 ;*******************************************************************************
 
 sub_b534:
-	lda     #$00    			; Clear byte_1345 flag
-	sta     byte_1345			
+	lda     #$00    			; Clear TIMER_EVENT flag
+	sta     TIMER_EVENT			
 	rts             			 
 
-; ----------------------------------------------------------------------------
+;*******************************************************************************
+;*                                                                             *
+;*                            wait_outbuf_to_empty                             *
+;*                                                                             *
+;*                          ???????????????????????                            *
+;*                                                                             *
+;*******************************************************************************
 sub_b53a:  
+wait_outbuf_to_empty:
 	sei             			; Inhibit IRQs
-	jsr     sub_b545			; Enable Serial out and timer IRQs
+	jsr     enable_serout_irqs		; Enable Serial out IRQs
 	cli             			; Enable IRQs
 
-:	lda     byte_1340
-	bne     :-				; Wait for byte_1340 to be $00
+:	lda     OUTBFPT				; 
+	bne     :-				; Wait until buffer offset = 0
 	rts             			; 
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                                  sub_b545                                   *
+;*                            enable_serout_irqs                              *
 ;*                                                                             *
 ;*                    Enable Serial Out and Timer Interrupts                   * 
 ;*                                                                             *
 ;*******************************************************************************
-sub_b545:
-	lda     POKMSK				; Enable IRQs for VSEROR VSEROC...
-	ora     #$18    			; ...VTIMR{1,2,4}.
+enable_serout_irqs:				; B545
+	lda     POKMSK				; Enable IRQs for VSEROR VSEROC
+	ora     #%00011000    			; (output required, output complete)
 						; Fall through to sub_irqen.
 
 ;*******************************************************************************
@@ -6772,20 +7281,33 @@ set_sys_tm1:					; B54F
 	ldy     #<$0003   			; Arg for SETVBV??
 	jsr     sub_b51f			; Set System Timer 1 IRQ and run SETVBV
 
-:	lda     byte_1345
+:	lda     TIMER_EVENT			;
 	bne     :-				; Wait until System Timer 1 IRQ runs
 	rts             			; 
 
-; ----------------------------------------------------------------------------
+;*******************************************************************************
+;*                                                                             *
+;*                              adv_buff_32_idx                                *
+;*                                                                             *
+;*                   Advance index in circular 32 byte buffer                  *
+;*                                                                             *
+;*******************************************************************************
 sub_b55c:
+adv_buff_32_idx:
 	iny             			; increment buffer offset
 	tya             			; let a = new buffer offset
 	and     #$1F    			; wrap offset if > 31
 	rts             			; 
 
-; ----------------------------------------------------------------------------
-
+;*******************************************************************************
+;*                                                                             *
+;*                              t_handler_open?                                *
+;*                                                                             *
+;*                   ????????????????????????????????????????                  *
+;*                                                                             *
+;*******************************************************************************
 sub_b561:
+t_handler_open:
 	tsx             			; B561 BA                       .
 	stx     byte_1344
 	lda     ICAX1Z
@@ -6795,32 +7317,37 @@ sub_b561:
 	jsr     sub_b47d
 	jsr     set_sys_tm1
 	lda     #$59    			; 'Y' (echo ?)
-	sta     character                       ; byte_1347
+	sta     CHARACTER                       ; byte_1347
 	ldx     #$01    			; B579 A2 01                    ..
 	jsr     sub_b422
 	jmp     LB5A5   			; B57E 4C A5 B5                 L..
 
-; ----------------------------------------------------------------------------
 
+;*******************************************************************************
+;*                                                                             *
+;*                              t_handler_close?                               *
+;*                                                                             *
+;*                   ????????????????????????????????????????                  *
+;*                                                                             *
+;*******************************************************************************
 sub_b581:
+t_handler_close:
 	tsx             			; B581 BA                       .
 	stx     byte_1344
 	lda     byte_133a
 	beq     LB5A5   			; B588 F0 1B                    ..
-	jsr     sub_b53a
+	jsr     wait_outbuf_to_empty
 	lda     byte_B2
-	bne     LB595   			; B58F D0 04                    ..
-	lda     #$51    			; B591 A9 51                    .Q
-	bne     LB597   			; B593 D0 02                    ..
-
-; ----------------------------------------------------------------------------
-LB595:  lda     #$5A    			; 'Z'
-LB597:  sta     character                       ; byte_1347
+	bne     :+				; B58F D0 04                    ..
+	lda     #$51    			; 'Q'
+	bne     :++				; B593 D0 02                    ..
+:	lda     #$5A    			; 'Z'
+:	sta     CHARACTER                       ; byte_1347
 	jsr     sub_b420
-	jsr     sub_b4f7
+	jsr     reg_ser_vects
 	lda     #$00    			; B5A0 A9 00                    ..
 	sta     byte_133a
-LB5A5:  ldy     #$01    			; B5A5 A0 01                    ..
+LB5A5:  ldy     #$01    			; Return code
 	rts             			; B5A7 60                       `
 
 ;*******************************************************************************
@@ -6832,10 +7359,10 @@ LB5A5:  ldy     #$01    			; B5A5 A0 01                    ..
 ;*******************************************************************************
 
 t_handler:
-	.addr	sub_b561-1
-	.addr	sub_b581-1
-	.addr	sub_b37c-1
-	.addr	sub_b2fa-1
+	.addr	sub_b561-1			; TODO OPEN?
+	.addr	sub_b581-1			; TODO CLOSE?
+	.addr	t_handler_get-1			; TODO Get character?
+	.addr	t_handler_put-1			; TODO Put character?
 
 ;*******************************************************************************
 ;*                                                                             *
@@ -6855,7 +7382,7 @@ sub_register_mpp:
 ;** (n) Find empty slot in HATABS **********************************************
 	ldx     #$00    			; Start search at offset 0 of HATABS
 	lda     #'R'
-	jsr     sub_bf86			; Returns HATABS offset in X
+	jsr     get_hatabs_slot			; Returns HATABS offset in X
 	bne     LB5D5   			; Quit if no slots
 
 ;** (n) Add Microbit 300 jump table to HATABS **********************************
@@ -6924,8 +7451,8 @@ ROTATE: ror     INP				;
 	dec     INPBIT  			; 
 	bne     NOBYTE   			; 
 	lda     INP         			; 
-	eor     #$FF    			; 
-	jsr     sub_b3b9			; Store INP to INPBUF
+	eor     #$FF    			; Invert bits
+	jsr     put_inpbuf			; Store INP to INPBUF
 	inc     INPBIT  			;
 	inc     ISTOP   			;
 NOBYTE: lda     #$03    			;
@@ -6951,7 +7478,7 @@ ZIPSKIP:
 	lda     #$03    			;
 	sta     OUTINT  			; 
 LB652:	
-RETURN: jmp     LB3B5   			; Return RTI
+RETURN: jmp     pull_and_rti   			; Return RTI
 CHKBUF:	lda     OUTBFPT				; Similar to CHKBUF routine found MPP source A146
 	beq     RETURN   			; 
 	jsr     sub_b3e7			; TODO
@@ -7007,14 +7534,14 @@ JCLOSE: lda     OUTBFPT				; Similar to JCLOSE found in MPP source A1D0
 ;*******************************************************************************
 sub_b6b8:
 ;** (1) Initialize variables and return ****************************************
-	lda     #$8D    			; 
+	lda     #$8D    			; 1000 1101
 	sta     byte_133a                       ; Let byte_133a = $8D
 
 	ldy     #$00    			; 
-	sty     byte_1342   			; Let $1342	= $00
-	sty     byte_133d                       ; Let byte_133d = $00
+	sty     BUF32_IDX   			; Point to start of 32-byte buffer
+	sty     byte_133d                       ; Clear status byte
 	iny             			; return code?  = 1
-	sty     $CB     			; Let $CB       = $01
+	sty     SEROUT_IRQ_FLG     			; Let $CB       = $01
 	rts             			; 
 
 ;*******************************************************************************
@@ -7025,22 +7552,22 @@ sub_b6b8:
 ;*                                                                             *
 ;*******************************************************************************
 sub_b6c9:  
-	lda     $CB     			; 
+	lda     SEROUT_IRQ_FLG     			; 
 	beq     sub_b6c9                        ; Waiting
 
 ;** (n) Restore vector addresses for VSERIN, VSEROR, VSEROC ********************
 	ldy     #$05    			; 
 	sei             			; Prevent IRQs
-:	lda     byte_1330,y 			; Values saved earlier in open_modem
-	sta     VSERIN,y 			; are restored to the serial vectors
+:	lda     byte_1330,Y 			; Values saved earlier in open_modem
+	sta     VSERIN,Y 			; are restored to the serial vectors
 	dey             			; 
-	bpl     :-                              ; End loop after 6 iterations
+	bpl     :-                              ; Next Y
 
 	cli             			; Enable IRQs
 	sty     byte_1346
 	iny             			; B6DD C8                       .
 	sty     DAUX1   			; B6DE 8C 0A 03                 ...
-	sty     byte_133a
+	sty     byte_133a			;
 	lda     #'W'    			; Let A = Write (verify) command
 	jmp     sub_sendsio                     ; Send SIO command frame
 
@@ -7054,9 +7581,8 @@ sub_b6c9:
 
 ; DESCRIPTION
 
-sub_b6e9:
-sub_write:
-	sta     character                       ; 
+sub_write:					; B6E9
+	sta     CHARACTER                       ; 
 	ldx     #$01    			; 
 	stx     $21     			; TODO I can't find address $21 being used elsewhere.
 
@@ -7065,14 +7591,14 @@ sub_write:
 	bcs     :-                              ; Waiting for something to appear?
 
 	sei             			; Disable interrupts
-	jsr     sub_b369                        ; store character into some sort of buffer
+	jsr     put_outbuf			; store character into some sort of buffer
 
 	lda     POKMSK                          ; Enable serial output data-required...
 	ora     #$18    			; ... and output transmission-finished interrupts
 	jsr     sub_irqen			; Enable new interrupt flags
 
 	ldy     #$00    			; 
-	sty     $CB     			; Let $CB = 0
+	sty     SEROUT_IRQ_FLG     			; Let $CB = 0
 	cli             			; Enable interrupts
 	iny             			; 
 	rts             			; Return success
@@ -7093,17 +7619,17 @@ sub_write:
 ; TODO I suspect a timer interrupt breaks out of the "wait" loop.
 
 sub_b709:
-sub_read:	
+sub_read:					; B709
 
 ;**(n) Wait for something to appear in the input buffer ************************
 	cli             			; Enable IRQ
-	sei             			; Disable IRQ
+	sei             			; Inhibit IRQ
 	ldy     BUFLEN  			; 
 	cpy     INPBFPT                         ; Wait until IRQ writes to buffer
-	beq     sub_read			; 
+	beq     sub_read			; Continue waiting
 
 ;**(n) Copy most-recent byte from buffer to "character" ************************
-	jsr     sub_b38a			; Using Y as offset, get last char from buffer...
+	jsr     get_inpbuf			; Using Y as offset, get last char from buffer...
 	ldy     #$01    			; ...and store in "character".
 	rts             			; Return success
 
@@ -7136,7 +7662,7 @@ LB71C:  ldy     #$00    			; Prepare CIO open R: on channel #1
 	sta     IS_MPP				; Default IS_MPP to modem (0)
 	sta     INPBFPT                         ; Let INPBFPT   = 0
 	sta     BUFLEN  			; Let BUFLEN    = 0
-	sta     byte_1342   			; Let byte_1342 = 0
+	sta     BUF32_IDX   			; Let byte_1342 = 0
 	sta     byte_1341   			; Let byte_1341 = 0
 	sta     DBYT+1 			        ; Set MSB of buffer size to 0
 
@@ -7179,14 +7705,15 @@ LB71C:  ldy     #$00    			; Prepare CIO open R: on channel #1
 
 ;** (n) Save/replace VSERIN VSEROR VSEROC interrupt vectors ******************
 	ldx     #$06    			; 
-@LOOP2:	lda     VSERIN-1,x 			; Save currect serial vector...
-	sta     byte_1330-1,x 			; ...addresses to RAM
-	lda     LB822-2+1,x                       ; Load new vector...
-	sta     VSERIN-1,x 			; ...addresses to IRQ registers
+@LOOP2:	lda     VSERIN-1,X 			; Save currect serial vector...
+	sta     byte_1330-1,X 			; ...addresses to RAM
+
+	lda     LB822-1,X			; Load new vector...
+	sta     VSERIN-1,X 			; ...addresses to IRQ registers
 	dex             			; 
 	bne     @LOOP2     			; End loop
 
-	stx     byte_CC			        ; Let byte_CC = 0
+	stx     SERIN_FLG		        ; Let SERIN_FLG = 0
 	stx     byte_CD 			; Let byte_CD = 0
 
 	lda     POKMSK                          ; 
@@ -7218,8 +7745,7 @@ LB71C:  ldy     #$00    			; Prepare CIO open R: on channel #1
 ; Returns Y=$8A and sign flag set if no 850 found.
 ; Returns Y=$01 and sign flag clear if 850 found.
 
-sub_b799:
-sub_register_R:
+sub_register_R:					; B799
 
 ;** (1) Initialize *************************************************************
 	lda     #$00    			; Let Y         = 0
@@ -7228,7 +7754,7 @@ sub_register_R:
 	tax             			; Let X         = 0
 
 ;** (2) Find first empty Handler Table slot ************************************
-	jsr     sub_hatabs_slot			; Let X = offset to new slot
+	jsr     get_hatabs_slot			; Let X = offset to new slot
 	beq     :+	   			; If slot was found, create new handler entry
 	rts             			; otherwise return
 
@@ -7256,7 +7782,7 @@ sub_register_R:
 	lda     #'S'    			; Prep A for use by DCOMND ($53->STATUS)
 	jsr     sub_sendsio			; SIOV returns with Y=($01->850,$8A->No 850)
 
-	lda     character                       ; A = $51 from somewhere earlier
+	lda     CHARACTER                       ; A = $51 from somewhere earlier
 	ora     DVSTAT  			; DSTAT currently ($00,$F0->850, $00,$00->no 850)
 	sta     DVSTAT  			; DSTAT become ($51,$F0 or $51,$00)
 	cpy     #$00    			; Sign flag set->850
@@ -7265,10 +7791,10 @@ sub_register_R:
 ; ----------------------------------------------------------------------------
 
 sub_b7da:
-	lda     byte_1340
+	lda     OUTBFPT
 	bne     :+
 	lda     byte_1346
-	sta     $CB     			; B7E2 85 CB                    ..
+	sta     SEROUT_IRQ_FLG     			; B7E2 85 CB                    ..
 :	jmp	sub_b3c6
 
 ;*******************************************************************************
@@ -7293,9 +7819,9 @@ sub_setbaud:
 	bit     CURRENT_BAUD			; 
 	bmi     :+				; if CURRENT_BAUD == $FF
 	ldx     #$0A    			; then AUX1 = $00 ( 300 baud, 8 bit word)
-	bne     LB7F3   			; else AUX1 = $0A (1200 baud, 8 bit word)
+	bne     :++   				; else AUX1 = $0A (1200 baud, 8 bit word)
 :	ldx	#$00    			; 
-LB7F3:  jsr     sub_b7fa
+:  	jsr     sub_b7fa
 
 ; **(2) Send command frame #2 for acknowledgement ******************************
 	lda     #'A'    			; DCOMND for requesting an ACK (returns 'C'omplete or 'E'rror)
@@ -7347,9 +7873,7 @@ handler_R:
 	.addr	sub_read-1      		; Generic get character
 	.addr	sub_write-1      		; Generic put character
 
-; the last two vectors and the jump are not included or used
-
-LB822:	.addr	sub_b39c			; GET STATUS vector???
+LB822:	.addr	get_rs232_status		; GET STATUS vector???
 	.addr	sub_b7da			; SPECIAL vector???
 	.addr	sub_b7da			; 
 
@@ -7416,8 +7940,8 @@ play_beep:					; B828
 
 check_if_pirated:				; B84B
 ;** Create pointer to where obfuscated code will be stored *********************
-	sta     off_EC				; create pointer in zero page
-	sty     off_EC+1
+	sta     OBFCODE_PTR			; create pointer in zero page
+	sty     OBFCODE_PTR+1
 	ldy     #$00    			; initialize pointer index
 
 ;** Initialize XOR decryption key **********************************************
@@ -7428,7 +7952,7 @@ check_if_pirated:				; B84B
 @LOOP:	iny             			; increment pointer index
 	rol     A       			; rotate the key with each iteration.
 	pha             			; stash key (to be clobbered soon)
-	eor     (off_EC),y			; decrypt instruction using XOR
+	eor     (OBFCODE_PTR),y			; decrypt instruction using XOR
 	sta     test_if_rom-1,y			; save decypted instruction to RAM
 	pla             			; restore key
 	dex             			; decrement counter
@@ -7548,11 +8072,15 @@ DTAB:	.byte	$E3,$E1,$E0,$E2
 ;*                                   LTAB                                      *
 ;*                                   RTAB                                      *
 ;*                                                                             *
-;*                      Left/right playfield mask tables                       *
+;*                       Left/right block mask tables                          *
 ;*                                                                             *
 ;*******************************************************************************
 
 ; DESCRIPTION
+;
+; LTAB - mask table to enable/disable pixels on the left edge of a block.
+; RTAB - mask table to enable/disable pixels on the right edge of a block.
+;
 ; The bitmaps for a typical Atari text mode fit neatly in discrete 8-bit 
 ; boundaries (40 characters wide with 40 bytes per line). 
 ; The PLATO terminal character display is 64 columns of 32 characters. In 
@@ -7577,23 +8105,23 @@ DTAB:	.byte	$E3,$E1,$E0,$E2
 ;          7      00000001 11111110
 ;          0               00000000
 ;
-LTAB:	.byte	%00000000	; $00
-	.byte	%01111111	; $7F
-	.byte	%00111111	; $3F
-	.byte	%00011111	; $1F
-	.byte	%00001111	; $0F
-	.byte	%00000111	; $07
-	.byte	%00000011	; $03
-	.byte	%00000001	; $01
+LTAB:	.byte	%00000000	; 0
+	.byte	%01111111	; 1
+	.byte	%00111111	; 2
+	.byte	%00011111	; 3
+	.byte	%00001111	; 4
+	.byte	%00000111	; 5
+	.byte	%00000011	; 6
+	.byte	%00000001	; 7
 
-RTAB:	.byte   %10000000	; $80
-	.byte	%11000000	; $C0
-	.byte	%11100000	; $E0
-	.byte	%11110000	; $F0
-	.byte	%11111000	; $F8
-	.byte	%11111100	; $FC
-	.byte	%11111110	; $FE
-	.byte	%00000000	; $00
+RTAB:	.byte   %10000000	; 0
+	.byte	%11000000	; 1
+	.byte	%11100000	; 2
+	.byte	%11110000	; 3
+	.byte	%11111000	; 4
+	.byte	%11111100	; 5
+	.byte	%11111110	; 6
+	.byte	%00000000	; 7
 
 CMTAB:	.byte   %00000111	; $07
 	.byte	%10000011	; $83
@@ -7849,8 +8377,7 @@ TAB_Y_ADJ:
 	.byte	$02				; 07
 
 ; Double wide pixels for text size 2 (bold/double)
-LBA02:	
-tab_dbl_wide:
+tab_dbl_wide:					; BA02
 	.byte	%00000000			; 00
 	.byte	%00000011			; 01
 	.byte	%00001100			; 02
@@ -8054,18 +8581,26 @@ LBA54:  .byte   '/'				; PLATO: ACCESS, /
 	.byte	'5'				; PLATO: ACCESS, 5
 
 ; ------------------------------------------------------------------------------
-
 	.byte	$02,$BB,$5A,$30,$5F
 	.byte	$EE,$3D,$A8
 
+;*******************************************************************************
+;*                                                                             *
+;*                                PM_BITMAPS                                   *
+;*                                                                             *
+;*    Player Missile bitmaps used during function key and touch panel modes    *
+;*                                                                             *
+;*******************************************************************************
+
+; DESCRIPTION
 ; Bitmap for 'F' displayed when in joystick-mapped function key mode
-LBA67:	.byte	%01110000			; .###....
+; Bitmap for touch screen cross-shaped cursor
+PM_BITMAPS:					; BA67
+	.byte	%01110000			; .###....
 	.byte	%01000000			; .#......
 	.byte	%01110000			; .###....
 	.byte	%01000000			; .#......
 	.byte	%01000000			; .#......
-
-; Bitmap for touch screen cross-shaped cursor
 	.byte	%00000110			; .....##.
 	.byte	%00001111			; ....####
 	.byte	%00000110			; .....##.
@@ -8144,23 +8679,18 @@ JUMTAB:						; BA6F
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                             tab_data_mode_HI                                *
-;*                             tab_data_mode_LO                                *
+;*                             tab_mode_subs_HI                                *
+;*                             tab_mode_subs_LO                                *
 ;*                                                                             *
 ;*                 Jump table to subroutines for data modes                    *
 ;*                                                                             *
 ;*******************************************************************************
 
 ; DESCRIPTION
-;-------------------------------------------------------------------------------
-; The set_data_mode routine is called when certain control codes or escape 
-; sequences are received from the PLATO host dealing with data modes. The 
-; set_data_mode routine eventally uses this table to get the address of the 
-; requested subroutine. The data modes affect how data received from the host 
-; should be interpretted. Is it a printable character (alpha mode), is it a set
-; of coordinates describing a line (draw line mode), etc.
-;-------------------------------------------------------------------------------
-tab_data_mode_HI:				; BACA
+; These subroutines are called from the "draw" routine if a data mode control 
+; code was received from the PLATO host.
+
+tab_mode_subs_HI:				; BACA
 	.byte	>(load_memory-1)		; data mode 2->Load memory
 	.byte	>(draw_block-1)			; data mode 4->block write/erase mode
 	.byte	$00				; unused
@@ -8170,7 +8700,7 @@ tab_data_mode_HI:				; BACA
 	.byte	$00				; unused
 	.byte   >(plot_alpha-1)			; data mode 3->alpha mode
 
-tab_data_mode_LO:				; BAD2
+tab_mode_subs_LO:				; BAD2
 	.byte	<(load_memory-1)		; data mode 2->Load memory
 	.byte	<(draw_block-1)			; data mode 4->block write/erase mode
 	.byte	$00				; unused
@@ -8180,7 +8710,7 @@ tab_data_mode_LO:				; BAD2
 	.byte	$00				; unused
 	.byte	<(plot_alpha-1)			; data mode 3->alpha mode
 
-tab_data_mode_id:				; BADA
+tab_mode_subs_id:				; BADA
 	.byte	$03				; data mode 2->Load memory 
 	.byte	$80				; data mode 4->block write/erase mode
 	.byte	$00				; unused
@@ -8190,20 +8720,47 @@ tab_data_mode_id:				; BADA
 	.byte	$00				; unused
 	.byte	$01				; data mode 3->alpha mode
 
-LBAE2:	.byte	>(get_plato_vects-1)		; byte_B4 = 1 
-	.byte	>(proc_ssf-1)			; byte_B4 = 2 ESC Q (SSF)
-	.byte	>(proc_echo-1)			; byte_B4 = 3 ESC Y (load Echo)
-	.byte	>(load_mem_addr-1)		; byte_B4 = 4 ESC W (load Memory Address)
-	.byte	>(sel_mode_6-1)			; byte_B4 = 5 ESC U (select mode 6)
+;*******************************************************************************
+;*                                                                             *
+;*                              tab_esc_subs_HI                                *
+;*                              tab_esc_subs_LO                                *
+;*                                                                             *
+;*        Jump table to subroutines for (mostly) escape code routines          *
+;*                                                                             *
+;*******************************************************************************
 
-LBAE7:	.byte   <(get_plato_vects-1)
+; DESCRIPTION
+; These subroutines are called from the "draw" routine if an escape sequence
+; or load coordinate command was received from the PLATO host.
+
+tab_esc_subs_HI:				; BAE2
+	.byte	>(get_plato_coords-1)		; ESC_CODE = 1 EM (load coordinate sequence)
+	.byte	>(proc_ssf-1)			; ESC_CODE = 2 ESC Q (SSF)
+	.byte	>(proc_echo-1)			; ESC_CODE = 3 ESC Y (load Echo)
+	.byte	>(load_mem_addr-1)		; ESC_CODE = 4 ESC W (load Memory Address)
+	.byte	>(proc_mode_6-1)		; ESC_CODE = 5 ESC U (select mode 6)
+
+tab_esc_subs_LO:				; BAE7
+	.byte   <(get_plato_coords-1)
 	.byte	<(proc_ssf-1)
 	.byte	<(proc_echo-1)
 	.byte	<(load_mem_addr-1)
-	.byte	<(sel_mode_6-1)
+	.byte	<(proc_mode_6-1)
 
-byte_BAEC:
-ch_mem_m1_DL2:
+;*******************************************************************************
+;*                                                                             *
+;*                             ch_mem_m1_DL2                                   *
+;*                                                                             *
+;*                  8x8 bitmaps for M1 extended characters                     *
+;*                                                                             *
+;*******************************************************************************
+
+; DESCRIPTION
+; This is a table of bitmaps for extended characters define in the PLATO M1
+; character set for use in the zoomed display (font size = 8x8). Standard M1
+; character bitmaps (A-Z, etc) are re-used from the Atari's ROM.
+
+ch_mem_m1_DL2:					; BAEC
 	.byte   %00000000       		; ........
 	.byte   %00000000       		; ........
 	.byte   %00000000       		; ........
@@ -9568,13 +10125,12 @@ ch_mem_m1_DL1:
 
 ;*******************************************************************************
 ;*                                                                             *
-;*                               sub_hatabs_slot                               *
+;*                               get_hatabs_slot                               *
 ;*                                                                             *
 ;*                    Return first unused HATABS table entry                   *
 ;*                                                                             *
 ;*******************************************************************************
-sub_bf86:
-sub_hatabs_slot:
+get_hatabs_slot:				; BF86
 
 ;** (n) Return the first empty slot in the Handler Address Table *****************
 	cmp     HATABS,x			; Is entry empty?
@@ -9583,7 +10139,7 @@ sub_hatabs_slot:
 	inx
 	inx
 	cpx     #$20    			; If >= 32 Then Quit. Z will be clear
-	bcc     sub_bf86			; Otherwise continue trying.
+	bcc     get_hatabs_slot			; Otherwise continue trying.
 :	rts             			; Return with Z and X (offset)
 
 ;*******************************************************************************
@@ -9598,54 +10154,68 @@ cart_init:
 	jsr	sub_b47d                        ; Init POKEY and serial interrupts
 
 ;*******************************************************************************
-	lda	#$51
+	lda	#$51				; 0101 0001
 	sta	byte_1347                       ; Let byte_1347 = $51
-	sta	byte_133a                       ; Let byte_133a = $51
+	sta	byte_133a                       ; Status byte TODO
 
 ;*******************************************************************************
-	lda	$CB				;
+	lda	SEROUT_IRQ_FLG				;
 	pha             			; Save current value in $CB
+
+;-------------------------------------------------------------------------------
+; Enable Serial Out IRQs
+;-------------------------------------------------------------------------------
 	lda     #$00    			;
-	sta     $CB     			; Let $CB = $00
+	sta     SEROUT_IRQ_FLG     		; Let $CB = $00
 	jsr     sub_b420			;
+
 	pla             			;
-	sta     $CB     			; Restore original value of $CB
+	sta     SEROUT_IRQ_FLG     			; Restore original value of $CB
 
 ;*******************************************************************************
-	lda     #$51    			; BFAB A9 51                    .Q
-	sta     byte_133a
+	lda     #$51    			; $51 BFAB A9 51                    .Q
+	sta     byte_133a			; Status byte TODO
 
-;*******************************************************************************
-	lda     $08     			;
-	beq     LBFC2   			; Skip next part if warmstart
+	lda     WARMST     			; Is this cold-start or warm-start?
+	beq     :++				; 0->Cold-start? -->
 
-;*******************************************************************************
+;-------------------------------------------------------------------------------
+; Warm-start code
+;-------------------------------------------------------------------------------
 	ldx     byte_B2
 	cpx     #$02    			; BFB6 E0 02                    ..
-	bcs     :+
-	sec             			; BFBA 38                       8
-	bne     LBFD8   			; BFBB D0 1B                    ..
+	bcs     :+				; 
+	sec             			; Set Carry
+	bne     :+++				; 
 
 :	ldx     #$02    			; BFBD A2 02                    ..
 	jsr     sub_b43f
 
-;*******************************************************************************
-LBFC2:  lda     #$FF    			; BFC2 A9 FF                    ..
-	sta     byte_133a
+;-------------------------------------------------------------------------------
+; Cold or Warm Start
+;-------------------------------------------------------------------------------
+:	lda     #$FF    			; BFC2 A9 FF                    ..
+	sta     byte_133a			; Status byte TODO
 
 	lda     #$00    			; BFC7 A9 00                    ..
-	sta     $CB     			; BFC9 85 CB                    ..
+	sta     SEROUT_IRQ_FLG     			; BFC9 85 CB                    ..
+
 	ldx     #$02    			; BFCB A2 02                    ..
 	jsr     sub_b422
+
 	lda     #$51    			; BFD0 A9 51                    .Q
-	sta     byte_133a
+	sta     byte_133a			; Status byte TODO
 	jsr     sub_b420
-LBFD8:  jsr     sub_b4f7
+
+;-------------------------------------------------------------------------------
+; 
+;-------------------------------------------------------------------------------
+:	jsr     reg_ser_vects
 	bcs	:+
 	lda     #$00    			; BFDD A9 00                    ..
 	sta     byte_133a
 	tax             			; BFE2 AA                       .
-	jsr     sub_bf86
+	jsr     get_hatabs_slot
 	bne	:+
 	lda     #'T'
 	sta     HATABS,x
@@ -9656,6 +10226,8 @@ LBFD8:  jsr     sub_b4f7
 :	rts
 
 	.byte	$00,$00				; Unused bytes
+
+	.org	$BFFA
 ;*******************************************************************************
 ;*                                                                             *
 ;*                                   LBFFA                                     *
